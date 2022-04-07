@@ -2,7 +2,12 @@ package loadtester
 
 import (
 	"context"
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -34,48 +39,65 @@ type Loadtest struct {
 	mRetry        sync.Mutex
 	retryTasks    []*retryTask
 	retryTaskPool sync.Pool
+
+	csvData
 }
 
 func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) *Loadtest {
 
-	opts := loadtestOptions{
-		taskBufferingFactor: 4,
-		maxWorkers:          1,
-		numWorkers:          1,
-		maxIntervalTasks:    1,
-		numIntervalTasks:    1,
-		interval:            time.Second,
+	opt := loadtestOptions{
+		taskBufferingFactor:     4,
+		maxWorkers:              1,
+		numWorkers:              1,
+		maxIntervalTasks:        1,
+		numIntervalTasks:        1,
+		interval:                time.Second,
+		csvOutputFilename:       "metrics.csv",
+		csvOutputFlushFrequency: 5 * time.Second,
 	}
 
 	for _, op := range options {
-		op(&opts)
+		op(&opt)
 	}
 
-	if opts.taskBufferingFactor <= 0 {
-		opts.taskBufferingFactor = 1
+	if opt.taskBufferingFactor <= 0 {
+		opt.taskBufferingFactor = 1
 	}
 
-	maxWorkQueueSize := opts.maxWorkers * opts.taskBufferingFactor
+	maxWorkQueueSize := opt.maxWorkers * opt.taskBufferingFactor
 
 	return &Loadtest{
 		impl:          impl,
-		maxTotalTasks: opts.maxTotalTasks,
-		maxWorkers:    opts.maxWorkers,
-		numWorkers:    opts.numWorkers,
-		workers:       make([]chan struct{}, 0, opts.maxWorkers),
+		maxTotalTasks: opt.maxTotalTasks,
+		maxWorkers:    opt.maxWorkers,
+		numWorkers:    opt.numWorkers,
+		workers:       make([]chan struct{}, 0, opt.maxWorkers),
 		taskChan:      make(chan taskWithMeta, maxWorkQueueSize),
 		resultsChan:   make(chan taskResult, maxWorkQueueSize),
 		retryTasks:    make([]*retryTask, 0, maxWorkQueueSize),
 
-		maxIntervalTasks: opts.maxIntervalTasks,
-		numIntervalTasks: opts.numIntervalTasks,
-		interval:         opts.interval,
+		maxIntervalTasks: opt.maxIntervalTasks,
+		numIntervalTasks: opt.numIntervalTasks,
+		interval:         opt.interval,
 		retryTaskPool: sync.Pool{
 			New: func() interface{} {
 				return &retryTask{}
 			},
 		},
+
+		csvData: csvData{
+			outputFilename: opt.csvOutputFilename,
+			flushFrequency: opt.csvOutputFlushFrequency,
+		},
 	}
+}
+
+type csvData struct {
+	outputFilename string
+	writer         *csv.Writer
+	flushFrequency time.Duration
+	flushDeadline  time.Time
+	writeErr       error
 }
 
 type taskResult struct {
@@ -139,6 +161,8 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 			start := time.Now().UTC()
 			err, retryQueued, panicked := lt.doTask(ctx, workerID, task)
 			elapsed := time.Since(start)
+
+			// TODO: log failures as they occur and indicate if max attempts count has been reached
 
 			lt.resultsChan <- taskResult{
 				Panicked:    panicked,
@@ -274,35 +298,249 @@ func (lt *Loadtest) loadRetries(taskBuf []Doer, numTasks int) []Doer {
 func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{}) {
 	defer wg.Done()
 
+	var intervalID time.Time
+	var resultCount, numNewTasks, numPass, numFail, numRetry, numPanic int
+	var minElapsed, maxElapsed, sumElapsed, sumLag time.Duration
+
+	minElapsed = maxDuration
+
+	flushMetrics := func(now time.Time) {
+		lt.csvData.writeErr = lt.writeOutputCsvRow(metricRecord{
+			intervalID:  intervalID,
+			sumLag:      sumLag,
+			numNewTasks: numNewTasks,
+			numTasks:    resultCount,
+			numPass:     numPass,
+			numFail:     numFail,
+			numRetry:    numRetry,
+			numPanic:    numPanic,
+			minElapsed:  minElapsed,
+			maxElapsed:  maxElapsed,
+			sumElapsed:  sumElapsed,
+		})
+
+		if !now.After(lt.csvData.flushDeadline) {
+			if lt.csvData.writeErr == nil {
+				lt.csvData.writer.Flush()
+				lt.csvData.writeErr = lt.csvData.writer.Error()
+			}
+			lt.csvData.flushDeadline = time.Now().UTC().Add(lt.csvData.flushFrequency)
+		}
+	}
+
+	lt.csvData.flushDeadline = time.Now().UTC().Add(lt.csvData.flushFrequency)
+
 	for {
 		var tr taskResult
 
 		select {
 		case tr = <-lt.resultsChan:
 		case <-stopChan:
+			if lt.csvData.writeErr == nil && resultCount > 0 {
+				now := time.Now().UTC()
+				lt.csvData.flushDeadline = now
+				flushMetrics(now)
+			}
 			return
 		}
 
 		lt.resultWaitGroup.Done()
 
-		Logger.Debugw(
-			"got result",
-			"result", tr,
-		)
+		// Logger.Debugw(
+		// 	"got result",
+		// 	"result", tr,
+		// )
+
+		// TODO: include percentage complete when maxTotalTasks is greater than 0
+
+		if lt.csvData.writeErr != nil {
+			continue
+		}
+
+		if intervalID.Before(tr.Meta.IntervalID) {
+			intervalID = tr.Meta.IntervalID
+			numNewTasks = tr.Meta.NumNewTasks
+			sumLag += tr.Meta.Lag
+		}
+		if minElapsed > tr.Elapsed {
+			minElapsed = tr.Elapsed
+		}
+		if maxElapsed < tr.Elapsed {
+			maxElapsed = tr.Elapsed
+		}
+
+		sumElapsed += tr.Elapsed
+
+		// TODO: remove ifs
+		if tr.Err == nil {
+			numPass++
+		} else {
+			numFail++
+		}
+		if tr.Panicked {
+			numPanic++
+		}
+		if tr.RetryQueued {
+			numRetry++
+		}
+
+		resultCount++
+
+		if resultCount >= numNewTasks {
+
+			flushMetrics(time.Now().UTC())
+
+			// reset metrics
+			minElapsed = maxDuration
+			maxElapsed = -1
+			sumElapsed = 0
+			resultCount = 0
+			numPass = 0
+			numFail = 0
+			numRetry = 0
+			numPanic = 0
+			sumLag = 0
+		}
 	}
 }
 
 const (
 	skipInterTaskSchedulingThreshold = 20 * time.Millisecond
+	maxDuration                      = time.Duration((^uint64(0)) >> 1)
 )
 
-func (lt *Loadtest) Run(ctx context.Context) {
+func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
+	if _, err := w.Write([]byte(`# `)); err != nil {
+		return err
+	}
+
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+
+	type Config struct {
+		StartTime             string `json:"start_time"`
+		Interval              string `json:"interval"`
+		MaxIntervalTasks      int    `json:"max_interval_tasks"`
+		MaxTotalTasks         int    `json:"max_total_tasks"`
+		MaxWorkers            int    `json:"max_workers"`
+		NumIntervalTasks      int    `json:"num_interval_tasks"`
+		NumWorkers            int    `json:"num_workers"`
+		MetricsFlushFrequency string `json:"metrics_flush_frequency"`
+	}
+
+	cfg := Config{
+		StartTime:             time.Now().UTC().Format(time.RFC3339Nano),
+		Interval:              lt.interval.String(),
+		MaxIntervalTasks:      lt.maxIntervalTasks,
+		MaxTotalTasks:         lt.maxTotalTasks,
+		MaxWorkers:            lt.maxWorkers,
+		NumIntervalTasks:      lt.numIntervalTasks,
+		NumWorkers:            lt.numWorkers,
+		MetricsFlushFrequency: lt.csvData.flushFrequency.String(),
+	}
+
+	Logger.Infow("writing metics config", "config", cfg)
+
+	err := enc.Encode(struct {
+		Config `json:"config"`
+	}{cfg})
+	if err != nil {
+		return err
+	}
+
+	if _, err := w.Write([]byte("\n")); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type metricRecord struct {
+	intervalID                         time.Time
+	sumLag                             time.Duration
+	numNewTasks                        int
+	numTasks                           int
+	numPass                            int
+	numFail                            int
+	numRetry                           int
+	numPanic                           int
+	minElapsed, maxElapsed, sumElapsed time.Duration
+}
+
+func (lt *Loadtest) writeOutputCsvHeaders() error {
+	return lt.csvData.writer.Write([]string{
+		"sample_time",
+		"interval_id",   // gauge
+		"sum_lag",       // gauge
+		"num_new_tasks", // gauge
+		"num_tasks",
+		"num_pass",
+		"num_fail",
+		"num_retry",
+		"num_panic",
+		"min_elapsed",
+		"avg_elapsed",
+		"max_elapsed",
+		"sum_elapsed",
+	})
+}
+
+func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
+	if lt.csvData.writeErr != nil {
+		return nil
+	}
+
+	nowStr := time.Now().UTC().Format(time.RFC3339Nano)
+
+	return lt.csvData.writer.Write([]string{
+		nowStr,
+		mr.intervalID.Format(time.RFC3339Nano),
+		mr.sumLag.String(),
+		strconv.Itoa(mr.numNewTasks),
+		strconv.Itoa(mr.numTasks),
+		strconv.Itoa(mr.numPass),
+		strconv.Itoa(mr.numFail),
+		strconv.Itoa(mr.numRetry),
+		strconv.Itoa(mr.numPanic),
+		mr.minElapsed.String(),
+		(mr.sumElapsed / time.Duration(mr.numTasks)).String(),
+		mr.maxElapsed.String(),
+		mr.sumElapsed.String(),
+	})
+}
+
+func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
+
+	csvf, err := os.Create(lt.csvData.outputFilename)
+	if err != nil {
+		return fmt.Errorf("failed to open output csv metrics file for writing: %w", err)
+	}
+	defer func() {
+		err := csvf.Close()
+		if err != nil {
+			if lt.csvData.writeErr != nil {
+				lt.csvData.writeErr = err
+			}
+			if err_result == nil {
+				err_result = lt.csvData.writeErr
+			}
+		}
+	}()
+
+	lt.csvData.writeErr = lt.writeOutputCsvConfigComment(csvf)
 
 	var wg sync.WaitGroup
 	stopChan := make(chan struct{})
 
 	wg.Add(1)
 	go lt.resultsHandler(&wg, stopChan)
+
+	csvw := csv.NewWriter(csvf)
+	lt.csvData.writer = csvw
+
+	if lt.csvData.writeErr == nil {
+		lt.csvData.writeErr = lt.writeOutputCsvHeaders()
+	}
 
 	numWorkers := lt.numWorkers
 
@@ -433,6 +671,8 @@ func (lt *Loadtest) Run(ctx context.Context) {
 				if recomputeInterTaskInterval {
 					interTaskInterval = interval / time.Duration(numIntervalTasks)
 				}
+
+				// TODO: log configuration updates when they occur
 
 				// pause load generation if unable to schedule anything
 				if numIntervalTasks <= 0 || numWorkers <= 0 {

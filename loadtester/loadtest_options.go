@@ -5,13 +5,15 @@ import (
 )
 
 type loadtestOptions struct {
-	taskBufferingFactor int
-	maxTotalTasks       int
-	maxWorkers          int
-	numWorkers          int
-	maxIntervalTasks    int
-	numIntervalTasks    int
-	interval            time.Duration
+	taskBufferingFactor     int
+	maxTotalTasks           int
+	maxWorkers              int
+	numWorkers              int
+	maxIntervalTasks        int
+	numIntervalTasks        int
+	interval                time.Duration
+	csvOutputFilename       string
+	csvOutputFlushFrequency time.Duration
 }
 
 type LoadtestOption func(*loadtestOptions)
@@ -62,5 +64,17 @@ func NumIntervalTasks(n int) LoadtestOption {
 func Interval(d time.Duration) LoadtestOption {
 	return func(opt *loadtestOptions) {
 		opt.interval = d
+	}
+}
+
+func CsvFilename(s string) LoadtestOption {
+	return func(opt *loadtestOptions) {
+		opt.csvOutputFilename = s
+	}
+}
+
+func CsvFlushFrequency(d time.Duration) LoadtestOption {
+	return func(opt *loadtestOptions) {
+		opt.csvOutputFlushFrequency = d
 	}
 }

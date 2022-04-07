@@ -29,13 +29,19 @@ func main() {
 
 	lt := loadtester.NewLoadtest(
 		&MyLoadtest{},
-		loadtester.NumWorkers(1),
-		loadtester.NumIntervalTasks(1),
+		loadtester.NumWorkers(5),
+		loadtester.NumIntervalTasks(25),
 		loadtester.Interval(1*time.Second),
 	)
+
 	loadtester.Logger.Infow("running")
 	defer func() {
 		loadtester.Logger.Infow("stopped")
 	}()
-	lt.Run(ctx)
+	if err := lt.Run(ctx); err != nil {
+		loadtester.Logger.Panicw(
+			"loadtest errored",
+			"error", err,
+		)
+	}
 }

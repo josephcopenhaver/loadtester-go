@@ -16,3 +16,9 @@ type DoRetryer interface {
 	Doer
 	Retryer
 }
+
+// TODO: tie off DoRetyerChecker
+type DoRetyerChecker interface {
+	DoRetryer
+	CanRetry(ctx context.Context, workerID int, prevErr error) bool
+}
