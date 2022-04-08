@@ -243,10 +243,15 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 	err := task.Do(ctx, workerID)
 	if err != nil {
 		if v, ok := task.(DoRetryer); ok {
+			if v, ok := v.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
+				return err, false, false
+			}
+
 			if x, ok := v.(*retryTask); ok {
 				v = x.DoRetryer
 			}
 			lt.enqueueRetry(v, err)
+
 			return err, true, false
 		}
 
