@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-
-	pkgerrors "github.com/pkg/errors"
 )
 
 type LoadtestImpl interface {
@@ -111,9 +109,9 @@ type csvData struct {
 }
 
 type taskResult struct {
-	Panicked    bool  `json:",omitempty"`
-	RetryQueued bool  `json:",omitempty"`
-	Err         error `json:",omitempty"`
+	Panicked    bool
+	RetryQueued bool
+	Errored     bool
 	Elapsed     time.Duration
 	Meta        taskMeta
 }
@@ -169,15 +167,13 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 		case task := <-lt.taskChan:
 
 			start := time.Now().UTC()
-			err, retryQueued, panicked := lt.doTask(ctx, workerID, task)
+			errored, retryQueued, panicked := lt.doTask(ctx, workerID, task)
 			elapsed := time.Since(start)
-
-			// TODO: log failures as they occur and indicate if max attempts count has been reached
 
 			lt.resultsChan <- taskResult{
 				Panicked:    panicked,
 				RetryQueued: retryQueued,
-				Err:         err,
+				Errored:     errored,
 				Elapsed:     elapsed,
 				Meta:        task.meta,
 			}
@@ -185,7 +181,9 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 	}
 }
 
-func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskWithMeta) (err_resp error, retryQueued_resp, panicking_resp bool) {
+func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskWithMeta) (errored_resp bool, retryQueued_resp, panicking_resp bool) {
+	var err_resp error
+
 	task := taskWithMeta.doer
 	defer func() {
 		if v, ok := task.(*retryTask); ok {
@@ -194,8 +192,18 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 		}
 	}()
 	defer func() {
+
+		if err_resp != nil {
+			Logger.Warnw(
+				"task error",
+				"worker_id", workerID,
+				"error", err_resp,
+			)
+		}
+
 		if r := recover(); r != nil {
 			panicking_resp = true
+			errored_resp = true
 
 			switch v := r.(type) {
 			case error:
@@ -204,28 +212,18 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 					"worker_id", workerID,
 					"error", v,
 				)
-
-				if _, ok := v.(fmt.Formatter); ok {
-					err_resp = v
-				} else {
-					err_resp = pkgerrors.WithStack(v)
-				}
 			case []byte:
 				Logger.Errorw(
 					"worker recovered from panic",
 					"worker_id", workerID,
 					"error", string(v),
 				)
-
-				err_resp = pkgerrors.New(string(v))
 			case string:
 				Logger.Errorw(
 					"worker recovered from panic",
 					"worker_id", workerID,
 					"error", v,
 				)
-
-				err_resp = pkgerrors.New(v)
 			default:
 				const msg = "unknown cause"
 
@@ -234,8 +232,6 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 					"worker_id", workerID,
 					"error", msg,
 				)
-
-				err_resp = pkgerrors.New(msg)
 			}
 		}
 	}()
@@ -244,7 +240,8 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 	if err != nil {
 		if v, ok := task.(DoRetryer); ok {
 			if v, ok := v.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
-				return err, false, false
+				err_resp = err
+				return true, false, false
 			}
 
 			if x, ok := v.(*retryTask); ok {
@@ -252,13 +249,15 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 			}
 			lt.enqueueRetry(v, err)
 
-			return err, true, false
+			err_resp = err
+			return true, true, false
 		}
 
-		return err, false, false
+		err_resp = err
+		return true, false, false
 	}
 
-	return nil, false, false
+	return false, false, false
 }
 
 func (lt *Loadtest) newRetryTask(task DoRetryer, err error) *retryTask {
@@ -395,7 +394,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 		sumElapsed += tr.Elapsed
 
 		// TODO: remove ifs
-		if tr.Err == nil {
+		if !tr.Errored {
 			numPass++
 		} else {
 			numFail++
