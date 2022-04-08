@@ -14,6 +14,7 @@ type loadtestOptions struct {
 	interval                time.Duration
 	csvOutputFilename       string
 	csvOutputFlushFrequency time.Duration
+	csvOutputDisabled       bool
 }
 
 type LoadtestOption func(*loadtestOptions)
@@ -76,5 +77,11 @@ func CsvFilename(s string) LoadtestOption {
 func CsvFlushFrequency(d time.Duration) LoadtestOption {
 	return func(opt *loadtestOptions) {
 		opt.csvOutputFlushFrequency = d
+	}
+}
+
+func CsvWriterDisabled(b bool) LoadtestOption {
+	return func(opt *loadtestOptions) {
+		opt.csvOutputDisabled = b
 	}
 }

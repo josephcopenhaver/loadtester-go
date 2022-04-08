@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -64,7 +65,13 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) *Loadtest {
 		opt.taskBufferingFactor = 1
 	}
 
-	maxWorkQueueSize := opt.maxWorkers * opt.taskBufferingFactor
+	maxWorkQueueSize := opt.maxIntervalTasks * opt.taskBufferingFactor
+	numPossibleLagResults := opt.taskBufferingFactor
+
+	var csvWriteErr error
+	if opt.csvOutputDisabled {
+		csvWriteErr = errCsvWriterDisabled
+	}
 
 	return &Loadtest{
 		impl:          impl,
@@ -73,7 +80,7 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) *Loadtest {
 		numWorkers:    opt.numWorkers,
 		workers:       make([]chan struct{}, 0, opt.maxWorkers),
 		taskChan:      make(chan taskWithMeta, maxWorkQueueSize),
-		resultsChan:   make(chan taskResult, maxWorkQueueSize),
+		resultsChan:   make(chan taskResult, maxWorkQueueSize+numPossibleLagResults),
 		retryTasks:    make([]*retryTask, 0, maxWorkQueueSize),
 
 		maxIntervalTasks: opt.maxIntervalTasks,
@@ -88,9 +95,12 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) *Loadtest {
 		csvData: csvData{
 			outputFilename: opt.csvOutputFilename,
 			flushFrequency: opt.csvOutputFlushFrequency,
+			writeErr:       csvWriteErr,
 		},
 	}
 }
+
+var errCsvWriterDisabled = errors.New("csv metrics writer disabled")
 
 type csvData struct {
 	outputFilename string
@@ -300,7 +310,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 
 	var intervalID time.Time
 	var resultCount, numNewTasks, numPass, numFail, numRetry, numPanic int
-	var minElapsed, maxElapsed, sumElapsed, sumLag time.Duration
+	var lag, minElapsed, maxElapsed, sumElapsed, sumLag time.Duration
 
 	minElapsed = maxDuration
 
@@ -309,6 +319,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 			intervalID:  intervalID,
 			sumLag:      sumLag,
 			numNewTasks: numNewTasks,
+			lag:         lag,
 			numTasks:    resultCount,
 			numPass:     numPass,
 			numFail:     numFail,
@@ -319,7 +330,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 			sumElapsed:  sumElapsed,
 		})
 
-		if !now.After(lt.csvData.flushDeadline) {
+		if !lt.csvData.flushDeadline.After(now) {
 			if lt.csvData.writeErr == nil {
 				lt.csvData.writer.Flush()
 				lt.csvData.writeErr = lt.csvData.writer.Error()
@@ -357,10 +368,17 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 			continue
 		}
 
+		if tr.Meta.IntervalID.IsZero() {
+
+			sumLag += tr.Meta.Lag
+
+			continue
+		}
+
 		if intervalID.Before(tr.Meta.IntervalID) {
 			intervalID = tr.Meta.IntervalID
 			numNewTasks = tr.Meta.NumNewTasks
-			sumLag += tr.Meta.Lag
+			lag = tr.Meta.Lag
 		}
 		if minElapsed > tr.Elapsed {
 			minElapsed = tr.Elapsed
@@ -400,6 +418,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 			numRetry = 0
 			numPanic = 0
 			sumLag = 0
+			lag = 0
 		}
 	}
 }
@@ -459,6 +478,7 @@ type metricRecord struct {
 	intervalID                         time.Time
 	sumLag                             time.Duration
 	numNewTasks                        int
+	lag                                time.Duration
 	numTasks                           int
 	numPass                            int
 	numFail                            int
@@ -471,8 +491,9 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 	return lt.csvData.writer.Write([]string{
 		"sample_time",
 		"interval_id",   // gauge
-		"sum_lag",       // gauge
 		"num_new_tasks", // gauge
+		"lag",           // gauge
+		"sum_lag",
 		"num_tasks",
 		"num_pass",
 		"num_fail",
@@ -495,8 +516,9 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 	return lt.csvData.writer.Write([]string{
 		nowStr,
 		mr.intervalID.Format(time.RFC3339Nano),
-		mr.sumLag.String(),
 		strconv.Itoa(mr.numNewTasks),
+		mr.lag.String(),
+		mr.sumLag.String(),
 		strconv.Itoa(mr.numTasks),
 		strconv.Itoa(mr.numPass),
 		strconv.Itoa(mr.numFail),
@@ -511,36 +533,40 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 
 func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
-	csvf, err := os.Create(lt.csvData.outputFilename)
-	if err != nil {
-		return fmt.Errorf("failed to open output csv metrics file for writing: %w", err)
-	}
-	defer func() {
-		err := csvf.Close()
+	if lt.csvData.writeErr == nil {
+
+		csvf, err := os.Create(lt.csvData.outputFilename)
 		if err != nil {
-			if lt.csvData.writeErr != nil {
-				lt.csvData.writeErr = err
+			return fmt.Errorf("failed to open output csv metrics file for writing: %w", err)
+		}
+		defer func() {
+			err := csvf.Close()
+			if err != nil {
+				if lt.csvData.writeErr != nil {
+					lt.csvData.writeErr = err
+				}
 			}
-			if err_result == nil {
+
+			if err_result == nil && lt.csvData.writeErr != errCsvWriterDisabled {
 				err_result = lt.csvData.writeErr
 			}
-		}
-	}()
+		}()
 
-	lt.csvData.writeErr = lt.writeOutputCsvConfigComment(csvf)
+		lt.csvData.writeErr = lt.writeOutputCsvConfigComment(csvf)
+
+		if lt.csvData.writeErr == nil {
+
+			lt.csvData.writer = csv.NewWriter(csvf)
+
+			lt.csvData.writeErr = lt.writeOutputCsvHeaders()
+		}
+	}
 
 	var wg sync.WaitGroup
 	stopChan := make(chan struct{})
 
 	wg.Add(1)
 	go lt.resultsHandler(&wg, stopChan)
-
-	csvw := csv.NewWriter(csvf)
-	lt.csvData.writer = csvw
-
-	if lt.csvData.writeErr == nil {
-		lt.csvData.writeErr = lt.writeOutputCsvHeaders()
-	}
 
 	numWorkers := lt.numWorkers
 
@@ -702,10 +728,6 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 		meta.IntervalID = intervalID
 
-		if delay < 0 {
-			meta.Lag = -delay
-		}
-
 		if numNewTasks <= 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
 
 			for _, task := range taskBuf {
@@ -738,8 +760,17 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		}
 
 		if delay < 0 {
+			lag := -delay
+
 			intervalID = realNow
-			meta.Lag = -delay
+			meta.Lag = lag
+
+			lt.resultWaitGroup.Add(1)
+			lt.resultsChan <- taskResult{
+				Meta: taskMeta{
+					Lag: lag,
+				},
+			}
 		}
 	}
 }
