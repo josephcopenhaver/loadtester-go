@@ -34,9 +34,6 @@ func MaxWorkers(max int) LoadtestOption {
 func NumWorkers(n int) LoadtestOption {
 	return func(opt *loadtestOptions) {
 		opt.numWorkers = n
-		if opt.maxWorkers < n {
-			opt.maxWorkers = n
-		}
 	}
 }
 
@@ -46,7 +43,6 @@ func TaskBufferingFactor(factor int) LoadtestOption {
 	}
 }
 
-// MaxIntervalTasks could be removed as this is more of a hint
 func MaxIntervalTasks(n int) LoadtestOption {
 	return func(opt *loadtestOptions) {
 		opt.maxIntervalTasks = n
@@ -56,9 +52,6 @@ func MaxIntervalTasks(n int) LoadtestOption {
 func NumIntervalTasks(n int) LoadtestOption {
 	return func(opt *loadtestOptions) {
 		opt.numIntervalTasks = n
-		if opt.maxIntervalTasks < n {
-			opt.maxIntervalTasks = n
-		}
 	}
 }
 

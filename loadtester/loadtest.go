@@ -42,7 +42,7 @@ type Loadtest struct {
 	csvData
 }
 
-func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) *Loadtest {
+func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error) {
 
 	opt := loadtestOptions{
 		taskBufferingFactor:     4,
@@ -57,6 +57,14 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) *Loadtest {
 
 	for _, op := range options {
 		op(&opt)
+	}
+
+	if opt.maxWorkers < opt.numWorkers {
+		return nil, errors.New("loadtest misconfigured: MaxWorkers < NumWorkers")
+	}
+
+	if opt.maxIntervalTasks < opt.numIntervalTasks {
+		return nil, errors.New("loadtest misconfigured: MaxIntervalTasks < NumIntervalTasks")
 	}
 
 	if opt.taskBufferingFactor <= 0 {
@@ -95,7 +103,7 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) *Loadtest {
 			flushFrequency: opt.csvOutputFlushFrequency,
 			writeErr:       csvWriteErr,
 		},
-	}
+	}, nil
 }
 
 var errCsvWriterDisabled = errors.New("csv metrics writer disabled")
@@ -686,6 +694,14 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 					// prevent over commiting on the maxWorkers count
 					if n > lt.maxWorkers {
+						Logger.Errorw(
+							"config update not within loadtest boundary conditions: numWorkers",
+							"reason", "update tried to set numWorkers set too high",
+							"remediation_hint", "increase the loadtests's MaxWorkers setting",
+							"remediation_taken", "using max value",
+							"requested", n,
+							"max", lt.maxWorkers,
+						)
 						n = lt.maxWorkers
 					}
 
@@ -717,8 +733,15 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					n := cu.numIntervalTasks.val
 
 					// prevent over commiting on the maxIntervalTasks count
-					// note this upper bound may be removed as it is more of a hint
 					if n > lt.maxIntervalTasks {
+						Logger.Errorw(
+							"config update not within loadtest boundary conditions: numIntervalTasks",
+							"reason", "update tried to set numIntervalTasks set too high",
+							"remediation_hint", "increase the loadtests's MaxIntervalTasks setting",
+							"remediation_taken", "using max value",
+							"requested", n,
+							"max", lt.maxIntervalTasks,
+						)
 						n = lt.maxIntervalTasks
 					}
 
