@@ -109,9 +109,10 @@ type csvData struct {
 }
 
 type taskResult struct {
-	Panicked    bool
-	RetryQueued bool
-	Errored     bool
+	Passed      uint8
+	Panicked    uint8
+	RetryQueued uint8
+	Errored     uint8
 	Elapsed     time.Duration
 	Meta        taskMeta
 }
@@ -167,10 +168,11 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 		case task := <-lt.taskChan:
 
 			start := time.Now().UTC()
-			errored, retryQueued, panicked := lt.doTask(ctx, workerID, task)
+			passed, errored, retryQueued, panicked := lt.doTask(ctx, workerID, task)
 			elapsed := time.Since(start)
 
 			lt.resultsChan <- taskResult{
+				Passed:      passed,
 				Panicked:    panicked,
 				RetryQueued: retryQueued,
 				Errored:     errored,
@@ -181,7 +183,7 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 	}
 }
 
-func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskWithMeta) (errored_resp bool, retryQueued_resp, panicking_resp bool) {
+func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskWithMeta) (success_resp, errored_resp, retryQueued_resp, panicking_resp uint8) {
 	var err_resp error
 
 	task := taskWithMeta.doer
@@ -202,8 +204,8 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 		}
 
 		if r := recover(); r != nil {
-			panicking_resp = true
-			errored_resp = true
+			panicking_resp = 1
+			errored_resp = 1
 
 			switch v := r.(type) {
 			case error:
@@ -241,7 +243,7 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 		if v, ok := task.(DoRetryer); ok {
 			if v, ok := v.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
 				err_resp = err
-				return true, false, false
+				return 0, 1, 0, 0
 			}
 
 			if x, ok := v.(*retryTask); ok {
@@ -250,14 +252,14 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 			lt.enqueueRetry(v, err)
 
 			err_resp = err
-			return true, true, false
+			return 0, 1, 1, 0
 		}
 
 		err_resp = err
-		return true, false, false
+		return 0, 1, 0, 0
 	}
 
-	return false, false, false
+	return 1, 0, 0, 0
 }
 
 func (lt *Loadtest) newRetryTask(task DoRetryer, err error) *retryTask {
@@ -318,7 +320,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 
 	minElapsed = maxDuration
 
-	flushMetrics := func(now time.Time) {
+	writeRow := func() {
 		lt.csvData.writeErr = lt.writeOutputCsvRow(metricRecord{
 			intervalID:  intervalID,
 			sumLag:      sumLag,
@@ -333,14 +335,6 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 			maxElapsed:  maxElapsed,
 			sumElapsed:  sumElapsed,
 		})
-
-		if !lt.csvData.flushDeadline.After(now) {
-			if lt.csvData.writeErr == nil {
-				lt.csvData.writer.Flush()
-				lt.csvData.writeErr = lt.csvData.writer.Error()
-			}
-			lt.csvData.flushDeadline = time.Now().UTC().Add(lt.csvData.flushFrequency)
-		}
 	}
 
 	lt.csvData.flushDeadline = time.Now().UTC().Add(lt.csvData.flushFrequency)
@@ -352,19 +346,12 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 		case tr = <-lt.resultsChan:
 		case <-stopChan:
 			if lt.csvData.writeErr == nil && resultCount > 0 {
-				now := time.Now().UTC()
-				lt.csvData.flushDeadline = now
-				flushMetrics(now)
+				writeRow()
 			}
 			return
 		}
 
 		lt.resultWaitGroup.Done()
-
-		// Logger.Debugw(
-		// 	"got result",
-		// 	"result", tr,
-		// )
 
 		// TODO: include percentage complete when maxTotalTasks is greater than 0
 
@@ -384,33 +371,32 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 			numNewTasks = tr.Meta.NumNewTasks
 			lag = tr.Meta.Lag
 		}
+
 		if minElapsed > tr.Elapsed {
 			minElapsed = tr.Elapsed
 		}
+
 		if maxElapsed < tr.Elapsed {
 			maxElapsed = tr.Elapsed
 		}
 
 		sumElapsed += tr.Elapsed
-
-		// TODO: remove ifs
-		if !tr.Errored {
-			numPass++
-		} else {
-			numFail++
-		}
-		if tr.Panicked {
-			numPanic++
-		}
-		if tr.RetryQueued {
-			numRetry++
-		}
+		numPass += int(tr.Passed)
+		numFail += int(tr.Errored)
+		numPanic += int(tr.Panicked)
+		numRetry += int(tr.RetryQueued)
 
 		resultCount++
 
 		if resultCount >= numNewTasks {
 
-			flushMetrics(time.Now().UTC())
+			writeRow()
+
+			if lt.csvData.writeErr == nil && !lt.csvData.flushDeadline.After(time.Now().UTC()) {
+				lt.csvData.writer.Flush()
+				lt.csvData.writeErr = lt.csvData.writer.Error()
+				lt.csvData.flushDeadline = time.Now().UTC().Add(lt.csvData.flushFrequency)
+			}
 
 			// reset metrics
 			minElapsed = maxDuration
@@ -492,7 +478,7 @@ type metricRecord struct {
 }
 
 func (lt *Loadtest) writeOutputCsvHeaders() error {
-	return lt.csvData.writer.Write([]string{
+	err := lt.csvData.writer.Write([]string{
 		"sample_time",
 		"interval_id",   // gauge
 		"num_new_tasks", // gauge
@@ -508,6 +494,14 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 		"max_elapsed",
 		"sum_elapsed",
 	})
+	if err != nil {
+		return err
+	}
+
+	// ensure headers flush asap
+	lt.csvData.writer.Flush()
+
+	return lt.csvData.writer.Error()
 }
 
 func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
@@ -544,6 +538,14 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			return fmt.Errorf("failed to open output csv metrics file for writing: %w", err)
 		}
 		defer func() {
+			if lt.csvData.writeErr == nil {
+				lt.csvData.writer.Flush()
+				lt.csvData.writeErr = lt.csvData.writer.Error()
+				if lt.csvData.writeErr == nil {
+					_, lt.csvData.writeErr = csvf.Write([]byte("\n# {\"done\":{\"end_time\":\"" + time.Now().UTC().Format(time.RFC3339Nano) + "\"}}\n"))
+				}
+			}
+
 			err := csvf.Close()
 			if err != nil {
 				if lt.csvData.writeErr != nil {
