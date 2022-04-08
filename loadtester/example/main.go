@@ -27,14 +27,10 @@ func main() {
 	ctx, cancel := loadtester.RootContext()
 	defer cancel()
 
-	// TODO: consider a lib change to default Max values if never explicitly set
-
 	lt, err := loadtester.NewLoadtest(
 		&MyLoadtest{},
 		loadtester.NumWorkers(5),
-		loadtester.MaxWorkers(5),
 		loadtester.NumIntervalTasks(25),
-		loadtester.MaxIntervalTasks(25),
 		loadtester.Interval(1*time.Second),
 	)
 	if err != nil {

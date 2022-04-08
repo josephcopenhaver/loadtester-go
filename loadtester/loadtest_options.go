@@ -8,9 +8,13 @@ type loadtestOptions struct {
 	taskBufferingFactor     int
 	maxTotalTasks           int
 	maxWorkers              int
+	maxWorkersSet           bool
 	numWorkers              int
+	numWorkersSet           bool
 	maxIntervalTasks        int
+	maxIntervalTasksSet     bool
 	numIntervalTasks        int
+	numIntervalTasksSet     bool
 	interval                time.Duration
 	csvOutputFilename       string
 	csvOutputFlushFrequency time.Duration
@@ -28,12 +32,14 @@ func MaxTotalTasks(max int) LoadtestOption {
 func MaxWorkers(max int) LoadtestOption {
 	return func(opt *loadtestOptions) {
 		opt.maxWorkers = max
+		opt.maxWorkersSet = true
 	}
 }
 
 func NumWorkers(n int) LoadtestOption {
 	return func(opt *loadtestOptions) {
 		opt.numWorkers = n
+		opt.numWorkersSet = true
 	}
 }
 
@@ -46,12 +52,14 @@ func TaskBufferingFactor(factor int) LoadtestOption {
 func MaxIntervalTasks(n int) LoadtestOption {
 	return func(opt *loadtestOptions) {
 		opt.maxIntervalTasks = n
+		opt.maxIntervalTasksSet = true
 	}
 }
 
 func NumIntervalTasks(n int) LoadtestOption {
 	return func(opt *loadtestOptions) {
 		opt.numIntervalTasks = n
+		opt.numIntervalTasksSet = true
 	}
 }
 

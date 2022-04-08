@@ -59,12 +59,28 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error
 		op(&opt)
 	}
 
+	if !opt.maxWorkersSet && opt.numWorkersSet {
+		opt.maxWorkers = opt.numWorkers
+	}
+
+	if !opt.maxIntervalTasksSet && opt.numIntervalTasksSet {
+		opt.maxIntervalTasks = opt.numIntervalTasks
+	}
+
 	if opt.maxWorkers < opt.numWorkers {
 		return nil, errors.New("loadtest misconfigured: MaxWorkers < NumWorkers")
 	}
 
+	if opt.maxWorkers < 1 {
+		return nil, errors.New("loadtest misconfigured: MaxWorkers < 1")
+	}
+
 	if opt.maxIntervalTasks < opt.numIntervalTasks {
 		return nil, errors.New("loadtest misconfigured: MaxIntervalTasks < NumIntervalTasks")
+	}
+
+	if opt.maxIntervalTasks < 1 {
+		return nil, errors.New("loadtest misconfigured: maxIntervalTasks < 1")
 	}
 
 	if opt.taskBufferingFactor <= 0 {
