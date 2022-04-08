@@ -39,6 +39,7 @@ type Loadtest struct {
 	retryTasks    []*retryTask
 	retryTaskPool sync.Pool
 
+	startTime time.Time
 	csvData
 }
 
@@ -442,14 +443,7 @@ const (
 	maxDuration                      = time.Duration((^uint64(0)) >> 1)
 )
 
-func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
-	if _, err := w.Write([]byte(`# `)); err != nil {
-		return err
-	}
-
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-
+func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 	type Config struct {
 		StartTime             string `json:"start_time"`
 		Interval              string `json:"interval"`
@@ -461,8 +455,8 @@ func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
 		MetricsFlushFrequency string `json:"metrics_flush_frequency"`
 	}
 
-	cfg := Config{
-		StartTime:             time.Now().UTC().Format(time.RFC3339Nano),
+	return Config{
+		StartTime:             lt.startTime.Format(time.RFC3339Nano),
 		Interval:              lt.interval.String(),
 		MaxIntervalTasks:      lt.maxIntervalTasks,
 		MaxTotalTasks:         lt.maxTotalTasks,
@@ -471,12 +465,19 @@ func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
 		NumWorkers:            lt.numWorkers,
 		MetricsFlushFrequency: lt.csvData.flushFrequency.String(),
 	}
+}
 
-	Logger.Infow("writing metics config", "config", cfg)
+func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
+	if _, err := w.Write([]byte(`# `)); err != nil {
+		return err
+	}
+
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
 
 	err := enc.Encode(struct {
-		Config `json:"config"`
-	}{cfg})
+		C interface{} `json:"config"`
+	}{lt.getLoadtestConfigAsJson()})
 	if err != nil {
 		return err
 	}
@@ -582,6 +583,8 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 
 func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
+	lt.startTime = time.Now().UTC()
+
 	if lt.csvData.writeErr == nil {
 
 		csvf, err := os.Create(lt.csvData.outputFilename)
@@ -618,6 +621,11 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			lt.csvData.writeErr = lt.writeOutputCsvHeaders()
 		}
 	}
+
+	Logger.Infow(
+		"starting loadtest",
+		"config", lt.getLoadtestConfigAsJson(),
+	)
 
 	var wg sync.WaitGroup
 	stopChan := make(chan struct{})
