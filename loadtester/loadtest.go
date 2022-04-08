@@ -315,25 +315,27 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 	defer wg.Done()
 
 	var intervalID time.Time
-	var resultCount, numNewTasks, numPass, numFail, numRetry, numPanic int
+	var totalResultCount, resultCount, numNewTasks, numPass, numFail, numRetry, numPanic int
 	var lag, minElapsed, maxElapsed, sumElapsed, sumLag time.Duration
 
 	minElapsed = maxDuration
 
 	writeRow := func() {
+		totalResultCount += resultCount
 		lt.csvData.writeErr = lt.writeOutputCsvRow(metricRecord{
-			intervalID:  intervalID,
-			sumLag:      sumLag,
-			numNewTasks: numNewTasks,
-			lag:         lag,
-			numTasks:    resultCount,
-			numPass:     numPass,
-			numFail:     numFail,
-			numRetry:    numRetry,
-			numPanic:    numPanic,
-			minElapsed:  minElapsed,
-			maxElapsed:  maxElapsed,
-			sumElapsed:  sumElapsed,
+			totalResultCount: totalResultCount,
+			intervalID:       intervalID,
+			sumLag:           sumLag,
+			numNewTasks:      numNewTasks,
+			lag:              lag,
+			numTasks:         resultCount,
+			numPass:          numPass,
+			numFail:          numFail,
+			numRetry:         numRetry,
+			numPanic:         numPanic,
+			minElapsed:       minElapsed,
+			maxElapsed:       maxElapsed,
+			sumElapsed:       sumElapsed,
 		})
 	}
 
@@ -352,8 +354,6 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 		}
 
 		lt.resultWaitGroup.Done()
-
-		// TODO: include percentage complete when maxTotalTasks is greater than 0
 
 		if lt.csvData.writeErr != nil {
 			continue
@@ -474,11 +474,13 @@ type metricRecord struct {
 	numFail                            int
 	numRetry                           int
 	numPanic                           int
+	totalResultCount                   int
 	minElapsed, maxElapsed, sumElapsed time.Duration
 }
 
 func (lt *Loadtest) writeOutputCsvHeaders() error {
-	err := lt.csvData.writer.Write([]string{
+
+	fields := []string{
 		"sample_time",
 		"interval_id",   // gauge
 		"num_new_tasks", // gauge
@@ -493,7 +495,13 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 		"avg_elapsed",
 		"max_elapsed",
 		"sum_elapsed",
-	})
+	}
+
+	if lt.maxTotalTasks > 0 {
+		fields = append(fields, "percent_done")
+	}
+
+	err := lt.csvData.writer.Write(fields)
 	if err != nil {
 		return err
 	}
@@ -511,7 +519,10 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 
 	nowStr := time.Now().UTC().Format(time.RFC3339Nano)
 
-	return lt.csvData.writer.Write([]string{
+	// TODO: `if lt.maxTotalTasks > 0` can be removed via a refactor and
+	// it would save some cycles
+
+	fields := []string{
 		nowStr,
 		mr.intervalID.Format(time.RFC3339Nano),
 		strconv.Itoa(mr.numNewTasks),
@@ -526,7 +537,23 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 		(mr.sumElapsed / time.Duration(mr.numTasks)).String(),
 		mr.maxElapsed.String(),
 		mr.sumElapsed.String(),
-	})
+		"",
+	}
+
+	if lt.maxTotalTasks > 0 {
+		high := mr.totalResultCount * 10000 / lt.maxTotalTasks
+		low := high % 100
+		high = high / 100
+		var prefix string
+		if low < 10 {
+			prefix = "0"
+		}
+		fields[len(fields)-1] = strconv.Itoa(high) + "." + prefix + strconv.Itoa(low)
+	} else {
+		fields = fields[:len(fields)-1]
+	}
+
+	return lt.csvData.writer.Write(fields)
 }
 
 func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
@@ -632,6 +659,10 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	for {
 		if maxTotalTasks > 0 {
 			if numTotalTasks >= maxTotalTasks {
+				Logger.Warnw(
+					"loadtest finished",
+					"maxTotalTasks", maxTotalTasks,
+				)
 				return
 			}
 
