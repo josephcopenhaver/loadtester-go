@@ -152,9 +152,9 @@ type taskResult struct {
 }
 
 type taskMeta struct {
-	IntervalID  time.Time
-	NumNewTasks int
-	Lag         time.Duration `json:",omitempty"`
+	IntervalID       time.Time
+	NumIntervalTasks int
+	Lag              time.Duration `json:",omitempty"`
 }
 
 type taskWithMeta struct {
@@ -349,7 +349,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 	defer wg.Done()
 
 	var intervalID time.Time
-	var totalResultCount, resultCount, numNewTasks, numPass, numFail, numRetry, numPanic int
+	var totalResultCount, resultCount, numIntervalTasks, numPass, numFail, numRetry, numPanic int
 	var lag, minElapsed, maxElapsed, sumElapsed, sumLag time.Duration
 
 	minElapsed = maxDuration
@@ -360,7 +360,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 			totalResultCount: totalResultCount,
 			intervalID:       intervalID,
 			sumLag:           sumLag,
-			numNewTasks:      numNewTasks,
+			numIntervalTasks: numIntervalTasks,
 			lag:              lag,
 			numTasks:         resultCount,
 			numPass:          numPass,
@@ -402,7 +402,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 
 		if intervalID.Before(tr.Meta.IntervalID) {
 			intervalID = tr.Meta.IntervalID
-			numNewTasks = tr.Meta.NumNewTasks
+			numIntervalTasks = tr.Meta.NumIntervalTasks
 			lag = tr.Meta.Lag
 		}
 
@@ -422,7 +422,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 
 		resultCount++
 
-		if resultCount >= numNewTasks {
+		if resultCount >= numIntervalTasks {
 
 			writeRow()
 
@@ -505,7 +505,7 @@ func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
 type metricRecord struct {
 	intervalID                         time.Time
 	sumLag                             time.Duration
-	numNewTasks                        int
+	numIntervalTasks                   int
 	lag                                time.Duration
 	numTasks                           int
 	numPass                            int
@@ -520,9 +520,9 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 
 	fields := []string{
 		"sample_time",
-		"interval_id",   // gauge
-		"num_new_tasks", // gauge
-		"lag",           // gauge
+		"interval_id",        // gauge
+		"num_interval_tasks", // gauge
+		"lag",                // gauge
 		"sum_lag",
 		"num_tasks",
 		"num_pass",
@@ -560,7 +560,7 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 	fields := []string{
 		nowStr,
 		mr.intervalID.Format(time.RFC3339Nano),
-		strconv.Itoa(mr.numNewTasks),
+		strconv.Itoa(mr.numIntervalTasks),
 		mr.lag.String(),
 		mr.sumLag.String(),
 		strconv.Itoa(mr.numTasks),
@@ -654,15 +654,14 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	maxTotalTasks := lt.maxTotalTasks
 
 	interval := lt.interval
-	numIntervalTasks := lt.numIntervalTasks
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	updatechan := lt.impl.UpdateChan()
 	configChanges := make([]interface{}, 0, 12)
 	meta := taskMeta{
-		NumNewTasks: numNewTasks,
+		NumIntervalTasks: lt.numIntervalTasks,
 	}
-	interTaskInterval := interval / time.Duration(numIntervalTasks)
+	interTaskInterval := interval / time.Duration(meta.NumIntervalTasks)
 
 	taskBuf := make([]Doer, 0, lt.maxIntervalTasks)
 
@@ -683,12 +682,12 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				return nil
 			}
 
-			if numIntervalTasks <= 0 || numWorkers <= 0 {
+			if meta.NumIntervalTasks <= 0 || numWorkers <= 0 {
 
 				Logger.Errorw(
 					"retry flushing could not be attempted",
 					"total_num_tasks", totalNumTasks,
-					"num_interval_tasks", numIntervalTasks,
+					"num_interval_tasks", meta.NumIntervalTasks,
 					"num_workers", numWorkers,
 				)
 
@@ -697,7 +696,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 			originalTotalNumTasks := totalNumTasks
 
-			Logger.Debugw(
+			Logger.Warnw(
 				"shutting down: flushing retries",
 				"total_num_tasks", totalNumTasks,
 				"flush_retries_timeout", lt.flushRetriesTimeout.String(),
@@ -707,6 +706,8 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			defer cancel()
 
 			intervalID = time.Now().UTC()
+			taskBuf = taskBuf[:0]
+			meta.Lag = 0
 
 			for {
 
@@ -746,11 +747,9 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 						}
 
 						numNewTasks = maxTotalTasks - totalNumTasks
-						if numNewTasks > numIntervalTasks {
-							numNewTasks = numIntervalTasks
+						if numNewTasks > meta.NumIntervalTasks {
+							numNewTasks = meta.NumIntervalTasks
 						}
-
-						meta.NumNewTasks = numNewTasks
 					}
 
 					select {
@@ -767,7 +766,8 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 					// read up to numNewTasks from retry slice
 					taskBuf = lt.loadRetries(taskBuf, numNewTasks)
-					if len(taskBuf) <= 0 {
+					taskBufSize := len(taskBuf)
+					if taskBufSize <= 0 {
 						Logger.Infow(
 							"all retries flushed",
 							"original_total_num_tasks", originalTotalNumTasks,
@@ -776,11 +776,11 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 						return nil
 					}
 
-					lt.resultWaitGroup.Add(len(taskBuf))
+					lt.resultWaitGroup.Add(taskBufSize)
 
 					meta.IntervalID = intervalID
 
-					if len(taskBuf) == 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
+					if taskBufSize == 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
 
 						for _, task := range taskBuf {
 							lt.taskChan <- taskWithMeta{task, meta}
@@ -797,7 +797,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 					taskBuf = taskBuf[:0]
 
-					totalNumTasks += numNewTasks
+					totalNumTasks += taskBufSize
 
 					meta.Lag = 0
 
@@ -809,7 +809,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 						time.Sleep(delay)
 						intervalID = nextIntervalID
 
-						if len(taskBuf) < numNewTasks {
+						if taskBufSize < numNewTasks {
 							break
 						}
 
@@ -830,7 +830,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 						}
 					}
 
-					if len(taskBuf) < numNewTasks {
+					if taskBufSize < numNewTasks {
 						break
 					}
 				}
@@ -880,11 +880,9 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			}
 
 			numNewTasks = maxTotalTasks - totalNumTasks
-			if numNewTasks > numIntervalTasks {
-				numNewTasks = numIntervalTasks
+			if numNewTasks > meta.NumIntervalTasks {
+				numNewTasks = meta.NumIntervalTasks
 			}
-
-			meta.NumNewTasks = numNewTasks
 		}
 
 		select {
@@ -954,11 +952,11 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				}
 
 				configChanges = append(configChanges,
-					"old_num_interval_tasks", numIntervalTasks,
+					"old_num_interval_tasks", meta.NumIntervalTasks,
 					"new_num_interval_tasks", n,
 				)
-				numIntervalTasks = n
 				numNewTasks = n
+				meta.NumIntervalTasks = n
 			}
 
 			if cu.interval.set {
@@ -972,7 +970,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			}
 
 			if recomputeInterTaskInterval {
-				interTaskInterval = interval / time.Duration(numIntervalTasks)
+				interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
 			}
 
 			Logger.Warnw(
@@ -982,13 +980,13 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			configChanges = configChanges[:0]
 
 			// pause load generation if unable to schedule anything
-			if numIntervalTasks <= 0 || numWorkers <= 0 {
+			if meta.NumIntervalTasks <= 0 || numWorkers <= 0 {
 
 				pauseStart := time.Now().UTC()
 
 				Logger.Warnw(
 					"pausing load generation",
-					"num_interval_tasks", numIntervalTasks,
+					"num_interval_tasks", meta.NumIntervalTasks,
 					"num_workers", numWorkers,
 					"paused_at", pauseStart,
 				)
@@ -1001,7 +999,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 					Logger.Warnw(
 						"resuming load generation",
-						"num_interval_tasks", numIntervalTasks,
+						"num_interval_tasks", meta.NumIntervalTasks,
 						"num_workers", numWorkers,
 						"paused_at", pauseStart,
 						"resumed_at", pauseEnd,
@@ -1021,6 +1019,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		taskBuf = lt.loadRetries(taskBuf, numNewTasks)
 
 		for i := len(taskBuf); i < numNewTasks; i++ {
+
 			task, ok := lt.impl.NextTask()
 			if !ok {
 				// iteration is technically done now
@@ -1032,18 +1031,30 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				if i == 0 {
 					// return immediately if there is nothing
 					// new to enqueue
+
+					Logger.Warnw(
+						"stopping loadtest: NextTask did not return a task",
+						"final_task_detla", 0,
+					)
+
 					return
 				}
+
+				Logger.Debugw("scheduled: stopping loadtest: NextTask did not return a task")
+
 				break
 			}
+
 			taskBuf = append(taskBuf, task)
 		}
 
-		lt.resultWaitGroup.Add(len(taskBuf))
+		taskBufSize := len(taskBuf)
+
+		lt.resultWaitGroup.Add(taskBufSize)
 
 		meta.IntervalID = intervalID
 
-		if numNewTasks <= 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
+		if taskBufSize <= 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
 
 			for _, task := range taskBuf {
 				lt.taskChan <- taskWithMeta{task, meta}
@@ -1058,17 +1069,21 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			}
 		}
 
-		if n := len(taskBuf); numNewTasks > n {
+		if numNewTasks > taskBufSize {
 			// must have hit the end of NextTask iterator
 			// increase total by actual number queued
 			// and stop traffic generation
-			totalNumTasks += n
+			totalNumTasks += taskBufSize
+			Logger.Warnw(
+				"stopping loadtest: NextTask did not return a task",
+				"final_task_detla", taskBufSize,
+			)
 			return
 		}
 
 		taskBuf = taskBuf[:0]
 
-		totalNumTasks += numNewTasks
+		totalNumTasks += taskBufSize
 
 		meta.Lag = 0
 
