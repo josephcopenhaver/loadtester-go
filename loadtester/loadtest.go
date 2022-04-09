@@ -568,7 +568,7 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 	if lt.maxTotalTasks > 0 {
 		high := mr.totalResultCount * 10000 / lt.maxTotalTasks
 		low := high % 100
-		high = high / 100
+		high /= 100
 		var prefix string
 		if low < 10 {
 			prefix = "0"
@@ -683,6 +683,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	updatechan := lt.impl.UpdateChan()
+	configChanges := make([]interface{}, 0, 12)
 	meta := taskMeta{
 		NumNewTasks: numNewTasks,
 	}
@@ -693,7 +694,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			if numTotalTasks >= maxTotalTasks {
 				Logger.Warnw(
 					"loadtest finished",
-					"maxTotalTasks", maxTotalTasks,
+					"max_total_tasks", maxTotalTasks,
 				)
 				return
 			}
@@ -748,6 +749,10 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 						}
 					}
 
+					configChanges = append(configChanges,
+						"old_num_workers", numWorkers,
+						"new_num_workers", n,
+					)
 					numWorkers = n
 				}
 
@@ -769,12 +774,20 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 						n = lt.maxIntervalTasks
 					}
 
+					configChanges = append(configChanges,
+						"old_num_interval_tasks", numIntervalTasks,
+						"new_num_interval_tasks", n,
+					)
 					numIntervalTasks = n
 				}
 
 				if cu.interval.set {
 					recomputeInterTaskInterval = true
 
+					configChanges = append(configChanges,
+						"old_interval", interval,
+						"new_interval", cu.interval.val,
+					)
 					interval = cu.interval.val
 				}
 
@@ -782,14 +795,38 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					interTaskInterval = interval / time.Duration(numIntervalTasks)
 				}
 
-				// TODO: log configuration updates when they occur
+				Logger.Warnw(
+					"loadtest config updated",
+					configChanges...,
+				)
+				configChanges = configChanges[:0]
 
 				// pause load generation if unable to schedule anything
 				if numIntervalTasks <= 0 || numWorkers <= 0 {
+
+					pauseStart := time.Now().UTC()
+
+					Logger.Warnw(
+						"pausing load generation",
+						"num_interval_tasks", numIntervalTasks,
+						"num_workers", numWorkers,
+						"paused_at", pauseStart,
+					)
+
 					select {
 					case <-ctxDone:
 						return
 					case cu = <-updatechan:
+						pauseEnd := time.Now().UTC()
+
+						Logger.Warnw(
+							"resuming load generation",
+							"num_interval_tasks", numIntervalTasks,
+							"num_workers", numWorkers,
+							"paused_at", pauseStart,
+							"resumed_at", pauseEnd,
+						)
+
 						continue
 					}
 				}
