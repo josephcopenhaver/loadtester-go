@@ -21,6 +21,7 @@ type loadtestOptions struct {
 	csvOutputDisabled       bool
 	flushRetriesTimeout     time.Duration
 	flushRetriesOnShutdown  bool
+	retriesDisabled         bool
 }
 
 type LoadtestOption func(*loadtestOptions)
@@ -101,5 +102,12 @@ func FlushRetriesOnShutdown(b bool) LoadtestOption {
 func FlushRetriesTimeout(d time.Duration) LoadtestOption {
 	return func(opt *loadtestOptions) {
 		opt.flushRetriesTimeout = d
+	}
+}
+
+// RetriesDisabled causes loadtester to ignore retry logic present on tasks
+func RetriesDisabled(b bool) LoadtestOption {
+	return func(opt *loadtestOptions) {
+		opt.retriesDisabled = b
 	}
 }

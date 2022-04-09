@@ -15,6 +15,9 @@ import (
 
 // TODO: offer a http client with a connection pool that matches max worker size plus some buffer/padding
 
+// TODO: RetriesDisabled runtimes checks can turn into init time checks; same with MaxTotalTasks based checks
+// I would no dream of doing this before prooving it is warranted first.
+
 type LoadtestImpl interface {
 	NextTask() (Doer, bool)
 	// UpdateChan should return the same channel each time or nil;
@@ -46,6 +49,7 @@ type Loadtest struct {
 
 	flushRetriesOnShutdown bool
 	flushRetriesTimeout    time.Duration
+	RetriesDisabled        bool
 }
 
 func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error) {
@@ -129,6 +133,7 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error
 
 		flushRetriesTimeout:    opt.flushRetriesTimeout,
 		flushRetriesOnShutdown: opt.flushRetriesOnShutdown,
+		RetriesDisabled:        opt.retriesDisabled,
 	}, nil
 }
 
@@ -274,19 +279,22 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 
 	err := task.Do(ctx, workerID)
 	if err != nil {
-		if v, ok := task.(DoRetryer); ok {
-			if v, ok := v.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
+		if !lt.RetriesDisabled {
+			if v, ok := task.(DoRetryer); ok {
+				if v, ok := v.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
+					err_resp = err
+					return 0, 1, 0, 0
+				}
+
+				if x, ok := v.(*retryTask); ok {
+					v = x.DoRetryer
+				}
+
+				lt.enqueueRetry(v, err)
+
 				err_resp = err
-				return 0, 1, 0, 0
+				return 0, 1, 1, 0
 			}
-
-			if x, ok := v.(*retryTask); ok {
-				v = x.DoRetryer
-			}
-			lt.enqueueRetry(v, err)
-
-			err_resp = err
-			return 0, 1, 1, 0
 		}
 
 		err_resp = err
@@ -835,7 +843,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					}
 				}
 			}
-		}(lt.flushRetriesOnShutdown)
+		}(!lt.RetriesDisabled && lt.flushRetriesOnShutdown)
 		if err != nil && err_result == nil {
 			err_result = err
 		}
@@ -1016,7 +1024,9 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		}
 
 		// read up to numNewTasks from retry slice
-		taskBuf = lt.loadRetries(taskBuf, numNewTasks)
+		if !lt.RetriesDisabled {
+			taskBuf = lt.loadRetries(taskBuf, numNewTasks)
+		}
 
 		for i := len(taskBuf); i < numNewTasks; i++ {
 
