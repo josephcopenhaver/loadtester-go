@@ -13,8 +13,10 @@ import (
 	"time"
 )
 
+// TODO: offer a http client with a connection pool that matches max worker size plus some buffer/padding
+
 type LoadtestImpl interface {
-	NextTask() Doer
+	NextTask() (Doer, bool)
 	// UpdateChan should return the same channel each time or nil;
 	// but once nil it must never be non-nil again
 	UpdateChan() <-chan ConfigUpdate
@@ -41,6 +43,9 @@ type Loadtest struct {
 
 	startTime time.Time
 	csvData
+
+	flushRetriesOnShutdown bool
+	flushRetriesTimeout    time.Duration
 }
 
 func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error) {
@@ -54,6 +59,7 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error
 		interval:                time.Second,
 		csvOutputFilename:       "metrics.csv",
 		csvOutputFlushFrequency: 5 * time.Second,
+		flushRetriesTimeout:     2 * time.Minute,
 	}
 
 	for _, op := range options {
@@ -120,6 +126,9 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error
 			flushFrequency: opt.csvOutputFlushFrequency,
 			writeErr:       csvWriteErr,
 		},
+
+		flushRetriesTimeout:    opt.flushRetriesTimeout,
+		flushRetriesOnShutdown: opt.flushRetriesOnShutdown,
 	}, nil
 }
 
@@ -445,25 +454,29 @@ const (
 
 func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 	type Config struct {
-		StartTime             string `json:"start_time"`
-		Interval              string `json:"interval"`
-		MaxIntervalTasks      int    `json:"max_interval_tasks"`
-		MaxTotalTasks         int    `json:"max_total_tasks"`
-		MaxWorkers            int    `json:"max_workers"`
-		NumIntervalTasks      int    `json:"num_interval_tasks"`
-		NumWorkers            int    `json:"num_workers"`
-		MetricsFlushFrequency string `json:"metrics_flush_frequency"`
+		StartTime              string `json:"start_time"`
+		Interval               string `json:"interval"`
+		MaxIntervalTasks       int    `json:"max_interval_tasks"`
+		MaxTotalTasks          int    `json:"max_total_tasks"`
+		MaxWorkers             int    `json:"max_workers"`
+		NumIntervalTasks       int    `json:"num_interval_tasks"`
+		NumWorkers             int    `json:"num_workers"`
+		MetricsFlushFrequency  string `json:"metrics_flush_frequency"`
+		FlushRetriesOnShutdown bool   `json:"flush_retries_on_shutdown"`
+		FlushRetriesTimeout    string `json:"flush_retries_timeout"`
 	}
 
 	return Config{
-		StartTime:             lt.startTime.Format(time.RFC3339Nano),
-		Interval:              lt.interval.String(),
-		MaxIntervalTasks:      lt.maxIntervalTasks,
-		MaxTotalTasks:         lt.maxTotalTasks,
-		MaxWorkers:            lt.maxWorkers,
-		NumIntervalTasks:      lt.numIntervalTasks,
-		NumWorkers:            lt.numWorkers,
-		MetricsFlushFrequency: lt.csvData.flushFrequency.String(),
+		StartTime:              lt.startTime.Format(time.RFC3339Nano),
+		Interval:               lt.interval.String(),
+		MaxIntervalTasks:       lt.maxIntervalTasks,
+		MaxTotalTasks:          lt.maxTotalTasks,
+		MaxWorkers:             lt.maxWorkers,
+		NumIntervalTasks:       lt.numIntervalTasks,
+		NumWorkers:             lt.numWorkers,
+		MetricsFlushFrequency:  lt.csvData.flushFrequency.String(),
+		FlushRetriesOnShutdown: lt.flushRetriesOnShutdown,
+		FlushRetriesTimeout:    lt.flushRetriesTimeout.String(),
 	}
 }
 
@@ -544,9 +557,6 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 
 	nowStr := time.Now().UTC().Format(time.RFC3339Nano)
 
-	// TODO: `if lt.maxTotalTasks > 0` can be removed via a refactor and
-	// it would save some cycles
-
 	fields := []string{
 		nowStr,
 		mr.intervalID.Format(time.RFC3339Nano),
@@ -580,6 +590,8 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 
 	return lt.csvData.writer.Write(fields)
 }
+
+var ErrRetriesFailedToFlush = errors.New("failed to flush all retries")
 
 func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
@@ -635,12 +647,199 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 	numWorkers := lt.numWorkers
 
+	var totalNumTasks int
+
+	intervalID := time.Now().UTC()
+
+	maxTotalTasks := lt.maxTotalTasks
+
+	interval := lt.interval
+	numIntervalTasks := lt.numIntervalTasks
+	numNewTasks := lt.numIntervalTasks
+	ctxDone := ctx.Done()
+	updatechan := lt.impl.UpdateChan()
+	configChanges := make([]interface{}, 0, 12)
+	meta := taskMeta{
+		NumNewTasks: numNewTasks,
+	}
+	interTaskInterval := interval / time.Duration(numIntervalTasks)
+
+	taskBuf := make([]Doer, 0, lt.maxIntervalTasks)
+
+	var delay time.Duration
+
 	// stopping routine runs on return
 	// flushing as much as possible
 	defer func() {
-		Logger.Debugw("waiting on results to flush")
 
-		// wait for all results to flush through
+		err := func(flushRetries bool) error {
+			if !flushRetries {
+
+				Logger.Debugw(
+					"waiting on results to flush",
+					"total_num_tasks", totalNumTasks,
+				)
+
+				return nil
+			}
+
+			if numIntervalTasks <= 0 || numWorkers <= 0 {
+
+				Logger.Errorw(
+					"retry flushing could not be attempted",
+					"total_num_tasks", totalNumTasks,
+					"num_interval_tasks", numIntervalTasks,
+					"num_workers", numWorkers,
+				)
+
+				return ErrRetriesFailedToFlush
+			}
+
+			originalTotalNumTasks := totalNumTasks
+
+			Logger.Debugw(
+				"shutting down: flushing retries",
+				"total_num_tasks", totalNumTasks,
+				"flush_retries_timeout", lt.flushRetriesTimeout.String(),
+			)
+
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), lt.flushRetriesTimeout)
+			defer cancel()
+
+			intervalID = time.Now().UTC()
+
+			for {
+
+				if shutdownCtx.Err() != nil {
+					Logger.Errorw(
+						"failed to flush all retries",
+						"original_total_num_tasks", originalTotalNumTasks,
+						"total_num_tasks", totalNumTasks,
+					)
+
+					return ErrRetriesFailedToFlush
+				}
+
+				lt.resultWaitGroup.Wait()
+
+				for {
+
+					if shutdownCtx.Err() != nil {
+						Logger.Errorw(
+							"failed to flush all retries",
+							"original_total_num_tasks", originalTotalNumTasks,
+							"total_num_tasks", totalNumTasks,
+						)
+
+						return ErrRetriesFailedToFlush
+					}
+
+					if maxTotalTasks > 0 {
+						if totalNumTasks >= maxTotalTasks {
+							Logger.Errorw(
+								"failed to flush all retries",
+								"original_total_num_tasks", originalTotalNumTasks,
+								"total_num_tasks", totalNumTasks,
+								"reason", "reached max total tasks",
+							)
+							return ErrRetriesFailedToFlush
+						}
+
+						numNewTasks = maxTotalTasks - totalNumTasks
+						if numNewTasks > numIntervalTasks {
+							numNewTasks = numIntervalTasks
+						}
+
+						meta.NumNewTasks = numNewTasks
+					}
+
+					select {
+					case <-ctxDone:
+						Logger.Warnw(
+							"user stopped loadtest while attempting to flush retries",
+							"original_total_num_tasks", originalTotalNumTasks,
+							"total_num_tasks", totalNumTasks,
+						)
+						return nil
+					default:
+						// continue with load generating retries
+					}
+
+					// read up to numNewTasks from retry slice
+					taskBuf = lt.loadRetries(taskBuf, numNewTasks)
+					if len(taskBuf) <= 0 {
+						Logger.Infow(
+							"all retries flushed",
+							"original_total_num_tasks", originalTotalNumTasks,
+							"total_num_tasks", totalNumTasks,
+						)
+						return nil
+					}
+
+					lt.resultWaitGroup.Add(len(taskBuf))
+
+					meta.IntervalID = intervalID
+
+					if len(taskBuf) == 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
+
+						for _, task := range taskBuf {
+							lt.taskChan <- taskWithMeta{task, meta}
+						}
+					} else {
+
+						lt.taskChan <- taskWithMeta{taskBuf[0], meta}
+
+						for _, task := range taskBuf[1:] {
+							time.Sleep(interTaskInterval)
+							lt.taskChan <- taskWithMeta{task, meta}
+						}
+					}
+
+					taskBuf = taskBuf[:0]
+
+					totalNumTasks += numNewTasks
+
+					meta.Lag = 0
+
+					// wait for next interval time to exist
+					nextIntervalID := intervalID.Add(interval)
+					realNow := time.Now().UTC()
+					delay = nextIntervalID.Sub(realNow)
+					if delay > 0 {
+						time.Sleep(delay)
+						intervalID = nextIntervalID
+
+						if len(taskBuf) < numNewTasks {
+							break
+						}
+
+						continue
+					}
+
+					if delay < 0 {
+						lag := -delay
+
+						intervalID = realNow
+						meta.Lag = lag
+
+						lt.resultWaitGroup.Add(1)
+						lt.resultsChan <- taskResult{
+							Meta: taskMeta{
+								Lag: lag,
+							},
+						}
+					}
+
+					if len(taskBuf) < numNewTasks {
+						break
+					}
+				}
+			}
+		}(lt.flushRetriesOnShutdown)
+		if err != nil && err_result == nil {
+			err_result = err
+		}
+
 		lt.resultWaitGroup.Wait()
 
 		Logger.Debugw("stopping result handler routines")
@@ -670,36 +869,17 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		lt.addWorker(ctx, i)
 	}
 
-	var numTotalTasks int
-
-	taskBuf := make([]Doer, 0, lt.maxIntervalTasks)
-
-	intervalID := time.Now().UTC()
-
-	maxTotalTasks := lt.maxTotalTasks
-
-	interval := lt.interval
-	numIntervalTasks := lt.numIntervalTasks
-	numNewTasks := lt.numIntervalTasks
-	ctxDone := ctx.Done()
-	updatechan := lt.impl.UpdateChan()
-	configChanges := make([]interface{}, 0, 12)
-	meta := taskMeta{
-		NumNewTasks: numNewTasks,
-	}
-	interTaskInterval := interval / time.Duration(numIntervalTasks)
-	var delay time.Duration
 	for {
 		if maxTotalTasks > 0 {
-			if numTotalTasks >= maxTotalTasks {
+			if totalNumTasks >= maxTotalTasks {
 				Logger.Warnw(
-					"loadtest finished",
+					"loadtest finished: max total task count reached",
 					"max_total_tasks", maxTotalTasks,
 				)
 				return
 			}
 
-			numNewTasks = maxTotalTasks - numTotalTasks
+			numNewTasks = maxTotalTasks - totalNumTasks
 			if numNewTasks > numIntervalTasks {
 				numNewTasks = numIntervalTasks
 			}
@@ -711,129 +891,128 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		case <-ctxDone:
 			return
 		case cu := <-updatechan:
-			for {
-				var recomputeInterTaskInterval bool
+			var recomputeInterTaskInterval bool
 
-				if cu.numWorkers.set {
-					n := cu.numWorkers.val
+			if cu.numWorkers.set {
+				n := cu.numWorkers.val
 
-					// prevent over commiting on the maxWorkers count
-					if n > lt.maxWorkers {
-						Logger.Errorw(
-							"config update not within loadtest boundary conditions: numWorkers",
-							"reason", "update tried to set numWorkers set too high",
-							"remediation_hint", "increase the loadtests's MaxWorkers setting",
-							"remediation_taken", "using max value",
-							"requested", n,
-							"max", lt.maxWorkers,
-						)
-						n = lt.maxWorkers
+				// prevent over commiting on the maxWorkers count
+				if n > lt.maxWorkers {
+					Logger.Errorw(
+						"config update not within loadtest boundary conditions: numWorkers",
+						"reason", "update tried to set numWorkers set too high",
+						"remediation_hint", "increase the loadtests's MaxWorkers setting",
+						"remediation_taken", "using max value",
+						"requested", n,
+						"max", lt.maxWorkers,
+					)
+					n = lt.maxWorkers
+				}
+
+				if n > numWorkers {
+
+					// unpause workers
+					for i := numWorkers; i < len(lt.workers); i++ {
+						lt.workers[i] <- struct{}{}
 					}
 
-					if n > numWorkers {
-
-						// unpause workers
-						for i := numWorkers; i < len(lt.workers); i++ {
-							lt.workers[i] <- struct{}{}
-						}
-
-						// spawn new workers if needed
-						for i := len(lt.workers); i < n; i++ {
-							lt.addWorker(ctx, i)
-						}
-					} else if n < numWorkers {
-
-						// pause workers if needed
-						for i := numWorkers - 1; i >= n; i-- {
-							lt.workers[i] <- struct{}{}
-						}
+					// spawn new workers if needed
+					for i := len(lt.workers); i < n; i++ {
+						lt.addWorker(ctx, i)
 					}
+				} else if n < numWorkers {
 
-					configChanges = append(configChanges,
-						"old_num_workers", numWorkers,
-						"new_num_workers", n,
-					)
-					numWorkers = n
-				}
-
-				if cu.numIntervalTasks.set {
-					recomputeInterTaskInterval = true
-
-					n := cu.numIntervalTasks.val
-
-					// prevent over commiting on the maxIntervalTasks count
-					if n > lt.maxIntervalTasks {
-						Logger.Errorw(
-							"config update not within loadtest boundary conditions: numIntervalTasks",
-							"reason", "update tried to set numIntervalTasks set too high",
-							"remediation_hint", "increase the loadtests's MaxIntervalTasks setting",
-							"remediation_taken", "using max value",
-							"requested", n,
-							"max", lt.maxIntervalTasks,
-						)
-						n = lt.maxIntervalTasks
+					// pause workers if needed
+					for i := numWorkers - 1; i >= n; i-- {
+						lt.workers[i] <- struct{}{}
 					}
+				}
 
-					configChanges = append(configChanges,
-						"old_num_interval_tasks", numIntervalTasks,
-						"new_num_interval_tasks", n,
+				configChanges = append(configChanges,
+					"old_num_workers", numWorkers,
+					"new_num_workers", n,
+				)
+				numWorkers = n
+			}
+
+			if cu.numIntervalTasks.set {
+				recomputeInterTaskInterval = true
+
+				n := cu.numIntervalTasks.val
+
+				// prevent over commiting on the maxIntervalTasks count
+				if n > lt.maxIntervalTasks {
+					Logger.Errorw(
+						"config update not within loadtest boundary conditions: numIntervalTasks",
+						"reason", "update tried to set numIntervalTasks set too high",
+						"remediation_hint", "increase the loadtests's MaxIntervalTasks setting",
+						"remediation_taken", "using max value",
+						"requested", n,
+						"max", lt.maxIntervalTasks,
 					)
-					numIntervalTasks = n
+					n = lt.maxIntervalTasks
 				}
 
-				if cu.interval.set {
-					recomputeInterTaskInterval = true
+				configChanges = append(configChanges,
+					"old_num_interval_tasks", numIntervalTasks,
+					"new_num_interval_tasks", n,
+				)
+				numIntervalTasks = n
+				numNewTasks = n
+			}
 
-					configChanges = append(configChanges,
-						"old_interval", interval,
-						"new_interval", cu.interval.val,
-					)
-					interval = cu.interval.val
-				}
+			if cu.interval.set {
+				recomputeInterTaskInterval = true
 
-				if recomputeInterTaskInterval {
-					interTaskInterval = interval / time.Duration(numIntervalTasks)
-				}
+				configChanges = append(configChanges,
+					"old_interval", interval,
+					"new_interval", cu.interval.val,
+				)
+				interval = cu.interval.val
+			}
+
+			if recomputeInterTaskInterval {
+				interTaskInterval = interval / time.Duration(numIntervalTasks)
+			}
+
+			Logger.Warnw(
+				"loadtest config updated",
+				configChanges...,
+			)
+			configChanges = configChanges[:0]
+
+			// pause load generation if unable to schedule anything
+			if numIntervalTasks <= 0 || numWorkers <= 0 {
+
+				pauseStart := time.Now().UTC()
 
 				Logger.Warnw(
-					"loadtest config updated",
-					configChanges...,
+					"pausing load generation",
+					"num_interval_tasks", numIntervalTasks,
+					"num_workers", numWorkers,
+					"paused_at", pauseStart,
 				)
-				configChanges = configChanges[:0]
 
-				// pause load generation if unable to schedule anything
-				if numIntervalTasks <= 0 || numWorkers <= 0 {
-
-					pauseStart := time.Now().UTC()
+				select {
+				case <-ctxDone:
+					return
+				case cu = <-updatechan:
+					pauseEnd := time.Now().UTC()
 
 					Logger.Warnw(
-						"pausing load generation",
+						"resuming load generation",
 						"num_interval_tasks", numIntervalTasks,
 						"num_workers", numWorkers,
 						"paused_at", pauseStart,
+						"resumed_at", pauseEnd,
 					)
 
-					select {
-					case <-ctxDone:
-						return
-					case cu = <-updatechan:
-						pauseEnd := time.Now().UTC()
-
-						Logger.Warnw(
-							"resuming load generation",
-							"num_interval_tasks", numIntervalTasks,
-							"num_workers", numWorkers,
-							"paused_at", pauseStart,
-							"resumed_at", pauseEnd,
-						)
-
-						continue
-					}
+					intervalID = pauseEnd
 				}
-
-				// continue with load generation
-				break
 			}
+
+			// re-loop
+			continue
 		default:
 			// continue with load generation
 		}
@@ -842,10 +1021,25 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		taskBuf = lt.loadRetries(taskBuf, numNewTasks)
 
 		for i := len(taskBuf); i < numNewTasks; i++ {
-			taskBuf = append(taskBuf, lt.impl.NextTask())
+			task, ok := lt.impl.NextTask()
+			if !ok {
+				// iteration is technically done now
+				// but there could be straggling retries
+				// queued after this, those should continue
+				// to be flushed if and only if maxTotalTasks
+				// has not been reached and if it is greater
+				// than zero
+				if i == 0 {
+					// return immediately if there is nothing
+					// new to enqueue
+					return
+				}
+				break
+			}
+			taskBuf = append(taskBuf, task)
 		}
 
-		lt.resultWaitGroup.Add(numNewTasks)
+		lt.resultWaitGroup.Add(len(taskBuf))
 
 		meta.IntervalID = intervalID
 
@@ -864,9 +1058,17 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			}
 		}
 
+		if n := len(taskBuf); numNewTasks > n {
+			// must have hit the end of NextTask iterator
+			// increase total by actual number queued
+			// and stop traffic generation
+			totalNumTasks += n
+			return
+		}
+
 		taskBuf = taskBuf[:0]
 
-		numTotalTasks += numNewTasks
+		totalNumTasks += numNewTasks
 
 		meta.Lag = 0
 

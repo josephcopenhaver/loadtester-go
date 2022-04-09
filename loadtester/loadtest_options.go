@@ -19,6 +19,8 @@ type loadtestOptions struct {
 	csvOutputFilename       string
 	csvOutputFlushFrequency time.Duration
 	csvOutputDisabled       bool
+	flushRetriesTimeout     time.Duration
+	flushRetriesOnShutdown  bool
 }
 
 type LoadtestOption func(*loadtestOptions)
@@ -84,5 +86,20 @@ func CsvFlushFrequency(d time.Duration) LoadtestOption {
 func CsvWriterDisabled(b bool) LoadtestOption {
 	return func(opt *loadtestOptions) {
 		opt.csvOutputDisabled = b
+	}
+}
+
+// FlushRetriesOnShutdown is useful when your loadtest is more like a smoke test
+// that must have all tasks flush and be succesful
+func FlushRetriesOnShutdown(b bool) LoadtestOption {
+	return func(opt *loadtestOptions) {
+		opt.flushRetriesOnShutdown = b
+	}
+}
+
+// FlushRetriesTimeout is only relevant when FlushRetriesOnShutdown(true) is used
+func FlushRetriesTimeout(d time.Duration) LoadtestOption {
+	return func(opt *loadtestOptions) {
+		opt.flushRetriesTimeout = d
 	}
 }
