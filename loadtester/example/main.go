@@ -16,15 +16,15 @@ func (t *task) Do(ctx context.Context, workerID int) error {
 type MyLoadtest struct{}
 
 func (lt MyLoadtest) ReadTasks(p []loadtester.Doer) int {
-	// cap and len of p will always be equal and greater than zero
+	// make sure you only fill up to len
 
-	size := len(p)
-
-	for i := 0; i < size; i++ {
+	var i int
+	for i < len(p) {
 		p[i] = &task{}
+		i++
 	}
 
-	return size
+	return i
 }
 
 func (lt MyLoadtest) UpdateChan() <-chan loadtester.ConfigUpdate {

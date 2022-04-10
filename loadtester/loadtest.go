@@ -19,6 +19,7 @@ import (
 // I would not dream of doing this before proving it is warranted first.
 
 type LoadtestImpl interface {
+	// ReadTasks fills the provided slice up to slice length starting at index 0 and returns how many records have been inserted
 	ReadTasks([]Doer) int
 	// UpdateChan should return the same channel each time or nil;
 	// but once nil it must never be non-nil again
@@ -40,8 +41,7 @@ type Loadtest struct {
 	maxIntervalTasks int
 	interval         time.Duration
 
-	mRetry        sync.Mutex
-	retryTasks    []*retryTask
+	retryTaskChan chan *retryTask
 	retryTaskPool sync.Pool
 
 	startTime time.Time
@@ -106,9 +106,9 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error
 		csvWriteErr = errCsvWriterDisabled
 	}
 
-	var retryTasks []*retryTask
+	var retryTaskChan chan *retryTask
 	if !opt.retriesDisabled {
-		retryTasks = make([]*retryTask, 0, maxWorkQueueSize)
+		retryTaskChan = make(chan *retryTask, maxWorkQueueSize)
 	}
 
 	return &Loadtest{
@@ -119,7 +119,7 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error
 		workers:       make([]chan struct{}, 0, opt.maxWorkers),
 		taskChan:      make(chan taskWithMeta, maxWorkQueueSize),
 		resultsChan:   make(chan taskResult, maxWorkQueueSize+numPossibleLagResults),
-		retryTasks:    retryTasks,
+		retryTaskChan: retryTaskChan,
 
 		maxIntervalTasks: opt.maxIntervalTasks,
 		numIntervalTasks: opt.numIntervalTasks,
@@ -298,7 +298,7 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 					v = x.DoRetryer
 				}
 
-				lt.enqueueRetry(v, err)
+				lt.retryTaskChan <- lt.newRetryTask(v, err)
 
 				err_resp = err
 				return 0, 1, 1, 0
@@ -320,51 +320,21 @@ func (lt *Loadtest) newRetryTask(task DoRetryer, err error) *retryTask {
 	return result
 }
 
-func (lt *Loadtest) enqueueRetry(task DoRetryer, err error) {
-	lt.mRetry.Lock()
-	defer lt.mRetry.Unlock()
+func (lt *Loadtest) readRetries(p []Doer) int {
+	// make sure you only fill up to len
 
-	lt.retryTasks = append(lt.retryTasks, lt.newRetryTask(task, err))
-}
-
-// TODO: loadRetries
-// 1: get rid of returning a slice, implement instead like ReadTasks
-// 2: should return number of elements loaded into the slice
-// 3: remove mRetry and lock/unlock behavior in favor of a "channel draining" technique
-// 4: party
-
-func (lt *Loadtest) loadRetries(taskBuf []Doer, numTasks int) []Doer {
-	lt.mRetry.Lock()
-	defer lt.mRetry.Unlock()
-
-	result := taskBuf
-
-	retryTasks := lt.retryTasks
-
-	size := len(retryTasks)
-
-	if size == 0 {
-		return result
+	var i int
+	for i < len(p) {
+		select {
+		case task := <-lt.retryTaskChan:
+			p[i] = task
+		default:
+			return i
+		}
+		i++
 	}
 
-	if size <= numTasks {
-		for i := 0; i < size; i++ {
-			result = append(result, retryTasks[i])
-		}
-
-		lt.retryTasks = retryTasks[:0]
-	} else {
-		size = numTasks
-
-		for i := 0; i < size; i++ {
-			result = append(result, retryTasks[i])
-		}
-
-		copy(retryTasks, retryTasks[size:])
-		lt.retryTasks = retryTasks[:len(retryTasks)-size]
-	}
-
-	return result
+	return i
 }
 
 func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{}) {
@@ -787,16 +757,31 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					}
 
 					// read up to numNewTasks from retry slice
-					taskBuf = lt.loadRetries(taskBuf, numNewTasks)
-					taskBufSize := len(taskBuf)
+					taskBufSize := lt.readRetries(taskBuf[:numNewTasks:numNewTasks])
 					if taskBufSize <= 0 {
-						Logger.Infow(
-							"all retries flushed",
+						// wait for any pending tasks to flush and try read again
+
+						Logger.Debugw(
+							"verifying all retries have flushed",
 							"original_total_num_tasks", originalTotalNumTasks,
 							"total_num_tasks", totalNumTasks,
 						)
-						return nil
+
+						lt.resultWaitGroup.Wait()
+
+						// read up to numNewTasks from retry slice again
+						taskBufSize = lt.readRetries(taskBuf[:numNewTasks:numNewTasks])
+						if taskBufSize <= 0 {
+
+							Logger.Infow(
+								"all retries flushed",
+								"original_total_num_tasks", originalTotalNumTasks,
+								"total_num_tasks", totalNumTasks,
+							)
+							return nil
+						}
 					}
+					taskBuf = taskBuf[:taskBufSize]
 
 					lt.resultWaitGroup.Add(taskBufSize)
 
@@ -1038,16 +1023,15 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		}
 
 		// read up to numNewTasks from retry slice
+		taskBufSize := 0
 		if !lt.RetriesDisabled {
-			taskBuf = lt.loadRetries(taskBuf, numNewTasks)
+			taskBufSize = lt.readRetries(taskBuf[:numNewTasks:numNewTasks])
 		}
-
-		taskBufSize := len(taskBuf)
+		taskBuf = taskBuf[:taskBufSize]
 
 		if taskBufSize < numNewTasks {
-			buf := (taskBuf[:numNewTasks])[taskBufSize:]
-			maxSize := len(buf)
-			n := lt.impl.ReadTasks(buf)
+			maxSize := numNewTasks - taskBufSize
+			n := lt.impl.ReadTasks(taskBuf[taskBufSize:numNewTasks:numNewTasks])
 			if n < 0 || n > maxSize {
 				panic(ErrBadReadTasksImpl)
 			}
