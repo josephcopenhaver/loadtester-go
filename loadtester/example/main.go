@@ -15,8 +15,8 @@ func (t *task) Do(ctx context.Context, workerID int) error {
 
 type MyLoadtest struct{}
 
-func (lt MyLoadtest) NextTask() (loadtester.Doer, bool) {
-	return &task{}, true
+func (lt MyLoadtest) NextTask() loadtester.Doer {
+	return &task{}
 }
 
 func (lt MyLoadtest) UpdateChan() <-chan loadtester.ConfigUpdate {

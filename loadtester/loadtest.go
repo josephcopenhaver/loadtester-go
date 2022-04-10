@@ -19,7 +19,7 @@ import (
 // I would no dream of doing this before prooving it is warranted first.
 
 type LoadtestImpl interface {
-	NextTask() (Doer, bool)
+	NextTask() Doer
 	// UpdateChan should return the same channel each time or nil;
 	// but once nil it must never be non-nil again
 	UpdateChan() <-chan ConfigUpdate
@@ -106,6 +106,11 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error
 		csvWriteErr = errCsvWriterDisabled
 	}
 
+	var retryTasks []*retryTask
+	if !opt.retriesDisabled {
+		retryTasks = make([]*retryTask, 0, maxWorkQueueSize)
+	}
+
 	return &Loadtest{
 		impl:          impl,
 		maxTotalTasks: opt.maxTotalTasks,
@@ -114,7 +119,7 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error
 		workers:       make([]chan struct{}, 0, opt.maxWorkers),
 		taskChan:      make(chan taskWithMeta, maxWorkQueueSize),
 		resultsChan:   make(chan taskResult, maxWorkQueueSize+numPossibleLagResults),
-		retryTasks:    make([]*retryTask, 0, maxWorkQueueSize),
+		retryTasks:    retryTasks,
 
 		maxIntervalTasks: opt.maxIntervalTasks,
 		numIntervalTasks: opt.numIntervalTasks,
@@ -1030,8 +1035,8 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 		for i := len(taskBuf); i < numNewTasks; i++ {
 
-			task, ok := lt.impl.NextTask()
-			if !ok {
+			task := lt.impl.NextTask()
+			if task == nil {
 				// iteration is technically done now
 				// but there could be straggling retries
 				// queued after this, those should continue
