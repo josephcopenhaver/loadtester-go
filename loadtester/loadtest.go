@@ -16,10 +16,10 @@ import (
 // TODO: offer a http client with a connection pool that matches max worker size plus some buffer/padding
 
 // TODO: RetriesDisabled runtimes checks can turn into init time checks; same with MaxTotalTasks based checks
-// I would no dream of doing this before prooving it is warranted first.
+// I would not dream of doing this before proving it is warranted first.
 
 type LoadtestImpl interface {
-	NextTask() Doer
+	ReadTasks([]Doer) int
 	// UpdateChan should return the same channel each time or nil;
 	// but once nil it must never be non-nil again
 	UpdateChan() <-chan ConfigUpdate
@@ -142,7 +142,10 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error
 	}, nil
 }
 
-var errCsvWriterDisabled = errors.New("csv metrics writer disabled")
+var (
+	errCsvWriterDisabled = errors.New("csv metrics writer disabled")
+	ErrBadReadTasksImpl  = errors.New("bad ReadTasks implementation: returned a value less than zero or larger than the input slice length")
+)
 
 type csvData struct {
 	outputFilename string
@@ -323,6 +326,12 @@ func (lt *Loadtest) enqueueRetry(task DoRetryer, err error) {
 
 	lt.retryTasks = append(lt.retryTasks, lt.newRetryTask(task, err))
 }
+
+// TODO: loadRetries
+// 1: get rid of returning a slice, implement instead like ReadTasks
+// 2: should return number of elements loaded into the slice
+// 3: remove mRetry and lock/unlock behavior in favor of a "channel draining" technique
+// 4: party
 
 func (lt *Loadtest) loadRetries(taskBuf []Doer, numTasks int) []Doer {
 	lt.mRetry.Lock()
@@ -1033,17 +1042,23 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			taskBuf = lt.loadRetries(taskBuf, numNewTasks)
 		}
 
-		for i := len(taskBuf); i < numNewTasks; i++ {
+		taskBufSize := len(taskBuf)
 
-			task := lt.impl.NextTask()
-			if task == nil {
+		if taskBufSize < numNewTasks {
+			buf := (taskBuf[:numNewTasks])[taskBufSize:]
+			maxSize := len(buf)
+			n := lt.impl.ReadTasks(buf)
+			if n < 0 || n > maxSize {
+				panic(ErrBadReadTasksImpl)
+			}
+			if n == 0 {
 				// iteration is technically done now
 				// but there could be straggling retries
 				// queued after this, those should continue
 				// to be flushed if and only if maxTotalTasks
 				// has not been reached and if it is greater
 				// than zero
-				if i == 0 {
+				if taskBufSize == 0 {
 					// return immediately if there is nothing
 					// new to enqueue
 
@@ -1060,10 +1075,9 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				break
 			}
 
-			taskBuf = append(taskBuf, task)
+			taskBufSize += n
+			taskBuf = taskBuf[:taskBufSize]
 		}
-
-		taskBufSize := len(taskBuf)
 
 		lt.resultWaitGroup.Add(taskBufSize)
 
@@ -1126,4 +1140,6 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			}
 		}
 	}
+
+	return nil
 }
