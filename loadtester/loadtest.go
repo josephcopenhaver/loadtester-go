@@ -156,12 +156,12 @@ type csvData struct {
 }
 
 type taskResult struct {
-	Passed      uint8
-	Panicked    uint8
-	RetryQueued uint8
-	Errored     uint8
-	Elapsed     time.Duration
-	Meta        taskMeta
+	Passed                       uint8
+	Panicked                     uint8
+	RetryQueued                  uint8
+	Errored                      uint8
+	QueuedDuration, TaskDuration time.Duration
+	Meta                         taskMeta
 }
 
 type taskMeta struct {
@@ -171,8 +171,9 @@ type taskMeta struct {
 }
 
 type taskWithMeta struct {
-	doer Doer
-	meta taskMeta
+	doer        Doer
+	enqueueTime time.Time
+	meta        taskMeta
 }
 
 type retryTask struct {
@@ -214,17 +215,18 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 			continue
 		case task := <-lt.taskChan:
 
-			start := time.Now().UTC()
+			taskStart := time.Now().UTC()
 			passed, errored, retryQueued, panicked := lt.doTask(ctx, workerID, task)
-			elapsed := time.Since(start)
+			taskEnd := time.Now().UTC()
 
 			lt.resultsChan <- taskResult{
-				Passed:      passed,
-				Panicked:    panicked,
-				RetryQueued: retryQueued,
-				Errored:     errored,
-				Elapsed:     elapsed,
-				Meta:        task.meta,
+				Passed:         passed,
+				Panicked:       panicked,
+				RetryQueued:    retryQueued,
+				Errored:        errored,
+				QueuedDuration: taskStart.Sub(task.enqueueTime),
+				TaskDuration:   taskEnd.Sub(taskStart),
+				Meta:           task.meta,
 			}
 		}
 	}
@@ -342,26 +344,30 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 
 	var intervalID time.Time
 	var totalResultCount, resultCount, numIntervalTasks, numPass, numFail, numRetry, numPanic int
-	var lag, minElapsed, maxElapsed, sumElapsed, sumLag time.Duration
+	var lag, minQueuedDuration, maxQueuedDuration, sumQueuedDuration, minTaskDuration, maxTaskDuration, sumTaskDuration, sumLag time.Duration
 
-	minElapsed = maxDuration
+	minQueuedDuration = maxDuration
+	minTaskDuration = maxDuration
 
 	writeRow := func() {
 		totalResultCount += resultCount
 		lt.csvData.writeErr = lt.writeOutputCsvRow(metricRecord{
-			totalResultCount: totalResultCount,
-			intervalID:       intervalID,
-			sumLag:           sumLag,
-			numIntervalTasks: numIntervalTasks,
-			lag:              lag,
-			numTasks:         resultCount,
-			numPass:          numPass,
-			numFail:          numFail,
-			numRetry:         numRetry,
-			numPanic:         numPanic,
-			minElapsed:       minElapsed,
-			maxElapsed:       maxElapsed,
-			sumElapsed:       sumElapsed,
+			totalResultCount:  totalResultCount,
+			intervalID:        intervalID,
+			sumLag:            sumLag,
+			numIntervalTasks:  numIntervalTasks,
+			lag:               lag,
+			numTasks:          resultCount,
+			numPass:           numPass,
+			numFail:           numFail,
+			numRetry:          numRetry,
+			numPanic:          numPanic,
+			minQueuedDuration: minQueuedDuration,
+			maxQueuedDuration: maxQueuedDuration,
+			sumQueuedDuration: sumQueuedDuration,
+			minTaskDuration:   minTaskDuration,
+			maxTaskDuration:   maxTaskDuration,
+			sumTaskDuration:   sumTaskDuration,
 		})
 	}
 
@@ -398,15 +404,24 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 			lag = tr.Meta.Lag
 		}
 
-		if minElapsed > tr.Elapsed {
-			minElapsed = tr.Elapsed
+		if minQueuedDuration > tr.QueuedDuration {
+			minQueuedDuration = tr.QueuedDuration
 		}
 
-		if maxElapsed < tr.Elapsed {
-			maxElapsed = tr.Elapsed
+		if minTaskDuration > tr.TaskDuration {
+			minTaskDuration = tr.TaskDuration
 		}
 
-		sumElapsed += tr.Elapsed
+		if maxTaskDuration < tr.TaskDuration {
+			maxTaskDuration = tr.TaskDuration
+		}
+
+		if maxQueuedDuration < tr.QueuedDuration {
+			maxQueuedDuration = tr.QueuedDuration
+		}
+
+		sumQueuedDuration += tr.QueuedDuration
+		sumTaskDuration += tr.TaskDuration
 		numPass += int(tr.Passed)
 		numFail += int(tr.Errored)
 		numPanic += int(tr.Panicked)
@@ -425,9 +440,12 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 			}
 
 			// reset metrics
-			minElapsed = maxDuration
-			maxElapsed = -1
-			sumElapsed = 0
+			minQueuedDuration = maxDuration
+			minTaskDuration = maxDuration
+			maxQueuedDuration = -1
+			maxTaskDuration = -1
+			sumQueuedDuration = 0
+			sumTaskDuration = 0
 			resultCount = 0
 			numPass = 0
 			numFail = 0
@@ -495,17 +513,18 @@ func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
 }
 
 type metricRecord struct {
-	intervalID                         time.Time
-	sumLag                             time.Duration
-	numIntervalTasks                   int
-	lag                                time.Duration
-	numTasks                           int
-	numPass                            int
-	numFail                            int
-	numRetry                           int
-	numPanic                           int
-	totalResultCount                   int
-	minElapsed, maxElapsed, sumElapsed time.Duration
+	intervalID                                              time.Time
+	sumLag                                                  time.Duration
+	numIntervalTasks                                        int
+	lag                                                     time.Duration
+	numTasks                                                int
+	numPass                                                 int
+	numFail                                                 int
+	numRetry                                                int
+	numPanic                                                int
+	totalResultCount                                        int
+	minTaskDuration, maxTaskDuration, sumTaskDuration       time.Duration
+	minQueuedDuration, maxQueuedDuration, sumQueuedDuration time.Duration
 }
 
 func (lt *Loadtest) writeOutputCsvHeaders() error {
@@ -521,10 +540,14 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 		"num_fail",
 		"num_retry",
 		"num_panic",
-		"min_elapsed",
-		"avg_elapsed",
-		"max_elapsed",
-		"sum_elapsed",
+		"min_queued_duration",
+		"avg_queued_duration",
+		"max_queued_duration",
+		"sum_queued_duration",
+		"min_task_duration",
+		"avg_task_duration",
+		"max_task_duration",
+		"sum_task_duration",
 	}
 
 	if lt.maxTotalTasks > 0 {
@@ -560,10 +583,14 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 		strconv.Itoa(mr.numFail),
 		strconv.Itoa(mr.numRetry),
 		strconv.Itoa(mr.numPanic),
-		mr.minElapsed.String(),
-		(mr.sumElapsed / time.Duration(mr.numTasks)).String(),
-		mr.maxElapsed.String(),
-		mr.sumElapsed.String(),
+		mr.minQueuedDuration.String(),
+		(mr.sumQueuedDuration / time.Duration(mr.numTasks)).String(),
+		mr.maxQueuedDuration.String(),
+		mr.sumQueuedDuration.String(),
+		mr.minTaskDuration.String(),
+		(mr.sumTaskDuration / time.Duration(mr.numTasks)).String(),
+		mr.maxTaskDuration.String(),
+		mr.sumTaskDuration.String(),
 		"",
 	}
 
@@ -790,15 +817,15 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					if taskBufSize == 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
 
 						for _, task := range taskBuf {
-							lt.taskChan <- taskWithMeta{task, meta}
+							lt.taskChan <- taskWithMeta{task, intervalID, meta}
 						}
 					} else {
 
-						lt.taskChan <- taskWithMeta{taskBuf[0], meta}
+						lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
 
 						for _, task := range taskBuf[1:] {
 							time.Sleep(interTaskInterval)
-							lt.taskChan <- taskWithMeta{task, meta}
+							lt.taskChan <- taskWithMeta{task, time.Now().UTC(), meta}
 						}
 					}
 
@@ -1070,15 +1097,15 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		if taskBufSize <= 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
 
 			for _, task := range taskBuf {
-				lt.taskChan <- taskWithMeta{task, meta}
+				lt.taskChan <- taskWithMeta{task, intervalID, meta}
 			}
 		} else {
 
-			lt.taskChan <- taskWithMeta{taskBuf[0], meta}
+			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
 
 			for _, task := range taskBuf[1:] {
 				time.Sleep(interTaskInterval)
-				lt.taskChan <- taskWithMeta{task, meta}
+				lt.taskChan <- taskWithMeta{task, time.Now().UTC(), meta}
 			}
 		}
 
