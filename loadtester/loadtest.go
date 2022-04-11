@@ -147,6 +147,10 @@ var (
 	ErrBadReadTasksImpl  = errors.New("bad ReadTasks implementation: returned a value less than zero or larger than the input slice length")
 )
 
+func timeToString(t time.Time) string {
+	return t.UTC().Format(time.RFC3339Nano)
+}
+
 type csvData struct {
 	outputFilename string
 	writer         *csv.Writer
@@ -215,9 +219,9 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 			continue
 		case task := <-lt.taskChan:
 
-			taskStart := time.Now().UTC()
+			taskStart := time.Now()
 			passed, errored, retryQueued, panicked := lt.doTask(ctx, workerID, task)
-			taskEnd := time.Now().UTC()
+			taskEnd := time.Now()
 
 			lt.resultsChan <- taskResult{
 				Passed:         passed,
@@ -371,7 +375,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 		})
 	}
 
-	lt.csvData.flushDeadline = time.Now().UTC().Add(lt.csvData.flushFrequency)
+	lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushFrequency)
 
 	for {
 		var tr taskResult
@@ -433,10 +437,10 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 
 			writeRow()
 
-			if lt.csvData.writeErr == nil && !lt.csvData.flushDeadline.After(time.Now().UTC()) {
+			if lt.csvData.writeErr == nil && !lt.csvData.flushDeadline.After(time.Now()) {
 				lt.csvData.writer.Flush()
 				lt.csvData.writeErr = lt.csvData.writer.Error()
-				lt.csvData.flushDeadline = time.Now().UTC().Add(lt.csvData.flushFrequency)
+				lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushFrequency)
 			}
 
 			// reset metrics
@@ -477,7 +481,7 @@ func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 	}
 
 	return Config{
-		StartTime:              lt.startTime.Format(time.RFC3339Nano),
+		StartTime:              timeToString(lt.startTime),
 		Interval:               lt.interval.String(),
 		MaxIntervalTasks:       lt.maxIntervalTasks,
 		MaxTotalTasks:          lt.maxTotalTasks,
@@ -570,11 +574,11 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 		return nil
 	}
 
-	nowStr := time.Now().UTC().Format(time.RFC3339Nano)
+	nowStr := timeToString(time.Now())
 
 	fields := []string{
 		nowStr,
-		mr.intervalID.Format(time.RFC3339Nano),
+		timeToString(mr.intervalID),
 		strconv.Itoa(mr.numIntervalTasks),
 		mr.lag.String(),
 		mr.sumLag.String(),
@@ -614,7 +618,7 @@ var ErrRetriesFailedToFlush = errors.New("failed to flush all retries")
 
 func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
-	lt.startTime = time.Now().UTC()
+	lt.startTime = time.Now()
 
 	if lt.csvData.writeErr == nil {
 
@@ -627,7 +631,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				lt.csvData.writer.Flush()
 				lt.csvData.writeErr = lt.csvData.writer.Error()
 				if lt.csvData.writeErr == nil {
-					_, lt.csvData.writeErr = csvf.Write([]byte("\n# {\"done\":{\"end_time\":\"" + time.Now().UTC().Format(time.RFC3339Nano) + "\"}}\n"))
+					_, lt.csvData.writeErr = csvf.Write([]byte("\n# {\"done\":{\"end_time\":\"" + timeToString(time.Now()) + "\"}}\n"))
 				}
 			}
 
@@ -668,7 +672,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 	var totalNumTasks int
 
-	intervalID := time.Now().UTC()
+	intervalID := time.Now()
 
 	maxTotalTasks := lt.maxTotalTasks
 
@@ -724,7 +728,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), lt.flushRetriesTimeout)
 			defer cancel()
 
-			intervalID = time.Now().UTC()
+			intervalID = time.Now()
 			taskBuf = taskBuf[:0]
 			meta.Lag = 0
 
@@ -825,7 +829,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 						for _, task := range taskBuf[1:] {
 							time.Sleep(interTaskInterval)
-							lt.taskChan <- taskWithMeta{task, time.Now().UTC(), meta}
+							lt.taskChan <- taskWithMeta{task, time.Now(), meta}
 						}
 					}
 
@@ -837,7 +841,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 					// wait for next interval time to exist
 					nextIntervalID := intervalID.Add(interval)
-					realNow := time.Now().UTC()
+					realNow := time.Now()
 					delay = nextIntervalID.Sub(realNow)
 					if delay > 0 {
 						time.Sleep(delay)
@@ -1016,27 +1020,27 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			// pause load generation if unable to schedule anything
 			if meta.NumIntervalTasks <= 0 || numWorkers <= 0 {
 
-				pauseStart := time.Now().UTC()
+				pauseStart := time.Now()
 
 				Logger.Warnw(
 					"pausing load generation",
 					"num_interval_tasks", meta.NumIntervalTasks,
 					"num_workers", numWorkers,
-					"paused_at", pauseStart,
+					"paused_at", pauseStart.UTC(),
 				)
 
 				select {
 				case <-ctxDone:
 					return
 				case cu = <-updatechan:
-					pauseEnd := time.Now().UTC()
+					pauseEnd := time.Now()
 
 					Logger.Warnw(
 						"resuming load generation",
 						"num_interval_tasks", meta.NumIntervalTasks,
 						"num_workers", numWorkers,
 						"paused_at", pauseStart,
-						"resumed_at", pauseEnd,
+						"resumed_at", pauseEnd.UTC(),
 					)
 
 					intervalID = pauseEnd
@@ -1105,7 +1109,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 			for _, task := range taskBuf[1:] {
 				time.Sleep(interTaskInterval)
-				lt.taskChan <- taskWithMeta{task, time.Now().UTC(), meta}
+				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
 			}
 		}
 
@@ -1129,7 +1133,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 		// wait for next interval time to exist
 		nextIntervalID := intervalID.Add(interval)
-		realNow := time.Now().UTC()
+		realNow := time.Now()
 		delay = nextIntervalID.Sub(realNow)
 		if delay > 0 {
 			time.Sleep(delay)
