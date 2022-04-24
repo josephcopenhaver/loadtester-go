@@ -57,7 +57,7 @@ type Loadtest struct {
 	flushRetriesTimeout    time.Duration
 	RetriesDisabled        bool
 
-	logger *zap.SugaredLogger
+	logger SugaredLogger
 }
 
 func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtest, error) {

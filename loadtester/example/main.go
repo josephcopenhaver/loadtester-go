@@ -18,6 +18,7 @@ type MyLoadtest struct{}
 
 func (lt MyLoadtest) ReadTasks(p []loadtester.Doer) int {
 	// make sure you only fill up to len
+	// filling less than len will signal that the loadtest is over
 
 	var i int
 	for i < len(p) {
