@@ -2,6 +2,8 @@ package loadtester
 
 import (
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type loadtestOptions struct {
@@ -22,6 +24,7 @@ type loadtestOptions struct {
 	flushRetriesTimeout     time.Duration
 	flushRetriesOnShutdown  bool
 	retriesDisabled         bool
+	logger                  *zap.SugaredLogger
 }
 
 type LoadtestOption func(*loadtestOptions)
@@ -109,5 +112,11 @@ func FlushRetriesTimeout(d time.Duration) LoadtestOption {
 func RetriesDisabled(b bool) LoadtestOption {
 	return func(opt *loadtestOptions) {
 		opt.retriesDisabled = b
+	}
+}
+
+func Logger(logger *zap.SugaredLogger) LoadtestOption {
+	return func(opt *loadtestOptions) {
+		opt.logger = logger
 	}
 }

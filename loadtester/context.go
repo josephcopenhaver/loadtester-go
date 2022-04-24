@@ -5,13 +5,15 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"go.uber.org/zap"
 )
 
 // RootContext returns a context that is canceled when the
 // system process receives an interrupt, sigint, or sigterm
 //
 // Also returns a function that can be used to cancel the context.
-func RootContext() (context.Context, func()) {
+func RootContext(logger *zap.SugaredLogger) (context.Context, func()) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -32,7 +34,11 @@ func RootContext() (context.Context, func()) {
 			requester = "process"
 		}
 
-		Logger.Warnw(
+		if logger == nil {
+			return
+		}
+
+		logger.Warnw(
 			"shutdown requested",
 			"requester", requester,
 		)

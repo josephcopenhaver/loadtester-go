@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/josephcopenhaver/loadtester-go/loadtester"
+	"go.uber.org/zap/zapcore"
 )
 
 type task struct{}
@@ -27,16 +28,22 @@ func (lt MyLoadtest) ReadTasks(p []loadtester.Doer) int {
 	return i
 }
 
-func (lt MyLoadtest) UpdateChan() <-chan loadtester.ConfigUpdate {
+func (lt MyLoadtest) UpdateConfigChan() <-chan loadtester.ConfigUpdate {
 	return nil
 }
 
 func main() {
-	ctx, cancel := loadtester.RootContext()
+	logger, err := loadtester.NewLogger(zapcore.InfoLevel)
+	if err != nil {
+		panic(err)
+	}
+
+	ctx, cancel := loadtester.RootContext(logger)
 	defer cancel()
 
 	lt, err := loadtester.NewLoadtest(
 		&MyLoadtest{},
+		loadtester.Logger(logger),
 		loadtester.NumWorkers(5),
 		loadtester.NumIntervalTasks(25),
 		loadtester.Interval(1*time.Second),
@@ -45,12 +52,12 @@ func main() {
 		panic(err)
 	}
 
-	loadtester.Logger.Infow("running")
+	logger.Infow("running")
 	defer func() {
-		loadtester.Logger.Infow("stopped")
+		logger.Infow("stopped")
 	}()
 	if err := lt.Run(ctx); err != nil {
-		loadtester.Logger.Panicw(
+		logger.Panicw(
 			"loadtest errored",
 			"error", err,
 		)

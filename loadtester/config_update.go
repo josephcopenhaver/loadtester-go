@@ -18,3 +18,18 @@ type ConfigUpdate struct {
 		val time.Duration
 	}
 }
+
+func (cu *ConfigUpdate) SetNumWorkers(n int) {
+	cu.numWorkers.set = true
+	cu.numWorkers.val = n
+}
+
+func (cu *ConfigUpdate) SetNumIntervalTasks(n int) {
+	cu.numIntervalTasks.set = true
+	cu.numIntervalTasks.val = n
+}
+
+func (cu *ConfigUpdate) SetInterval(d time.Duration) {
+	cu.interval.set = true
+	cu.interval.val = d
+}

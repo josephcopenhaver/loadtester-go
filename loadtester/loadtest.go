@@ -7,27 +7,33 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
-)
 
-// TODO: offer a http client with a connection pool that matches max worker size plus some buffer/padding
+	"go.uber.org/zap"
+)
 
 // TODO: RetriesDisabled runtimes checks can turn into init time checks; same with MaxTotalTasks based checks
 // I would not dream of doing this before proving it is warranted first.
 
-type LoadtestImpl interface {
+// TaskProvider describes how to read tasks into a
+// loadtest and how to control a loadtest's configuration
+// over time
+type TaskProvider interface {
 	// ReadTasks fills the provided slice up to slice length starting at index 0 and returns how many records have been inserted
 	ReadTasks([]Doer) int
-	// UpdateChan should return the same channel each time or nil;
+	// UpdateConfigChan should return the same channel each time or nil;
 	// but once nil it must never be non-nil again
-	UpdateChan() <-chan ConfigUpdate
+	UpdateConfigChan() <-chan ConfigUpdate
 }
 
 type Loadtest struct {
-	impl            LoadtestImpl
+	taskProvider    TaskProvider
 	maxTotalTasks   int
 	maxWorkers      int
 	numWorkers      int
@@ -50,9 +56,11 @@ type Loadtest struct {
 	flushRetriesOnShutdown bool
 	flushRetriesTimeout    time.Duration
 	RetriesDisabled        bool
+
+	logger *zap.SugaredLogger
 }
 
-func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error) {
+func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtest, error) {
 
 	opt := loadtestOptions{
 		taskBufferingFactor:     4,
@@ -98,6 +106,14 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error
 		opt.taskBufferingFactor = 1
 	}
 
+	if opt.logger == nil {
+		logger, err := NewLogger(zap.InfoLevel)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create a default logger: %w", err)
+		}
+		opt.logger = logger
+	}
+
 	maxWorkQueueSize := opt.maxIntervalTasks * opt.taskBufferingFactor
 	numPossibleLagResults := opt.taskBufferingFactor
 
@@ -112,7 +128,7 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error
 	}
 
 	return &Loadtest{
-		impl:          impl,
+		taskProvider:  taskProvider,
 		maxTotalTasks: opt.maxTotalTasks,
 		maxWorkers:    opt.maxWorkers,
 		numWorkers:    opt.numWorkers,
@@ -139,6 +155,7 @@ func NewLoadtest(impl LoadtestImpl, options ...LoadtestOption) (*Loadtest, error
 		flushRetriesTimeout:    opt.flushRetriesTimeout,
 		flushRetriesOnShutdown: opt.flushRetriesOnShutdown,
 		RetriesDisabled:        opt.retriesDisabled,
+		logger:                 opt.logger,
 	}, nil
 }
 
@@ -202,6 +219,8 @@ func (lt *Loadtest) addWorker(ctx context.Context, workerID int) {
 
 func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-chan struct{}) {
 	for {
+		var task taskWithMeta
+
 		select {
 		case _, ok := <-pauseChan:
 			if !ok {
@@ -217,21 +236,21 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 			}
 
 			continue
-		case task := <-lt.taskChan:
+		case task = <-lt.taskChan:
+		}
 
-			taskStart := time.Now()
-			passed, errored, retryQueued, panicked := lt.doTask(ctx, workerID, task)
-			taskEnd := time.Now()
+		taskStart := time.Now()
+		passed, errored, retryQueued, panicked := lt.doTask(ctx, workerID, task)
+		taskEnd := time.Now()
 
-			lt.resultsChan <- taskResult{
-				Passed:         passed,
-				Panicked:       panicked,
-				RetryQueued:    retryQueued,
-				Errored:        errored,
-				QueuedDuration: taskStart.Sub(task.enqueueTime),
-				TaskDuration:   taskEnd.Sub(taskStart),
-				Meta:           task.meta,
-			}
+		lt.resultsChan <- taskResult{
+			Passed:         passed,
+			Panicked:       panicked,
+			RetryQueued:    retryQueued,
+			Errored:        errored,
+			QueuedDuration: taskStart.Sub(task.enqueueTime),
+			TaskDuration:   taskEnd.Sub(taskStart),
+			Meta:           task.meta,
 		}
 	}
 }
@@ -249,7 +268,7 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 	defer func() {
 
 		if err_resp != nil {
-			Logger.Warnw(
+			lt.logger.Warnw(
 				"task error",
 				"worker_id", workerID,
 				"error", err_resp,
@@ -262,19 +281,19 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 
 			switch v := r.(type) {
 			case error:
-				Logger.Errorw(
+				lt.logger.Errorw(
 					"worker recovered from panic",
 					"worker_id", workerID,
 					"error", v,
 				)
 			case []byte:
-				Logger.Errorw(
+				lt.logger.Errorw(
 					"worker recovered from panic",
 					"worker_id", workerID,
 					"error", string(v),
 				)
 			case string:
-				Logger.Errorw(
+				lt.logger.Errorw(
 					"worker recovered from panic",
 					"worker_id", workerID,
 					"error", v,
@@ -282,7 +301,7 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 			default:
 				const msg = "unknown cause"
 
-				Logger.Errorw(
+				lt.logger.Errorw(
 					"worker recovered from panic",
 					"worker_id", workerID,
 					"error", msg,
@@ -292,30 +311,36 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 	}()
 
 	err := task.Do(ctx, workerID)
-	if err != nil {
-		if !lt.RetriesDisabled {
-			if v, ok := task.(DoRetryer); ok {
-				if v, ok := v.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
-					err_resp = err
-					return 0, 1, 0, 0
-				}
-
-				if x, ok := v.(*retryTask); ok {
-					v = x.DoRetryer
-				}
-
-				lt.retryTaskChan <- lt.newRetryTask(v, err)
-
-				err_resp = err
-				return 0, 1, 1, 0
-			}
-		}
-
-		err_resp = err
-		return 0, 1, 0, 0
+	if err == nil {
+		success_resp = 1
+		return
 	}
 
-	return 1, 0, 0, 0
+	err_resp = err
+	errored_resp = 1
+
+	if lt.RetriesDisabled {
+		return
+	}
+
+	dr, ok := task.(DoRetryer)
+	if !ok {
+		return
+	}
+
+	if v, ok := dr.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
+		return
+	}
+
+	if x, ok := dr.(*retryTask); ok {
+		dr = x.DoRetryer
+	}
+
+	lt.retryTaskChan <- lt.newRetryTask(dr, err)
+
+	retryQueued_resp = 1
+
+	return
 }
 
 func (lt *Loadtest) newRetryTask(task DoRetryer, err error) *retryTask {
@@ -614,6 +639,58 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 	return lt.csvData.writer.Write(fields)
 }
 
+// HttpTransport returns a new configured *http.Transport
+// which implements http.RoundTripper that can be used in
+// tasks which have http clients
+//
+// Note, you may need to increase the value of MaxIdleConns
+// if your tasks target multiple hosts. MaxIdleConnsPerHost
+// does not override the limit established by MaxIdleConns
+// and if the tasks are expected to communicate to multiple
+// hosts you probably need to apply some scaling factor to
+// it to let connections go idle for a time and still be reusable.
+//
+// Note that if you are not connecting to a loadbalancer
+// which preserves connections to a client much of the intent
+// we're trying to establish here is not applicable.
+//
+// Also if the loadbalancer does not have "max connection lifespan"
+// behavior nor a "round robin" or "connection balancing" feature
+// without forcing the loadtesting client to reconnect then as
+// you increase load your established connections may prevent the
+// spread of load to newly scaled-out recipients of that load.
+//
+// By default golang's http standard lib does not expose a way for us
+// to attempt to address this. The problem is also worse if your
+// loadbalancer ( or number of exposed ips for a dns record ) increase.
+//
+// Rectifying this issue requires a fix like/option like
+// https://github.com/golang/go/pull/46714
+// to be accepted by the go maintainers.
+func (lt *Loadtest) NewHttpTransport() *http.Transport {
+
+	// adding runtime CPU count to the max
+	// just to ensure whenever one worker releases
+	// a connection back to the pool we're not impacted
+	// by the delay of that connection getting re-pooled
+	maxConnections := lt.maxWorkers + runtime.NumCPU()
+
+	return &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   15 * time.Second,
+			KeepAlive: 15 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          maxConnections,
+		IdleConnTimeout:       20 * time.Second, // default was 90
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		MaxIdleConnsPerHost:   maxConnections,
+		MaxConnsPerHost:       maxConnections,
+	}
+}
+
 var ErrRetriesFailedToFlush = errors.New("failed to flush all retries")
 
 func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
@@ -657,7 +734,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		}
 	}
 
-	Logger.Infow(
+	lt.logger.Infow(
 		"starting loadtest",
 		"config", lt.getLoadtestConfigAsJson(),
 	)
@@ -679,7 +756,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
-	updatechan := lt.impl.UpdateChan()
+	updatechan := lt.taskProvider.UpdateConfigChan()
 	configChanges := make([]interface{}, 0, 12)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
@@ -697,7 +774,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		err := func(flushRetries bool) error {
 			if !flushRetries {
 
-				Logger.Debugw(
+				lt.logger.Debugw(
 					"waiting on results to flush",
 					"total_num_tasks", totalNumTasks,
 				)
@@ -707,7 +784,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 			if meta.NumIntervalTasks <= 0 || numWorkers <= 0 {
 
-				Logger.Errorw(
+				lt.logger.Errorw(
 					"retry flushing could not be attempted",
 					"total_num_tasks", totalNumTasks,
 					"num_interval_tasks", meta.NumIntervalTasks,
@@ -719,7 +796,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 			originalTotalNumTasks := totalNumTasks
 
-			Logger.Warnw(
+			lt.logger.Warnw(
 				"shutting down: flushing retries",
 				"total_num_tasks", totalNumTasks,
 				"flush_retries_timeout", lt.flushRetriesTimeout.String(),
@@ -735,7 +812,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			for {
 
 				if shutdownCtx.Err() != nil {
-					Logger.Errorw(
+					lt.logger.Errorw(
 						"failed to flush all retries",
 						"original_total_num_tasks", originalTotalNumTasks,
 						"total_num_tasks", totalNumTasks,
@@ -749,7 +826,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				for {
 
 					if shutdownCtx.Err() != nil {
-						Logger.Errorw(
+						lt.logger.Errorw(
 							"failed to flush all retries",
 							"original_total_num_tasks", originalTotalNumTasks,
 							"total_num_tasks", totalNumTasks,
@@ -760,7 +837,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 					if maxTotalTasks > 0 {
 						if totalNumTasks >= maxTotalTasks {
-							Logger.Errorw(
+							lt.logger.Errorw(
 								"failed to flush all retries",
 								"original_total_num_tasks", originalTotalNumTasks,
 								"total_num_tasks", totalNumTasks,
@@ -777,7 +854,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 					select {
 					case <-ctxDone:
-						Logger.Warnw(
+						lt.logger.Warnw(
 							"user stopped loadtest while attempting to flush retries",
 							"original_total_num_tasks", originalTotalNumTasks,
 							"total_num_tasks", totalNumTasks,
@@ -792,7 +869,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					if taskBufSize <= 0 {
 						// wait for any pending tasks to flush and try read again
 
-						Logger.Debugw(
+						lt.logger.Debugw(
 							"verifying all retries have flushed",
 							"original_total_num_tasks", originalTotalNumTasks,
 							"total_num_tasks", totalNumTasks,
@@ -804,7 +881,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 						taskBufSize = lt.readRetries(taskBuf[:numNewTasks:numNewTasks])
 						if taskBufSize <= 0 {
 
-							Logger.Infow(
+							lt.logger.Infow(
 								"all retries flushed",
 								"original_total_num_tasks", originalTotalNumTasks,
 								"total_num_tasks", totalNumTasks,
@@ -880,24 +957,24 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 		lt.resultWaitGroup.Wait()
 
-		Logger.Debugw("stopping result handler routines")
+		lt.logger.Debugw("stopping result handler routines")
 
 		// signal for handler routines to stop
 		close(stopChan)
 
-		Logger.Debugw("waiting for result handler routines to stop")
+		lt.logger.Debugw("waiting for result handler routines to stop")
 
 		// wait for handler routines to stop
 		wg.Wait()
 
-		Logger.Debugw("stopping workers")
+		lt.logger.Debugw("stopping workers")
 
 		// signal for workers to stop
 		for i := 0; i < len(lt.workers); i++ {
 			close(lt.workers[i])
 		}
 
-		Logger.Debugw("waiting for workers to stop")
+		lt.logger.Debugw("waiting for workers to stop")
 
 		// wait for workers to stop
 		lt.workerWaitGroup.Wait()
@@ -910,7 +987,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	for {
 		if maxTotalTasks > 0 {
 			if totalNumTasks >= maxTotalTasks {
-				Logger.Warnw(
+				lt.logger.Warnw(
 					"loadtest finished: max total task count reached",
 					"max_total_tasks", maxTotalTasks,
 				)
@@ -934,7 +1011,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 				// prevent over commiting on the maxWorkers count
 				if n > lt.maxWorkers {
-					Logger.Errorw(
+					lt.logger.Errorw(
 						"config update not within loadtest boundary conditions: numWorkers",
 						"reason", "update tried to set numWorkers set too high",
 						"remediation_hint", "increase the loadtests's MaxWorkers setting",
@@ -978,7 +1055,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 				// prevent over commiting on the maxIntervalTasks count
 				if n > lt.maxIntervalTasks {
-					Logger.Errorw(
+					lt.logger.Errorw(
 						"config update not within loadtest boundary conditions: numIntervalTasks",
 						"reason", "update tried to set numIntervalTasks set too high",
 						"remediation_hint", "increase the loadtests's MaxIntervalTasks setting",
@@ -1011,7 +1088,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
 			}
 
-			Logger.Warnw(
+			lt.logger.Warnw(
 				"loadtest config updated",
 				configChanges...,
 			)
@@ -1022,7 +1099,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 				pauseStart := time.Now()
 
-				Logger.Warnw(
+				lt.logger.Warnw(
 					"pausing load generation",
 					"num_interval_tasks", meta.NumIntervalTasks,
 					"num_workers", numWorkers,
@@ -1035,7 +1112,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				case cu = <-updatechan:
 					pauseEnd := time.Now()
 
-					Logger.Warnw(
+					lt.logger.Warnw(
 						"resuming load generation",
 						"num_interval_tasks", meta.NumIntervalTasks,
 						"num_workers", numWorkers,
@@ -1062,7 +1139,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 		if taskBufSize < numNewTasks {
 			maxSize := numNewTasks - taskBufSize
-			n := lt.impl.ReadTasks(taskBuf[taskBufSize:numNewTasks:numNewTasks])
+			n := lt.taskProvider.ReadTasks(taskBuf[taskBufSize:numNewTasks:numNewTasks])
 			if n < 0 || n > maxSize {
 				panic(ErrBadReadTasksImpl)
 			}
@@ -1077,15 +1154,15 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					// return immediately if there is nothing
 					// new to enqueue
 
-					Logger.Warnw(
+					lt.logger.Warnw(
 						"stopping loadtest: NextTask did not return a task",
-						"final_task_detla", 0,
+						"final_task_delta", 0,
 					)
 
 					return
 				}
 
-				Logger.Debugw("scheduled: stopping loadtest: NextTask did not return a task")
+				lt.logger.Debugw("scheduled: stopping loadtest: NextTask did not return a task")
 
 				break
 			}
@@ -1118,9 +1195,9 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			// increase total by actual number queued
 			// and stop traffic generation
 			totalNumTasks += taskBufSize
-			Logger.Warnw(
+			lt.logger.Warnw(
 				"stopping loadtest: NextTask did not return a task",
-				"final_task_detla", taskBufSize,
+				"final_task_delta", taskBufSize,
 			)
 			return
 		}
