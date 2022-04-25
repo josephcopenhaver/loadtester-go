@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"golang.org/x/sync/semaphore"
 )
 
 // TODO: RetriesDisabled runtimes checks can turn into init time checks; same with MaxTotalTasks based checks
@@ -26,6 +27,17 @@ import (
 // over time
 type TaskProvider interface {
 	// ReadTasks fills the provided slice up to slice length starting at index 0 and returns how many records have been inserted
+	//
+	// Failing to fill the whole slice will signal the end of the loadtest.
+	//
+	// Note in general you should not use this behavior to signal loadtests to stop
+	// if your loadtest needs to be time-bound. For that case you should signal a stop
+	// via the context. This stop on failure to fill behavior only exists for cases
+	// where the author wants to exhaustively run a set of tasks and not bound the
+	// loadtest to a timespan but rather completeness of the tasks space.
+	//
+	// Note that if you have only partially filled the slice, those filled task slots
+	// will still be run before termination of the loadtest.
 	ReadTasks([]Doer) int
 	// UpdateConfigChan should return the same channel each time or nil;
 	// but once nil it must never be non-nil again
@@ -42,6 +54,21 @@ type Loadtest struct {
 	resultWaitGroup sync.WaitGroup
 	taskChan        chan taskWithMeta
 	resultsChan     chan taskResult
+
+	// intervalTasksSema will always have the capacity of double the task interval rate
+	// but it is created with the maximum weight to queue up two batches of maxIntervalTasks
+	//
+	// This addition prevents enqueuing more than twice the count of desired tasks per interval
+	// and creates negative pressure on the task enqueue routine since the max channel sizes
+	// are static and bound to the maximums we could reach in some pacer implementation.
+	//
+	// Meaning we could send far more than we intended for the wall-clock interval and it
+	// could cause severe bursts in load without this protection.
+	//
+	// As a result this does slow down each task runner, but only slightly as it's just acquiring
+	// a lock, doing some simple math, and then unlocking as the task worker calls release on
+	// the sempahore. It's worth it to me.
+	intervalTasksSema *semaphore.Weighted
 
 	numIntervalTasks int
 	maxIntervalTasks int
@@ -127,6 +154,16 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 		retryTaskChan = make(chan *retryTask, maxWorkQueueSize)
 	}
 
+	var sm *semaphore.Weighted
+	{
+		size := int64(opt.maxIntervalTasks) * 2
+		sm = semaphore.NewWeighted(size)
+		if !sm.TryAcquire(size) {
+			return nil, errors.New("failed to initialize load generation semaphore")
+		}
+		sm.Release(int64(opt.numIntervalTasks) * 2)
+	}
+
 	return &Loadtest{
 		taskProvider:  taskProvider,
 		maxTotalTasks: opt.maxTotalTasks,
@@ -156,12 +193,14 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 		flushRetriesOnShutdown: opt.flushRetriesOnShutdown,
 		RetriesDisabled:        opt.retriesDisabled,
 		logger:                 opt.logger,
+		intervalTasksSema:      sm,
 	}, nil
 }
 
 var (
-	errCsvWriterDisabled = errors.New("csv metrics writer disabled")
-	ErrBadReadTasksImpl  = errors.New("bad ReadTasks implementation: returned a value less than zero or larger than the input slice length")
+	errCsvWriterDisabled    = errors.New("csv metrics writer disabled")
+	ErrBadReadTasksImpl     = errors.New("bad ReadTasks implementation: returned a value less than zero or larger than the input slice length")
+	ErrRetriesFailedToFlush = errors.New("failed to flush all retries")
 )
 
 func timeToString(t time.Time) string {
@@ -252,6 +291,8 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 			TaskDuration:   taskEnd.Sub(taskStart),
 			Meta:           task.meta,
 		}
+
+		lt.intervalTasksSema.Release(1)
 	}
 }
 
@@ -691,8 +732,6 @@ func (lt *Loadtest) NewHttpTransport() *http.Transport {
 	}
 }
 
-var ErrRetriesFailedToFlush = errors.New("failed to flush all retries")
-
 func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 	lt.startTime = time.Now()
@@ -891,6 +930,17 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					}
 					taskBuf = taskBuf[:taskBufSize]
 
+					// acquire load generation opportunity slots ( smooths bursts )
+					if lt.intervalTasksSema.Acquire(shutdownCtx, int64(taskBufSize)) != nil {
+						lt.logger.Errorw(
+							"failed to flush all retries",
+							"original_total_num_tasks", originalTotalNumTasks,
+							"total_num_tasks", totalNumTasks,
+							"reason", "shutdown timeout reached while waiting for semaphore acquisition",
+						)
+						return ErrRetriesFailedToFlush
+					}
+
 					lt.resultWaitGroup.Add(taskBufSize)
 
 					meta.IntervalID = intervalID
@@ -1004,6 +1054,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		case <-ctxDone:
 			return
 		case cu := <-updatechan:
+			var ctxErrored bool
 			var recomputeInterTaskInterval bool
 
 			if cu.numWorkers.set {
@@ -1066,6 +1117,12 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					n = lt.maxIntervalTasks
 				}
 
+				if n > numNewTasks {
+					lt.intervalTasksSema.Release(int64(n-numNewTasks) * 2)
+				} else if n < numNewTasks {
+					ctxErrored = (lt.intervalTasksSema.Acquire(ctx, int64(numNewTasks-n)*2) != nil)
+				}
+
 				configChanges = append(configChanges,
 					"old_num_interval_tasks", meta.NumIntervalTasks,
 					"new_num_interval_tasks", n,
@@ -1093,6 +1150,10 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				configChanges...,
 			)
 			configChanges = configChanges[:0]
+
+			if ctxErrored {
+				return
+			}
 
 			// pause load generation if unable to schedule anything
 			if meta.NumIntervalTasks <= 0 || numWorkers <= 0 {
@@ -1169,6 +1230,11 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 			taskBufSize += n
 			taskBuf = taskBuf[:taskBufSize]
+		}
+
+		// acquire load generation opportunity slots ( smooths bursts )
+		if lt.intervalTasksSema.Acquire(ctx, int64(taskBufSize)) != nil {
+			return
 		}
 
 		lt.resultWaitGroup.Add(taskBufSize)
