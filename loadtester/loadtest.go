@@ -44,6 +44,14 @@ type TaskProvider interface {
 	UpdateConfigChan() <-chan ConfigUpdate
 }
 
+type csvData struct {
+	outputFilename string
+	writer         *csv.Writer
+	flushFrequency time.Duration
+	flushDeadline  time.Time
+	writeErr       error
+}
+
 type Loadtest struct {
 	taskProvider    TaskProvider
 	maxTotalTasks   int
@@ -89,7 +97,7 @@ type Loadtest struct {
 
 func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtest, error) {
 
-	opt := loadtestOptions{
+	cfg := loadtestConfig{
 		taskBufferingFactor:     4,
 		maxWorkers:              1,
 		numWorkers:              1,
@@ -101,82 +109,82 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 		flushRetriesTimeout:     2 * time.Minute,
 	}
 
-	for _, op := range options {
-		op(&opt)
+	for _, option := range options {
+		option(&cfg)
 	}
 
-	if !opt.maxWorkersSet && opt.numWorkersSet {
-		opt.maxWorkers = opt.numWorkers
+	if !cfg.maxWorkersSet && cfg.numWorkersSet {
+		cfg.maxWorkers = cfg.numWorkers
 	}
 
-	if !opt.maxIntervalTasksSet && opt.numIntervalTasksSet {
-		opt.maxIntervalTasks = opt.numIntervalTasks
+	if !cfg.maxIntervalTasksSet && cfg.numIntervalTasksSet {
+		cfg.maxIntervalTasks = cfg.numIntervalTasks
 	}
 
-	if opt.maxWorkers < opt.numWorkers {
+	if cfg.maxWorkers < cfg.numWorkers {
 		return nil, errors.New("loadtest misconfigured: MaxWorkers < NumWorkers")
 	}
 
-	if opt.maxWorkers < 1 {
+	if cfg.maxWorkers < 1 {
 		return nil, errors.New("loadtest misconfigured: MaxWorkers < 1")
 	}
 
-	if opt.maxIntervalTasks < opt.numIntervalTasks {
+	if cfg.maxIntervalTasks < cfg.numIntervalTasks {
 		return nil, errors.New("loadtest misconfigured: MaxIntervalTasks < NumIntervalTasks")
 	}
 
-	if opt.maxIntervalTasks < 1 {
+	if cfg.maxIntervalTasks < 1 {
 		return nil, errors.New("loadtest misconfigured: maxIntervalTasks < 1")
 	}
 
-	if opt.taskBufferingFactor <= 0 {
-		opt.taskBufferingFactor = 1
+	if cfg.taskBufferingFactor <= 0 {
+		cfg.taskBufferingFactor = 1
 	}
 
-	if opt.logger == nil {
+	if cfg.logger == nil {
 		logger, err := NewLogger(zap.InfoLevel)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create a default logger: %w", err)
 		}
-		opt.logger = logger
+		cfg.logger = logger
 	}
 
-	maxWorkQueueSize := opt.maxIntervalTasks * opt.taskBufferingFactor
-	numPossibleLagResults := opt.taskBufferingFactor
+	maxWorkQueueSize := cfg.maxIntervalTasks * cfg.taskBufferingFactor
+	numPossibleLagResults := cfg.taskBufferingFactor
 
 	var csvWriteErr error
-	if opt.csvOutputDisabled {
+	if cfg.csvOutputDisabled {
 		csvWriteErr = errCsvWriterDisabled
 	}
 
 	var retryTaskChan chan *retryTask
-	if !opt.retriesDisabled {
+	if !cfg.retriesDisabled {
 		retryTaskChan = make(chan *retryTask, maxWorkQueueSize)
 	}
 
 	var sm *semaphore.Weighted
 	{
-		size := int64(opt.maxIntervalTasks) * 2
+		size := int64(cfg.maxIntervalTasks) * 2
 		sm = semaphore.NewWeighted(size)
 		if !sm.TryAcquire(size) {
 			return nil, errors.New("failed to initialize load generation semaphore")
 		}
-		sm.Release(int64(opt.numIntervalTasks) * 2)
+		sm.Release(int64(cfg.numIntervalTasks) * 2)
 	}
 
 	return &Loadtest{
 		taskProvider:  taskProvider,
-		maxTotalTasks: opt.maxTotalTasks,
-		maxWorkers:    opt.maxWorkers,
-		numWorkers:    opt.numWorkers,
-		workers:       make([]chan struct{}, 0, opt.maxWorkers),
+		maxTotalTasks: cfg.maxTotalTasks,
+		maxWorkers:    cfg.maxWorkers,
+		numWorkers:    cfg.numWorkers,
+		workers:       make([]chan struct{}, 0, cfg.maxWorkers),
 		taskChan:      make(chan taskWithMeta, maxWorkQueueSize),
 		resultsChan:   make(chan taskResult, maxWorkQueueSize+numPossibleLagResults),
 		retryTaskChan: retryTaskChan,
 
-		maxIntervalTasks: opt.maxIntervalTasks,
-		numIntervalTasks: opt.numIntervalTasks,
-		interval:         opt.interval,
+		maxIntervalTasks: cfg.maxIntervalTasks,
+		numIntervalTasks: cfg.numIntervalTasks,
+		interval:         cfg.interval,
 		retryTaskPool: sync.Pool{
 			New: func() interface{} {
 				return &retryTask{}
@@ -184,15 +192,15 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 		},
 
 		csvData: csvData{
-			outputFilename: opt.csvOutputFilename,
-			flushFrequency: opt.csvOutputFlushFrequency,
+			outputFilename: cfg.csvOutputFilename,
+			flushFrequency: cfg.csvOutputFlushFrequency,
 			writeErr:       csvWriteErr,
 		},
 
-		flushRetriesTimeout:    opt.flushRetriesTimeout,
-		flushRetriesOnShutdown: opt.flushRetriesOnShutdown,
-		RetriesDisabled:        opt.retriesDisabled,
-		logger:                 opt.logger,
+		flushRetriesTimeout:    cfg.flushRetriesTimeout,
+		flushRetriesOnShutdown: cfg.flushRetriesOnShutdown,
+		RetriesDisabled:        cfg.retriesDisabled,
+		logger:                 cfg.logger,
 		intervalTasksSema:      sm,
 	}, nil
 }
@@ -205,14 +213,6 @@ var (
 
 func timeToString(t time.Time) string {
 	return t.UTC().Format(time.RFC3339Nano)
-}
-
-type csvData struct {
-	outputFilename string
-	writer         *csv.Writer
-	flushFrequency time.Duration
-	flushDeadline  time.Time
-	writeErr       error
 }
 
 type taskResult struct {
