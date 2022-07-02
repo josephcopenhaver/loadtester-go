@@ -19,7 +19,7 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-// TODO: RetriesDisabled runtimes checks can turn into init time checks; same with MaxTotalTasks based checks
+// TODO: RetriesDisabled runtimes checks can turn into init time checks; same with MaxTasks based checks
 // I would not dream of doing this before proving it is warranted first.
 
 // TaskProvider describes how to read tasks into a
@@ -54,7 +54,7 @@ type csvData struct {
 
 type Loadtest struct {
 	taskProvider    TaskProvider
-	maxTotalTasks   int
+	maxTasks        int
 	maxWorkers      int
 	numWorkers      int
 	workers         []chan struct{}
@@ -174,7 +174,7 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 
 	return &Loadtest{
 		taskProvider:  taskProvider,
-		maxTotalTasks: cfg.maxTotalTasks,
+		maxTasks:      cfg.maxTasks,
 		maxWorkers:    cfg.maxWorkers,
 		numWorkers:    cfg.numWorkers,
 		workers:       make([]chan struct{}, 0, cfg.maxWorkers),
@@ -413,21 +413,21 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 	defer wg.Done()
 
 	var intervalID time.Time
-	var totalResultCount, resultCount, numIntervalTasks, numPass, numFail, numRetry, numPanic int
+	var totalNumTasks, numTasks, numIntervalTasks, numPass, numFail, numRetry, numPanic int
 	var lag, minQueuedDuration, maxQueuedDuration, sumQueuedDuration, minTaskDuration, maxTaskDuration, sumTaskDuration, sumLag time.Duration
 
 	minQueuedDuration = maxDuration
 	minTaskDuration = maxDuration
 
 	writeRow := func() {
-		totalResultCount += resultCount
+		totalNumTasks += numTasks
 		lt.csvData.writeErr = lt.writeOutputCsvRow(metricRecord{
-			totalResultCount:  totalResultCount,
+			totalNumTasks:     totalNumTasks,
 			intervalID:        intervalID,
 			sumLag:            sumLag,
 			numIntervalTasks:  numIntervalTasks,
 			lag:               lag,
-			numTasks:          resultCount,
+			numTasks:          numTasks,
 			numPass:           numPass,
 			numFail:           numFail,
 			numRetry:          numRetry,
@@ -449,7 +449,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 		select {
 		case tr = <-lt.resultsChan:
 		case <-stopChan:
-			if lt.csvData.writeErr == nil && resultCount > 0 {
+			if lt.csvData.writeErr == nil && numTasks > 0 {
 				writeRow()
 			}
 			return
@@ -497,9 +497,9 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 		numPanic += int(tr.Panicked)
 		numRetry += int(tr.RetryQueued)
 
-		resultCount++
+		numTasks++
 
-		if resultCount >= numIntervalTasks {
+		if numTasks >= numIntervalTasks {
 
 			writeRow()
 
@@ -516,7 +516,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 			maxTaskDuration = -1
 			sumQueuedDuration = 0
 			sumTaskDuration = 0
-			resultCount = 0
+			numTasks = 0
 			numPass = 0
 			numFail = 0
 			numRetry = 0
@@ -537,7 +537,7 @@ func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 		StartTime              string `json:"start_time"`
 		Interval               string `json:"interval"`
 		MaxIntervalTasks       int    `json:"max_interval_tasks"`
-		MaxTotalTasks          int    `json:"max_total_tasks"`
+		MaxTasks               int    `json:"max_tasks"`
 		MaxWorkers             int    `json:"max_workers"`
 		NumIntervalTasks       int    `json:"num_interval_tasks"`
 		NumWorkers             int    `json:"num_workers"`
@@ -550,7 +550,7 @@ func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 		StartTime:              timeToString(lt.startTime),
 		Interval:               lt.interval.String(),
 		MaxIntervalTasks:       lt.maxIntervalTasks,
-		MaxTotalTasks:          lt.maxTotalTasks,
+		MaxTasks:               lt.maxTasks,
 		MaxWorkers:             lt.maxWorkers,
 		NumIntervalTasks:       lt.numIntervalTasks,
 		NumWorkers:             lt.numWorkers,
@@ -592,7 +592,7 @@ type metricRecord struct {
 	numFail                                                 int
 	numRetry                                                int
 	numPanic                                                int
-	totalResultCount                                        int
+	totalNumTasks                                           int
 	minTaskDuration, maxTaskDuration, sumTaskDuration       time.Duration
 	minQueuedDuration, maxQueuedDuration, sumQueuedDuration time.Duration
 }
@@ -620,7 +620,7 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 		"sum_task_duration",
 	}
 
-	if lt.maxTotalTasks > 0 {
+	if lt.maxTasks > 0 {
 		fields = append(fields, "percent_done")
 	}
 
@@ -664,8 +664,8 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 		"",
 	}
 
-	if lt.maxTotalTasks > 0 {
-		high := mr.totalResultCount * 10000 / lt.maxTotalTasks
+	if lt.maxTasks > 0 {
+		high := mr.totalNumTasks * 10000 / lt.maxTasks
 		low := high % 100
 		high /= 100
 		var prefix string
@@ -786,11 +786,13 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 	numWorkers := lt.numWorkers
 
-	var totalNumTasks int
+	// numTasks is the total number of tasks
+	// scheduled to run ( including retries )
+	var numTasks int
 
 	intervalID := time.Now()
 
-	maxTotalTasks := lt.maxTotalTasks
+	maxTasks := lt.maxTasks
 
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
@@ -815,7 +817,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 				lt.logger.Debugw(
 					"waiting on results to flush",
-					"total_num_tasks", totalNumTasks,
+					"num_tasks", numTasks,
 				)
 
 				return nil
@@ -825,7 +827,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 				lt.logger.Errorw(
 					"retry flushing could not be attempted",
-					"total_num_tasks", totalNumTasks,
+					"num_tasks", numTasks,
 					"num_interval_tasks", meta.NumIntervalTasks,
 					"num_workers", numWorkers,
 				)
@@ -833,11 +835,11 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				return ErrRetriesFailedToFlush
 			}
 
-			originalTotalNumTasks := totalNumTasks
+			preflushNumTasks := numTasks
 
 			lt.logger.Warnw(
 				"shutting down: flushing retries",
-				"total_num_tasks", totalNumTasks,
+				"num_tasks", numTasks,
 				"flush_retries_timeout", lt.flushRetriesTimeout.String(),
 			)
 
@@ -853,8 +855,8 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				if shutdownCtx.Err() != nil {
 					lt.logger.Errorw(
 						"failed to flush all retries",
-						"original_total_num_tasks", originalTotalNumTasks,
-						"total_num_tasks", totalNumTasks,
+						"preflush_num_tasks", preflushNumTasks,
+						"num_tasks", numTasks,
 					)
 
 					return ErrRetriesFailedToFlush
@@ -867,25 +869,25 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					if shutdownCtx.Err() != nil {
 						lt.logger.Errorw(
 							"failed to flush all retries",
-							"original_total_num_tasks", originalTotalNumTasks,
-							"total_num_tasks", totalNumTasks,
+							"preflush_num_tasks", preflushNumTasks,
+							"num_tasks", numTasks,
 						)
 
 						return ErrRetriesFailedToFlush
 					}
 
-					if maxTotalTasks > 0 {
-						if totalNumTasks >= maxTotalTasks {
+					if maxTasks > 0 {
+						if numTasks >= maxTasks {
 							lt.logger.Errorw(
 								"failed to flush all retries",
-								"original_total_num_tasks", originalTotalNumTasks,
-								"total_num_tasks", totalNumTasks,
-								"reason", "reached max total tasks",
+								"preflush_num_tasks", preflushNumTasks,
+								"num_tasks", numTasks,
+								"reason", "reached max tasks",
 							)
 							return ErrRetriesFailedToFlush
 						}
 
-						numNewTasks = maxTotalTasks - totalNumTasks
+						numNewTasks = maxTasks - numTasks
 						if numNewTasks > meta.NumIntervalTasks {
 							numNewTasks = meta.NumIntervalTasks
 						}
@@ -895,8 +897,8 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					case <-ctxDone:
 						lt.logger.Warnw(
 							"user stopped loadtest while attempting to flush retries",
-							"original_total_num_tasks", originalTotalNumTasks,
-							"total_num_tasks", totalNumTasks,
+							"preflush_num_tasks", preflushNumTasks,
+							"num_tasks", numTasks,
 						)
 						return nil
 					default:
@@ -910,8 +912,8 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 						lt.logger.Debugw(
 							"verifying all retries have flushed",
-							"original_total_num_tasks", originalTotalNumTasks,
-							"total_num_tasks", totalNumTasks,
+							"preflush_num_tasks", preflushNumTasks,
+							"num_tasks", numTasks,
 						)
 
 						lt.resultWaitGroup.Wait()
@@ -922,8 +924,8 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 							lt.logger.Infow(
 								"all retries flushed",
-								"original_total_num_tasks", originalTotalNumTasks,
-								"total_num_tasks", totalNumTasks,
+								"preflush_num_tasks", preflushNumTasks,
+								"num_tasks", numTasks,
 							)
 							return nil
 						}
@@ -934,8 +936,8 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					if lt.intervalTasksSema.Acquire(shutdownCtx, int64(taskBufSize)) != nil {
 						lt.logger.Errorw(
 							"failed to flush all retries",
-							"original_total_num_tasks", originalTotalNumTasks,
-							"total_num_tasks", totalNumTasks,
+							"preflush_num_tasks", preflushNumTasks,
+							"num_tasks", numTasks,
 							"reason", "shutdown timeout reached while waiting for semaphore acquisition",
 						)
 						return ErrRetriesFailedToFlush
@@ -962,7 +964,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 					taskBuf = taskBuf[:0]
 
-					totalNumTasks += taskBufSize
+					numTasks += taskBufSize
 
 					meta.Lag = 0
 
@@ -1035,16 +1037,16 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	}
 
 	for {
-		if maxTotalTasks > 0 {
-			if totalNumTasks >= maxTotalTasks {
+		if maxTasks > 0 {
+			if numTasks >= maxTasks {
 				lt.logger.Warnw(
-					"loadtest finished: max total task count reached",
-					"max_total_tasks", maxTotalTasks,
+					"loadtest finished: max task count reached",
+					"max_tasks", maxTasks,
 				)
 				return
 			}
 
-			numNewTasks = maxTotalTasks - totalNumTasks
+			numNewTasks = maxTasks - numTasks
 			if numNewTasks > meta.NumIntervalTasks {
 				numNewTasks = meta.NumIntervalTasks
 			}
@@ -1208,7 +1210,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				// iteration is technically done now
 				// but there could be straggling retries
 				// queued after this, those should continue
-				// to be flushed if and only if maxTotalTasks
+				// to be flushed if and only if maxTasks
 				// has not been reached and if it is greater
 				// than zero
 				if taskBufSize == 0 {
@@ -1258,9 +1260,9 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 		if numNewTasks > taskBufSize {
 			// must have hit the end of NextTask iterator
-			// increase total by actual number queued
+			// increase numTasks total by actual number queued
 			// and stop traffic generation
-			totalNumTasks += taskBufSize
+			numTasks += taskBufSize
 			lt.logger.Warnw(
 				"stopping loadtest: NextTask did not return a task",
 				"final_task_delta", taskBufSize,
@@ -1270,7 +1272,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 		taskBuf = taskBuf[:0]
 
-		totalNumTasks += taskBufSize
+		numTasks += taskBufSize
 
 		meta.Lag = 0
 

@@ -6,7 +6,7 @@ import (
 
 type loadtestConfig struct {
 	taskBufferingFactor     int
-	maxTotalTasks           int
+	maxTasks                int
 	maxWorkers              int
 	maxWorkersSet           bool
 	numWorkers              int
@@ -27,9 +27,10 @@ type loadtestConfig struct {
 
 type LoadtestOption func(*loadtestConfig)
 
-func MaxTotalTasks(max int) LoadtestOption {
+// MaxTasks sets an upperbound on the number of tasks the loadtest could perform
+func MaxTasks(max int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
-		cfg.maxTotalTasks = max
+		cfg.maxTasks = max
 	}
 }
 
