@@ -933,12 +933,13 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					taskBuf = taskBuf[:taskBufSize]
 
 					// acquire load generation opportunity slots ( smooths bursts )
-					if lt.intervalTasksSema.Acquire(shutdownCtx, int64(taskBufSize)) != nil {
+					if err := lt.intervalTasksSema.Acquire(shutdownCtx, int64(taskBufSize)); err != nil {
 						lt.logger.Errorw(
 							"failed to flush all retries",
 							"preflush_num_tasks", preflushNumTasks,
 							"num_tasks", numTasks,
-							"reason", "shutdown timeout reached while waiting for semaphore acquisition",
+							"error", err,
+							"reason", "shutdown timeout likely reached while waiting for semaphore acquisition",
 						)
 						return ErrRetriesFailedToFlush
 					}
@@ -1056,7 +1057,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		case <-ctxDone:
 			return
 		case cu := <-updatechan:
-			var ctxErrored bool
+			var prepSemaErr error
 			var recomputeInterTaskInterval bool
 
 			if cu.numWorkers.set {
@@ -1122,7 +1123,16 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				if n > numNewTasks {
 					lt.intervalTasksSema.Release(int64(n-numNewTasks) * 2)
 				} else if n < numNewTasks {
-					ctxErrored = (lt.intervalTasksSema.Acquire(ctx, int64(numNewTasks-n)*2) != nil)
+					prepSemaErr = lt.intervalTasksSema.Acquire(ctx, int64(numNewTasks-n)*2)
+					if prepSemaErr != nil {
+						lt.logger.Errorw(
+							"loadtest config udpate: failed to pre-acquire load generation slots",
+							"error", prepSemaErr,
+						)
+
+						// not returning and error... yet
+						// going to let config update log statement occur and then report the error present in prepSemaErr
+					}
 				}
 
 				configChanges = append(configChanges,
@@ -1143,7 +1153,8 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				interval = cu.interval.val
 			}
 
-			if recomputeInterTaskInterval {
+			// && clause: protects against divide by zero
+			if recomputeInterTaskInterval && meta.NumIntervalTasks >= 0 {
 				interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
 			}
 
@@ -1153,8 +1164,8 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			)
 			configChanges = configChanges[:0]
 
-			if ctxErrored {
-				return
+			if prepSemaErr != nil {
+				return prepSemaErr
 			}
 
 			// pause load generation if unable to schedule anything
