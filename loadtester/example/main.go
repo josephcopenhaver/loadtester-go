@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/josephcopenhaver/loadtester-go/loadtester"
@@ -34,9 +36,26 @@ func (lt MyLoadtest) UpdateConfigChan() <-chan loadtester.ConfigUpdate {
 }
 
 func main() {
-	logger, err := loadtester.NewLogger(zapcore.InfoLevel)
-	if err != nil {
-		panic(err)
+
+	var logger loadtester.SugaredLogger
+	{
+		level := zapcore.InfoLevel
+
+		if s := os.Getenv("LOG_LEVEL"); s != "" {
+			v, err := zapcore.ParseLevel(s)
+			if err != nil {
+				panic(fmt.Errorf("failed to parse LOG_LEVEL environment variable: %w", err))
+			}
+
+			level = v
+		}
+
+		v, err := loadtester.NewLogger(level)
+		if err != nil {
+			panic(err)
+		}
+
+		logger = v
 	}
 
 	ctx, cancel := loadtester.RootContext(logger)
