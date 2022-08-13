@@ -64,7 +64,8 @@ type Loadtest struct {
 	resultsChan     chan taskResult
 
 	// intervalTasksSema will always have the capacity of double the task interval rate
-	// but it is created with the maximum weight to queue up two batches of maxIntervalTasks
+	// but it is created with the maximum weight to allow up two batches of maxIntervalTasks
+	// to be spawned ( one batch in progress, one batch pending in channel queue )
 	//
 	// This addition prevents enqueuing more than twice the count of desired tasks per interval
 	// and creates negative pressure on the task enqueue routine since the max channel sizes
@@ -98,7 +99,7 @@ type Loadtest struct {
 func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtest, error) {
 
 	cfg := loadtestConfig{
-		taskBufferingFactor:     4,
+		outputBufferingFactor:   4,
 		maxWorkers:              1,
 		numWorkers:              1,
 		maxIntervalTasks:        1,
@@ -137,8 +138,8 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 		return nil, errors.New("loadtest misconfigured: maxIntervalTasks < 1")
 	}
 
-	if cfg.taskBufferingFactor <= 0 {
-		cfg.taskBufferingFactor = 1
+	if cfg.outputBufferingFactor <= 0 {
+		cfg.outputBufferingFactor = 1
 	}
 
 	if cfg.logger == nil {
@@ -149,8 +150,15 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 		cfg.logger = logger
 	}
 
-	maxWorkQueueSize := cfg.maxIntervalTasks * cfg.taskBufferingFactor
-	numPossibleLagResults := cfg.taskBufferingFactor
+	// lag results are reported per interval through the same channel as results
+	// so it's important to account for them per interval when constructing max
+	// config buffers
+
+	const intervalPossibleLagResultCount = 1
+	var resultsChanSize int
+	{
+		resultsChanSize = (cfg.maxIntervalTasks + intervalPossibleLagResultCount) * cfg.outputBufferingFactor
+	}
 
 	var csvWriteErr error
 	if cfg.csvOutputDisabled {
@@ -159,7 +167,7 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 
 	var retryTaskChan chan *retryTask
 	if !cfg.retriesDisabled {
-		retryTaskChan = make(chan *retryTask, maxWorkQueueSize)
+		retryTaskChan = make(chan *retryTask, cfg.maxIntervalTasks)
 	}
 
 	var sm *semaphore.Weighted
@@ -178,8 +186,8 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 		maxWorkers:    cfg.maxWorkers,
 		numWorkers:    cfg.numWorkers,
 		workers:       make([]chan struct{}, 0, cfg.maxWorkers),
-		taskChan:      make(chan taskWithMeta, maxWorkQueueSize),
-		resultsChan:   make(chan taskResult, maxWorkQueueSize+numPossibleLagResults),
+		taskChan:      make(chan taskWithMeta, cfg.maxIntervalTasks+intervalPossibleLagResultCount),
+		resultsChan:   make(chan taskResult, resultsChanSize),
 		retryTaskChan: retryTaskChan,
 
 		maxIntervalTasks: cfg.maxIntervalTasks,

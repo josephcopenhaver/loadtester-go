@@ -5,7 +5,7 @@ import (
 )
 
 type loadtestConfig struct {
-	taskBufferingFactor     int
+	outputBufferingFactor   int
 	maxTasks                int
 	maxWorkers              int
 	maxWorkersSet           bool
@@ -48,9 +48,9 @@ func NumWorkers(n int) LoadtestOption {
 	}
 }
 
-func TaskBufferingFactor(factor int) LoadtestOption {
+func OutputBufferingFactor(factor int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
-		cfg.taskBufferingFactor = factor
+		cfg.outputBufferingFactor = factor
 	}
 }
 
