@@ -63,11 +63,11 @@ type Loadtest struct {
 	taskChan        chan taskWithMeta
 	resultsChan     chan taskResult
 
-	// intervalTasksSema will always have the capacity of double the task interval rate
-	// but it is created with the maximum weight to allow up two batches of maxIntervalTasks
-	// to be spawned ( one batch in progress, one batch pending in channel queue )
+	// intervalTasksSema will always have capacity set to the task interval rate + worker count
+	// but it is created with the maximum weight to allow up to max task interval rate + max
+	// worker count configurations ( accounts for work in progress and work queued )
 	//
-	// This addition prevents enqueuing more than twice the count of desired tasks per interval
+	// This addition prevents enqueuing more than beyond the desired tasks per interval
 	// and creates negative pressure on the task enqueue routine since the max channel sizes
 	// are static and bound to the maximums we could reach in some pacer implementation.
 	//
@@ -172,12 +172,12 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 
 	var sm *semaphore.Weighted
 	{
-		size := int64(cfg.maxIntervalTasks) * 2
+		size := int64(cfg.maxIntervalTasks + cfg.maxWorkers)
 		sm = semaphore.NewWeighted(size)
 		if !sm.TryAcquire(size) {
 			return nil, errors.New("failed to initialize load generation semaphore")
 		}
-		sm.Release(int64(cfg.numIntervalTasks) * 2)
+		sm.Release(int64(cfg.numIntervalTasks + cfg.numWorkers))
 	}
 
 	return &Loadtest{
@@ -1045,6 +1045,12 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		lt.addWorker(ctx, i)
 	}
 
+	getTaskSlotCount := func() int {
+		return numNewTasks + numWorkers
+	}
+
+	taskSlotCount := getTaskSlotCount()
+
 	for {
 		if maxTasks > 0 {
 			if numTasks >= maxTasks {
@@ -1066,9 +1072,11 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			return
 		case cu := <-updatechan:
 			var prepSemaErr error
-			var recomputeInterTaskInterval bool
+			var recomputeInterTaskInterval, recomputeTaskSlots bool
 
 			if cu.numWorkers.set {
+				recomputeTaskSlots = true
+
 				n := cu.numWorkers.val
 
 				// prevent over commiting on the maxWorkers count
@@ -1112,6 +1120,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 			if cu.numIntervalTasks.set {
 				recomputeInterTaskInterval = true
+				recomputeTaskSlots = true
 
 				n := cu.numIntervalTasks.val
 
@@ -1126,21 +1135,6 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 						"max", lt.maxIntervalTasks,
 					)
 					n = lt.maxIntervalTasks
-				}
-
-				if n > numNewTasks {
-					lt.intervalTasksSema.Release(int64(n-numNewTasks) * 2)
-				} else if n < numNewTasks {
-					prepSemaErr = lt.intervalTasksSema.Acquire(ctx, int64(numNewTasks-n)*2)
-					if prepSemaErr != nil {
-						lt.logger.Errorw(
-							"loadtest config udpate: failed to pre-acquire load generation slots",
-							"error", prepSemaErr,
-						)
-
-						// not returning and error... yet
-						// going to let config update log statement occur and then report the error present in prepSemaErr
-					}
 				}
 
 				configChanges = append(configChanges,
@@ -1164,6 +1158,28 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			// && clause: protects against divide by zero
 			if recomputeInterTaskInterval && meta.NumIntervalTasks >= 0 {
 				interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
+			}
+
+			if recomputeTaskSlots {
+				if newTaskSlotCount := getTaskSlotCount(); newTaskSlotCount != taskSlotCount {
+
+					if newTaskSlotCount > taskSlotCount {
+						lt.intervalTasksSema.Release(int64(newTaskSlotCount - taskSlotCount))
+					} else {
+						prepSemaErr = lt.intervalTasksSema.Acquire(ctx, int64(taskSlotCount-newTaskSlotCount))
+						if prepSemaErr != nil {
+							lt.logger.Errorw(
+								"loadtest config udpate: failed to pre-acquire load generation slots",
+								"error", prepSemaErr,
+							)
+
+							// not returning and error... yet
+							// going to let config update log statement occur and then report the error present in prepSemaErr
+						}
+					}
+
+					taskSlotCount = newTaskSlotCount
+				}
 			}
 
 			lt.logger.Warnw(
