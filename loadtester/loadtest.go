@@ -177,7 +177,6 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 		if !sm.TryAcquire(size) {
 			return nil, errors.New("failed to initialize load generation semaphore")
 		}
-		sm.Release(int64(cfg.numIntervalTasks + cfg.numWorkers))
 	}
 
 	return &Loadtest{
@@ -1041,16 +1040,49 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		lt.workerWaitGroup.Wait()
 	}()
 
+	// getTaskSlotCount is the task emission backpressure
+	// throttle that conveys the number of tasks that
+	// are allowed to be un-finished for the performance
+	// interval under normal circumstances
+	getTaskSlotCount := func() int {
+
+		// if the number of workers exceeds the number
+		// of tasks then ideally we'll always have a
+		// few idle workers
+		//
+		// in such a scenario we don't want to treat work
+		// in progress larger than the number of new tasks
+		// as expected work in progress, instead we should
+		// have only up to the task count of work in progress
+		// and ideally that work should be flushing to the
+		// results consumer routine
+		//
+		// so to create backpressure we ignore the number
+		// of workers that exceed the task count for the
+		// interval
+		//
+		// having idle workers is valid in cases where tasks
+		// are of a mixed type configuration and some take
+		// longer than others - it's just another type of
+		// throughput buffering authors can opt into using
+		// for edge case reasons/simulations
+		if numWorkers > numNewTasks {
+			return numNewTasks * 2
+		}
+
+		return numNewTasks + numWorkers
+	}
+
+	// apply initial task buffer limits to the interval semaphore
+	taskSlotCount := getTaskSlotCount()
+	lt.intervalTasksSema.Release(int64(taskSlotCount))
+
+	// start workers just before starting task scheduling
 	for i := 0; i < numWorkers; i++ {
 		lt.addWorker(ctx, i)
 	}
 
-	getTaskSlotCount := func() int {
-		return numNewTasks + numWorkers
-	}
-
-	taskSlotCount := getTaskSlotCount()
-
+	// main task scheduling loop
 	for {
 		if maxTasks > 0 {
 			if numTasks >= maxTasks {
