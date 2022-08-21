@@ -416,7 +416,7 @@ func (lt *Loadtest) readRetries(p []Doer) int {
 	return i
 }
 
-func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{}) {
+func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	var intervalID time.Time
@@ -451,11 +451,8 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup, stopChan <-chan struct{})
 	lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushFrequency)
 
 	for {
-		var tr taskResult
-
-		select {
-		case tr = <-lt.resultsChan:
-		case <-stopChan:
+		tr, ok := <-lt.resultsChan
+		if !ok {
 			if lt.csvData.writeErr == nil && numTasks > 0 {
 				writeRow()
 			}
@@ -786,10 +783,9 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	)
 
 	var wg sync.WaitGroup
-	stopChan := make(chan struct{})
 
 	wg.Add(1)
-	go lt.resultsHandler(&wg, stopChan)
+	go lt.resultsHandler(&wg)
 
 	numWorkers := lt.numWorkers
 
@@ -1015,28 +1011,27 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			err_result = err
 		}
 
+		// wait for all results to come in
+		lt.logger.Debugw("waiting for loadtest results")
 		lt.resultWaitGroup.Wait()
 
-		lt.logger.Debugw("stopping result handler routines")
+		lt.logger.Debugw("stopping result handler routines and workers")
 
-		// signal for handler routines to stop
-		close(stopChan)
-
-		lt.logger.Debugw("waiting for result handler routines to stop")
-
-		// wait for handler routines to stop
-		wg.Wait()
-
-		lt.logger.Debugw("stopping workers")
+		// signal for result handler routines to stop
+		close(lt.resultsChan)
 
 		// signal for workers to stop
+		lt.logger.Debugw("stopping workers")
 		for i := 0; i < len(lt.workers); i++ {
 			close(lt.workers[i])
 		}
 
-		lt.logger.Debugw("waiting for workers to stop")
+		// wait for result handler routines to stop
+		lt.logger.Debugw("waiting for result handler routines to stop")
+		wg.Wait()
 
 		// wait for workers to stop
+		lt.logger.Debugw("waiting for workers to stop")
 		lt.workerWaitGroup.Wait()
 	}()
 
