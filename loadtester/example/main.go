@@ -67,6 +67,7 @@ func main() {
 		loadtester.NumWorkers(5),
 		loadtester.NumIntervalTasks(25),
 		loadtester.Interval(1*time.Second),
+		// loadtester.FlushRetriesOnShutdown(true), // default is false
 	)
 	if err != nil {
 		panic(err)

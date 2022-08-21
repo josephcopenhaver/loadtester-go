@@ -548,6 +548,7 @@ func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 		MetricsFlushFrequency  string `json:"metrics_flush_frequency"`
 		FlushRetriesOnShutdown bool   `json:"flush_retries_on_shutdown"`
 		FlushRetriesTimeout    string `json:"flush_retries_timeout"`
+		RetriesDisabled        bool   `json:"retries_disabled"`
 	}
 
 	return Config{
@@ -561,6 +562,7 @@ func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 		MetricsFlushFrequency:  lt.csvData.flushFrequency.String(),
 		FlushRetriesOnShutdown: lt.flushRetriesOnShutdown,
 		FlushRetriesTimeout:    lt.flushRetriesTimeout.String(),
+		RetriesDisabled:        lt.RetriesDisabled,
 	}
 }
 
@@ -819,12 +821,27 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			if !flushRetries {
 
 				lt.logger.Debugw(
-					"waiting on results to flush",
+					"not waiting on retries to flush on shutdown",
+					"reason", "retries disabled or flush retries on shutdown disabled",
 					"num_tasks", numTasks,
 				)
 
 				return nil
 			}
+
+			if ctx.Err() != nil {
+				lt.logger.Warnw(
+					"not waiting on retries to flush on shutdown",
+					"reason", "user stopped loadtest",
+					"num_tasks", numTasks,
+				)
+				return nil
+			}
+
+			lt.logger.Debugw(
+				"waiting on retries to flush",
+				"num_tasks", numTasks,
+			)
 
 			if meta.NumIntervalTasks <= 0 || numWorkers <= 0 {
 
