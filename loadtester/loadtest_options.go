@@ -74,19 +74,19 @@ func Interval(d time.Duration) LoadtestOption {
 	}
 }
 
-func CsvFilename(s string) LoadtestOption {
+func MetricsCsvFilename(s string) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.csvOutputFilename = s
 	}
 }
 
-func CsvFlushInterval(d time.Duration) LoadtestOption {
+func MetricsCsvFlushInterval(d time.Duration) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.csvOutputFlushInterval = d
 	}
 }
 
-func CsvWriterDisabled(b bool) LoadtestOption {
+func MetricsCsvWriterDisabled(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.csvOutputDisabled = b
 	}
