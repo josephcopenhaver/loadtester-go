@@ -5,24 +5,24 @@ import (
 )
 
 type loadtestConfig struct {
-	outputBufferingFactor   int
-	maxTasks                int
-	maxWorkers              int
-	maxWorkersSet           bool
-	numWorkers              int
-	numWorkersSet           bool
-	maxIntervalTasks        int
-	maxIntervalTasksSet     bool
-	numIntervalTasks        int
-	numIntervalTasksSet     bool
-	interval                time.Duration
-	csvOutputFilename       string
-	csvOutputFlushFrequency time.Duration
-	csvOutputDisabled       bool
-	flushRetriesTimeout     time.Duration
-	flushRetriesOnShutdown  bool
-	retriesDisabled         bool
-	logger                  SugaredLogger
+	outputBufferingFactor  int
+	maxTasks               int
+	maxWorkers             int
+	maxWorkersSet          bool
+	numWorkers             int
+	numWorkersSet          bool
+	maxIntervalTasks       int
+	maxIntervalTasksSet    bool
+	numIntervalTasks       int
+	numIntervalTasksSet    bool
+	interval               time.Duration
+	csvOutputFilename      string
+	csvOutputFlushInterval time.Duration
+	csvOutputDisabled      bool
+	flushRetriesTimeout    time.Duration
+	flushRetriesOnShutdown bool
+	retriesDisabled        bool
+	logger                 SugaredLogger
 }
 
 type LoadtestOption func(*loadtestConfig)
@@ -80,9 +80,9 @@ func CsvFilename(s string) LoadtestOption {
 	}
 }
 
-func CsvFlushFrequency(d time.Duration) LoadtestOption {
+func CsvFlushInterval(d time.Duration) LoadtestOption {
 	return func(cfg *loadtestConfig) {
-		cfg.csvOutputFlushFrequency = d
+		cfg.csvOutputFlushInterval = d
 	}
 }
 

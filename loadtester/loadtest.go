@@ -47,7 +47,7 @@ type TaskProvider interface {
 type csvData struct {
 	outputFilename string
 	writer         *csv.Writer
-	flushFrequency time.Duration
+	flushInterval  time.Duration
 	flushDeadline  time.Time
 	writeErr       error
 }
@@ -99,15 +99,15 @@ type Loadtest struct {
 func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtest, error) {
 
 	cfg := loadtestConfig{
-		outputBufferingFactor:   4,
-		maxWorkers:              1,
-		numWorkers:              1,
-		maxIntervalTasks:        1,
-		numIntervalTasks:        1,
-		interval:                time.Second,
-		csvOutputFilename:       "metrics.csv",
-		csvOutputFlushFrequency: 5 * time.Second,
-		flushRetriesTimeout:     2 * time.Minute,
+		outputBufferingFactor:  4,
+		maxWorkers:             1,
+		numWorkers:             1,
+		maxIntervalTasks:       1,
+		numIntervalTasks:       1,
+		interval:               time.Second,
+		csvOutputFilename:      "metrics.csv",
+		csvOutputFlushInterval: 5 * time.Second,
+		flushRetriesTimeout:    2 * time.Minute,
 	}
 
 	for _, option := range options {
@@ -155,10 +155,7 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 	// config buffers
 
 	const intervalPossibleLagResultCount = 1
-	var resultsChanSize int
-	{
-		resultsChanSize = (cfg.maxIntervalTasks + intervalPossibleLagResultCount) * cfg.outputBufferingFactor
-	}
+	resultsChanSize := (cfg.maxIntervalTasks + intervalPossibleLagResultCount) * cfg.outputBufferingFactor
 
 	var csvWriteErr error
 	if cfg.csvOutputDisabled {
@@ -200,7 +197,7 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 
 		csvData: csvData{
 			outputFilename: cfg.csvOutputFilename,
-			flushFrequency: cfg.csvOutputFlushFrequency,
+			flushInterval:  cfg.csvOutputFlushInterval,
 			writeErr:       csvWriteErr,
 		},
 
@@ -448,7 +445,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup) {
 		})
 	}
 
-	lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushFrequency)
+	lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushInterval)
 
 	for {
 		tr, ok := <-lt.resultsChan
@@ -510,7 +507,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup) {
 			if lt.csvData.writeErr == nil && !lt.csvData.flushDeadline.After(time.Now()) {
 				lt.csvData.writer.Flush()
 				lt.csvData.writeErr = lt.csvData.writer.Error()
-				lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushFrequency)
+				lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushInterval)
 			}
 
 			// reset metrics
@@ -545,7 +542,7 @@ func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 		MaxWorkers             int    `json:"max_workers"`
 		NumIntervalTasks       int    `json:"num_interval_tasks"`
 		NumWorkers             int    `json:"num_workers"`
-		MetricsFlushFrequency  string `json:"metrics_flush_frequency"`
+		MetricsFlushInterval   string `json:"metrics_flush_interval"`
 		FlushRetriesOnShutdown bool   `json:"flush_retries_on_shutdown"`
 		FlushRetriesTimeout    string `json:"flush_retries_timeout"`
 		RetriesDisabled        bool   `json:"retries_disabled"`
@@ -559,7 +556,7 @@ func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 		MaxWorkers:             lt.maxWorkers,
 		NumIntervalTasks:       lt.numIntervalTasks,
 		NumWorkers:             lt.numWorkers,
-		MetricsFlushFrequency:  lt.csvData.flushFrequency.String(),
+		MetricsFlushInterval:   lt.csvData.flushInterval.String(),
 		FlushRetriesOnShutdown: lt.flushRetriesOnShutdown,
 		FlushRetriesTimeout:    lt.flushRetriesTimeout.String(),
 		RetriesDisabled:        lt.RetriesDisabled,
