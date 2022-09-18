@@ -1108,10 +1108,14 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			}
 		}
 
+		var paused bool
+		var pauseStart time.Time
+
 		select {
 		case <-ctxDone:
 			return
 		case cu := <-updatechan:
+		PausedTaskSchedulerLoop:
 			var prepSemaErr error
 			var recomputeInterTaskInterval, recomputeTaskSlots bool
 
@@ -1121,10 +1125,19 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				n := cu.numWorkers.val
 
 				// prevent over commiting on the maxWorkers count
-				if n > lt.maxWorkers {
+				if n < 0 {
 					lt.logger.Errorw(
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers set too high",
+						"reason", "update tried to set numWorkers too low",
+						"remediation_taken", "using min value",
+						"requested", n,
+						"min", 0,
+					)
+					n = 0
+				} else if n > lt.maxWorkers {
+					lt.logger.Errorw(
+						"config update not within loadtest boundary conditions: numWorkers",
+						"reason", "update tried to set numWorkers too high",
 						"remediation_hint", "increase the loadtests's MaxWorkers setting",
 						"remediation_taken", "using max value",
 						"requested", n,
@@ -1166,10 +1179,19 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				n := cu.numIntervalTasks.val
 
 				// prevent over commiting on the maxIntervalTasks count
-				if n > lt.maxIntervalTasks {
+				if n < 0 {
 					lt.logger.Errorw(
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks set too high",
+						"reason", "update tried to set numIntervalTasks too low",
+						"remediation_taken", "using min value",
+						"requested", n,
+						"min", 0,
+					)
+					n = 0
+				} else if n > lt.maxIntervalTasks {
+					lt.logger.Errorw(
+						"config update not within loadtest boundary conditions: numIntervalTasks",
+						"reason", "update tried to set numIntervalTasks too high",
 						"remediation_hint", "increase the loadtests's MaxIntervalTasks setting",
 						"remediation_taken", "using max value",
 						"requested", n,
@@ -1189,11 +1211,24 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			if cu.interval.set {
 				recomputeInterTaskInterval = true
 
+				n := cu.interval.val
+
+				if n < 0 {
+					lt.logger.Errorw(
+						"config update not within loadtest boundary conditions: interval",
+						"reason", "update tried to set interval too low",
+						"remediation_taken", "using min value",
+						"requested", n,
+						"min", 0,
+					)
+					n = 0
+				}
+
 				configChanges = append(configChanges,
 					"old_interval", interval,
-					"new_interval", cu.interval.val,
+					"new_interval", n,
 				)
-				interval = cu.interval.val
+				interval = n
 			}
 
 			// && clause: protects against divide by zero
@@ -1236,31 +1271,36 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			// pause load generation if unable to schedule anything
 			if meta.NumIntervalTasks <= 0 || numWorkers <= 0 {
 
-				pauseStart := time.Now()
+				if !paused {
+					paused = true
+					pauseStart = time.Now().UTC()
 
-				lt.logger.Warnw(
-					"pausing load generation",
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
-					"paused_at", pauseStart.UTC(),
-				)
+					lt.logger.Warnw(
+						"pausing load generation",
+						"num_interval_tasks", meta.NumIntervalTasks,
+						"num_workers", numWorkers,
+						"paused_at", pauseStart,
+					)
+				}
 
 				select {
 				case <-ctxDone:
 					return
 				case cu = <-updatechan:
-					pauseEnd := time.Now()
-
-					lt.logger.Warnw(
-						"resuming load generation",
-						"num_interval_tasks", meta.NumIntervalTasks,
-						"num_workers", numWorkers,
-						"paused_at", pauseStart,
-						"resumed_at", pauseEnd.UTC(),
-					)
-
-					intervalID = pauseEnd
+					goto PausedTaskSchedulerLoop
 				}
+			}
+
+			if paused {
+				intervalID = time.Now()
+
+				lt.logger.Warnw(
+					"resuming load generation",
+					"num_interval_tasks", meta.NumIntervalTasks,
+					"num_workers", numWorkers,
+					"paused_at", pauseStart,
+					"resumed_at", intervalID.UTC(),
+				)
 			}
 
 			// re-loop
