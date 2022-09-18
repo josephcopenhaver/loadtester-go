@@ -182,7 +182,7 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 		maxWorkers:    cfg.maxWorkers,
 		numWorkers:    cfg.numWorkers,
 		workers:       make([]chan struct{}, 0, cfg.maxWorkers),
-		taskChan:      make(chan taskWithMeta, cfg.maxIntervalTasks+intervalPossibleLagResultCount),
+		taskChan:      make(chan taskWithMeta, cfg.maxIntervalTasks),
 		resultsChan:   make(chan taskResult, resultsChanSize),
 		retryTaskChan: retryTaskChan,
 
