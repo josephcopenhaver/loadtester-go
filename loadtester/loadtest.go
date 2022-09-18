@@ -163,16 +163,16 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 	}
 
 	var retryTaskChan chan *retryTask
-	if !cfg.retriesDisabled {
-		retryTaskChan = make(chan *retryTask, cfg.maxIntervalTasks)
-	}
-
 	var sm *semaphore.Weighted
 	{
-		size := int64(cfg.maxIntervalTasks + cfg.maxWorkers)
-		sm = semaphore.NewWeighted(size)
-		if !sm.TryAcquire(size) {
+		maxNumInProgressOrQueuedTasks := cfg.maxIntervalTasks + cfg.maxWorkers
+		sm = semaphore.NewWeighted(int64(maxNumInProgressOrQueuedTasks))
+		if !sm.TryAcquire(int64(maxNumInProgressOrQueuedTasks)) {
 			return nil, errors.New("failed to initialize load generation semaphore")
+		}
+
+		if !cfg.retriesDisabled {
+			retryTaskChan = make(chan *retryTask, maxNumInProgressOrQueuedTasks)
 		}
 	}
 
@@ -922,6 +922,21 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 						// continue with load generating retries
 					}
 
+					// acquire load generation opportunity slots ( smooths bursts )
+					//
+					// in the shutdown retry flow we always want to acquire before reading retries
+					// to avoid a deadlock edge case of the retry queue being full, all workers tasks failed and need to be retried
+					if err := lt.intervalTasksSema.Acquire(shutdownCtx, int64(numNewTasks)); err != nil {
+						lt.logger.Errorw(
+							"failed to flush all retries",
+							"preflush_num_tasks", preflushNumTasks,
+							"num_tasks", numTasks,
+							"error", err,
+							"reason", "shutdown timeout likely reached while waiting for semaphore acquisition",
+						)
+						return ErrRetriesFailedToFlush
+					}
+
 					// read up to numNewTasks from retry slice
 					taskBufSize := lt.readRetries(taskBuf[:numNewTasks:numNewTasks])
 					if taskBufSize <= 0 {
@@ -949,16 +964,9 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					}
 					taskBuf = taskBuf[:taskBufSize]
 
-					// acquire load generation opportunity slots ( smooths bursts )
-					if err := lt.intervalTasksSema.Acquire(shutdownCtx, int64(taskBufSize)); err != nil {
-						lt.logger.Errorw(
-							"failed to flush all retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
-							"error", err,
-							"reason", "shutdown timeout likely reached while waiting for semaphore acquisition",
-						)
-						return ErrRetriesFailedToFlush
+					// re-release any extra load slots we allocated beyond what really remains to do
+					if numNewTasks > taskBufSize {
+						lt.intervalTasksSema.Release(int64(numNewTasks - taskBufSize))
 					}
 
 					lt.resultWaitGroup.Add(taskBufSize)
@@ -1309,9 +1317,24 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			// continue with load generation
 		}
 
+		var acquiredLoadGenerationSlots bool
+
 		// read up to numNewTasks from retry slice
 		taskBufSize := 0
 		if !lt.RetriesDisabled {
+
+			// acquire load generation opportunity slots ( smooths bursts )
+			//
+			// do this early conditionally to allow retries to settle in the retry channel
+			// so we can pick them up when enough buffer space has cleared
+			//
+			// thus we avoid a possible deadlock where the retry queue is full and the workers
+			// all have failed tasks that wish to be retried
+			acquiredLoadGenerationSlots = true
+			if lt.intervalTasksSema.Acquire(ctx, int64(numNewTasks)) != nil {
+				return
+			}
+
 			taskBufSize = lt.readRetries(taskBuf[:numNewTasks:numNewTasks])
 		}
 		taskBuf = taskBuf[:taskBufSize]
@@ -1351,7 +1374,15 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		}
 
 		// acquire load generation opportunity slots ( smooths bursts )
-		if lt.intervalTasksSema.Acquire(ctx, int64(taskBufSize)) != nil {
+		// if not done already
+		//
+		// but if we allocated too many in our retry prep phase then release the
+		// difference
+		if acquiredLoadGenerationSlots {
+			if numNewTasks > taskBufSize {
+				lt.intervalTasksSema.Release(int64(numNewTasks - taskBufSize))
+			}
+		} else if lt.intervalTasksSema.Acquire(ctx, int64(taskBufSize)) != nil {
 			return
 		}
 
