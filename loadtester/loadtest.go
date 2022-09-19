@@ -416,33 +416,12 @@ func (lt *Loadtest) readRetries(p []Doer) int {
 func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	var intervalID time.Time
-	var totalNumTasks, numTasks, numIntervalTasks, numPass, numFail, numRetry, numPanic int
-	var lag, minQueuedDuration, maxQueuedDuration, sumQueuedDuration, minTaskDuration, maxTaskDuration, sumTaskDuration, sumLag time.Duration
-
-	minQueuedDuration = maxDuration
-	minTaskDuration = maxDuration
+	var mr metricRecord
+	mr.reset()
 
 	writeRow := func() {
-		totalNumTasks += numTasks
-		lt.csvData.writeErr = lt.writeOutputCsvRow(metricRecord{
-			totalNumTasks:     totalNumTasks,
-			intervalID:        intervalID,
-			sumLag:            sumLag,
-			numIntervalTasks:  numIntervalTasks,
-			lag:               lag,
-			numTasks:          numTasks,
-			numPass:           numPass,
-			numFail:           numFail,
-			numRetry:          numRetry,
-			numPanic:          numPanic,
-			minQueuedDuration: minQueuedDuration,
-			maxQueuedDuration: maxQueuedDuration,
-			sumQueuedDuration: sumQueuedDuration,
-			minTaskDuration:   minTaskDuration,
-			maxTaskDuration:   maxTaskDuration,
-			sumTaskDuration:   sumTaskDuration,
-		})
+		mr.totalNumTasks += mr.numTasks
+		lt.csvData.writeErr = lt.writeOutputCsvRow(mr)
 	}
 
 	lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushInterval)
@@ -450,7 +429,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup) {
 	for {
 		tr, ok := <-lt.resultsChan
 		if !ok {
-			if lt.csvData.writeErr == nil && numTasks > 0 {
+			if lt.csvData.writeErr == nil && mr.numTasks > 0 {
 				writeRow()
 			}
 			return
@@ -464,43 +443,43 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup) {
 
 		if tr.Meta.IntervalID.IsZero() {
 
-			sumLag += tr.Meta.Lag
+			mr.sumLag += tr.Meta.Lag
 
 			continue
 		}
 
-		if intervalID.Before(tr.Meta.IntervalID) {
-			intervalID = tr.Meta.IntervalID
-			numIntervalTasks = tr.Meta.NumIntervalTasks
-			lag = tr.Meta.Lag
+		if mr.intervalID.Before(tr.Meta.IntervalID) {
+			mr.intervalID = tr.Meta.IntervalID
+			mr.numIntervalTasks = tr.Meta.NumIntervalTasks
+			mr.lag = tr.Meta.Lag
 		}
 
-		if minQueuedDuration > tr.QueuedDuration {
-			minQueuedDuration = tr.QueuedDuration
+		if mr.minQueuedDuration > tr.QueuedDuration {
+			mr.minQueuedDuration = tr.QueuedDuration
 		}
 
-		if minTaskDuration > tr.TaskDuration {
-			minTaskDuration = tr.TaskDuration
+		if mr.minTaskDuration > tr.TaskDuration {
+			mr.minTaskDuration = tr.TaskDuration
 		}
 
-		if maxTaskDuration < tr.TaskDuration {
-			maxTaskDuration = tr.TaskDuration
+		if mr.maxTaskDuration < tr.TaskDuration {
+			mr.maxTaskDuration = tr.TaskDuration
 		}
 
-		if maxQueuedDuration < tr.QueuedDuration {
-			maxQueuedDuration = tr.QueuedDuration
+		if mr.maxQueuedDuration < tr.QueuedDuration {
+			mr.maxQueuedDuration = tr.QueuedDuration
 		}
 
-		sumQueuedDuration += tr.QueuedDuration
-		sumTaskDuration += tr.TaskDuration
-		numPass += int(tr.Passed)
-		numFail += int(tr.Errored)
-		numPanic += int(tr.Panicked)
-		numRetry += int(tr.RetryQueued)
+		mr.sumQueuedDuration += tr.QueuedDuration
+		mr.sumTaskDuration += tr.TaskDuration
+		mr.numPass += int(tr.Passed)
+		mr.numFail += int(tr.Errored)
+		mr.numPanic += int(tr.Panicked)
+		mr.numRetry += int(tr.RetryQueued)
 
-		numTasks++
+		mr.numTasks++
 
-		if numTasks >= numIntervalTasks {
+		if mr.numTasks >= mr.numIntervalTasks {
 
 			writeRow()
 
@@ -510,20 +489,7 @@ func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup) {
 				lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushInterval)
 			}
 
-			// reset metrics
-			minQueuedDuration = maxDuration
-			minTaskDuration = maxDuration
-			maxQueuedDuration = -1
-			maxTaskDuration = -1
-			sumQueuedDuration = 0
-			sumTaskDuration = 0
-			numTasks = 0
-			numPass = 0
-			numFail = 0
-			numRetry = 0
-			numPanic = 0
-			sumLag = 0
-			lag = 0
+			mr.reset()
 		}
 	}
 }
@@ -585,19 +551,32 @@ func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
 	return nil
 }
 
-type metricRecord struct {
-	intervalID                                              time.Time
-	sumLag                                                  time.Duration
-	numIntervalTasks                                        int
-	lag                                                     time.Duration
+type metricRecordFlushables struct {
 	numTasks                                                int
 	numPass                                                 int
 	numFail                                                 int
 	numRetry                                                int
 	numPanic                                                int
-	totalNumTasks                                           int
+	sumLag                                                  time.Duration
+	lag                                                     time.Duration
 	minTaskDuration, maxTaskDuration, sumTaskDuration       time.Duration
 	minQueuedDuration, maxQueuedDuration, sumQueuedDuration time.Duration
+}
+
+type metricRecord struct {
+	// fields that are preserved
+	intervalID       time.Time
+	numIntervalTasks int
+	totalNumTasks    int
+
+	metricRecordFlushables
+}
+
+func (mrf *metricRecordFlushables) reset() {
+	*mrf = metricRecordFlushables{
+		minTaskDuration:   maxDuration,
+		minQueuedDuration: maxDuration,
+	}
 }
 
 func (lt *Loadtest) writeOutputCsvHeaders() error {
