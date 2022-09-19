@@ -47,11 +47,15 @@ type TaskProvider interface {
 	UpdateConfigChan() <-chan ConfigUpdate
 }
 
+type taskResultFlags struct {
+	Passed      uint8
+	Panicked    uint8
+	RetryQueued uint8
+	Errored     uint8
+}
+
 type taskResult struct {
-	Passed                       uint8
-	Panicked                     uint8
-	RetryQueued                  uint8
-	Errored                      uint8
+	taskResultFlags
 	QueuedDuration, TaskDuration time.Duration
 	Meta                         taskMeta
 }
@@ -200,24 +204,21 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 		}
 
 		taskStart := time.Now()
-		passed, errored, retryQueued, panicked := lt.doTask(ctx, workerID, task)
+		respFlags := lt.doTask(ctx, workerID, task)
 		taskEnd := time.Now()
 
 		lt.resultsChan <- taskResult{
-			Passed:         passed,
-			Panicked:       panicked,
-			RetryQueued:    retryQueued,
-			Errored:        errored,
-			QueuedDuration: taskStart.Sub(task.enqueueTime),
-			TaskDuration:   taskEnd.Sub(taskStart),
-			Meta:           task.meta,
+			taskResultFlags: respFlags,
+			QueuedDuration:  taskStart.Sub(task.enqueueTime),
+			TaskDuration:    taskEnd.Sub(taskStart),
+			Meta:            task.meta,
 		}
 
 		lt.intervalTasksSema.Release(1)
 	}
 }
 
-func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskWithMeta) (success_resp, errored_resp, retryQueued_resp, panicking_resp uint8) {
+func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskWithMeta) (result taskResultFlags) {
 	var err_resp error
 
 	task := taskWithMeta.doer
@@ -238,8 +239,8 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 		}
 
 		if r := recover(); r != nil {
-			panicking_resp = 1
-			errored_resp = 1
+			result.Panicked = 1
+			result.Errored = 1
 
 			switch v := r.(type) {
 			case error:
@@ -274,12 +275,12 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 
 	err := task.Do(ctx, workerID)
 	if err == nil {
-		success_resp = 1
+		result.Passed = 1
 		return
 	}
 
 	err_resp = err
-	errored_resp = 1
+	result.Errored = 1
 
 	if lt.RetriesDisabled {
 		return
@@ -300,7 +301,7 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 
 	lt.retryTaskChan <- lt.newRetryTask(dr, err)
 
-	retryQueued_resp = 1
+	result.RetryQueued = 1
 
 	return
 }

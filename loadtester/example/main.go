@@ -25,7 +25,7 @@ type MyLoadtest struct {
 	cfgChan chan loadtester.ConfigUpdate
 }
 
-func (lt MyLoadtest) ReadTasks(p []loadtester.Doer) int {
+func (lt *MyLoadtest) ReadTasks(p []loadtester.Doer) int {
 	// make sure you only fill up to len
 	// filling less than len will signal that the loadtest is over
 
@@ -38,7 +38,7 @@ func (lt MyLoadtest) ReadTasks(p []loadtester.Doer) int {
 	return i
 }
 
-func (lt MyLoadtest) UpdateConfigChan() <-chan loadtester.ConfigUpdate {
+func (lt *MyLoadtest) UpdateConfigChan() <-chan loadtester.ConfigUpdate {
 	return lt.cfgChan
 }
 

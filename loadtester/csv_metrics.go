@@ -244,14 +244,13 @@ func (lt *Loadtest) resultsHandler() {
 		if mr.numTasks >= mr.numIntervalTasks {
 
 			writeRow()
+			mr.reset()
 
 			if lt.csvData.writeErr == nil && !lt.csvData.flushDeadline.After(time.Now()) {
 				lt.csvData.writer.Flush()
 				lt.csvData.writeErr = lt.csvData.writer.Error()
 				lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushInterval)
 			}
-
-			mr.reset()
 		}
 	}
 }
