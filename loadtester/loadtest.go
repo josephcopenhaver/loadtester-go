@@ -420,7 +420,10 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
-	interTaskInterval := interval / time.Duration(meta.NumIntervalTasks)
+	var interTaskInterval time.Duration
+	if meta.NumIntervalTasks > 0 {
+		interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
+	}
 
 	taskBuf := make([]Doer, 0, lt.maxIntervalTasks)
 
@@ -843,7 +846,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			}
 
 			// && clause: protects against divide by zero
-			if recomputeInterTaskInterval && meta.NumIntervalTasks >= 0 {
+			if recomputeInterTaskInterval && meta.NumIntervalTasks > 0 {
 				interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
 			}
 
