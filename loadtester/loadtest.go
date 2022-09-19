@@ -3,20 +3,23 @@ package loadtester
 import (
 	"context"
 	"encoding/csv"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net"
-	"net/http"
 	"os"
-	"runtime"
-	"strconv"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
+)
+
+const (
+	skipInterTaskSchedulingThreshold = 20 * time.Millisecond
+)
+
+var (
+	ErrBadReadTasksImpl     = errors.New("bad ReadTasks implementation: returned a value less than zero or larger than the input slice length")
+	ErrRetriesFailedToFlush = errors.New("failed to flush all retries")
 )
 
 // TODO: RetriesDisabled runtimes checks can turn into init time checks; same with MaxTasks based checks
@@ -44,12 +47,13 @@ type TaskProvider interface {
 	UpdateConfigChan() <-chan ConfigUpdate
 }
 
-type csvData struct {
-	outputFilename string
-	writer         *csv.Writer
-	flushInterval  time.Duration
-	flushDeadline  time.Time
-	writeErr       error
+type taskResult struct {
+	Passed                       uint8
+	Panicked                     uint8
+	RetryQueued                  uint8
+	Errored                      uint8
+	QueuedDuration, TaskDuration time.Duration
+	Meta                         taskMeta
 }
 
 type Loadtest struct {
@@ -207,46 +211,6 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 		logger:                 cfg.logger,
 		intervalTasksSema:      sm,
 	}, nil
-}
-
-var (
-	errCsvWriterDisabled    = errors.New("csv metrics writer disabled")
-	ErrBadReadTasksImpl     = errors.New("bad ReadTasks implementation: returned a value less than zero or larger than the input slice length")
-	ErrRetriesFailedToFlush = errors.New("failed to flush all retries")
-)
-
-func timeToString(t time.Time) string {
-	return t.UTC().Format(time.RFC3339Nano)
-}
-
-type taskResult struct {
-	Passed                       uint8
-	Panicked                     uint8
-	RetryQueued                  uint8
-	Errored                      uint8
-	QueuedDuration, TaskDuration time.Duration
-	Meta                         taskMeta
-}
-
-type taskMeta struct {
-	IntervalID       time.Time
-	NumIntervalTasks int
-	Lag              time.Duration `json:",omitempty"`
-}
-
-type taskWithMeta struct {
-	doer        Doer
-	enqueueTime time.Time
-	meta        taskMeta
-}
-
-type retryTask struct {
-	DoRetryer
-	err error
-}
-
-func (rt *retryTask) Do(ctx context.Context, workerID int) error {
-	return rt.DoRetryer.Retry(ctx, workerID, rt.err)
 }
 
 func (lt *Loadtest) addWorker(ctx context.Context, workerID int) {
@@ -413,92 +377,6 @@ func (lt *Loadtest) readRetries(p []Doer) int {
 	return i
 }
 
-func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	var mr metricRecord
-	mr.reset()
-
-	writeRow := func() {
-		mr.totalNumTasks += mr.numTasks
-		lt.csvData.writeErr = lt.writeOutputCsvRow(mr)
-	}
-
-	lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushInterval)
-
-	for {
-		tr, ok := <-lt.resultsChan
-		if !ok {
-			if lt.csvData.writeErr == nil && mr.numTasks > 0 {
-				writeRow()
-			}
-			return
-		}
-
-		lt.resultWaitGroup.Done()
-
-		if lt.csvData.writeErr != nil {
-			continue
-		}
-
-		if tr.Meta.IntervalID.IsZero() {
-
-			mr.sumLag += tr.Meta.Lag
-
-			continue
-		}
-
-		if mr.intervalID.Before(tr.Meta.IntervalID) {
-			mr.intervalID = tr.Meta.IntervalID
-			mr.numIntervalTasks = tr.Meta.NumIntervalTasks
-			mr.lag = tr.Meta.Lag
-		}
-
-		if mr.minQueuedDuration > tr.QueuedDuration {
-			mr.minQueuedDuration = tr.QueuedDuration
-		}
-
-		if mr.minTaskDuration > tr.TaskDuration {
-			mr.minTaskDuration = tr.TaskDuration
-		}
-
-		if mr.maxTaskDuration < tr.TaskDuration {
-			mr.maxTaskDuration = tr.TaskDuration
-		}
-
-		if mr.maxQueuedDuration < tr.QueuedDuration {
-			mr.maxQueuedDuration = tr.QueuedDuration
-		}
-
-		mr.sumQueuedDuration += tr.QueuedDuration
-		mr.sumTaskDuration += tr.TaskDuration
-		mr.numPass += int(tr.Passed)
-		mr.numFail += int(tr.Errored)
-		mr.numPanic += int(tr.Panicked)
-		mr.numRetry += int(tr.RetryQueued)
-
-		mr.numTasks++
-
-		if mr.numTasks >= mr.numIntervalTasks {
-
-			writeRow()
-
-			if lt.csvData.writeErr == nil && !lt.csvData.flushDeadline.After(time.Now()) {
-				lt.csvData.writer.Flush()
-				lt.csvData.writeErr = lt.csvData.writer.Error()
-				lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushInterval)
-			}
-
-			mr.reset()
-		}
-	}
-}
-
-const (
-	skipInterTaskSchedulingThreshold = 20 * time.Millisecond
-	maxDuration                      = time.Duration((^uint64(0)) >> 1)
-)
-
 func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 	type Config struct {
 		StartTime              string `json:"start_time"`
@@ -529,191 +407,6 @@ func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 	}
 }
 
-func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
-	if _, err := w.Write([]byte(`# `)); err != nil {
-		return err
-	}
-
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-
-	err := enc.Encode(struct {
-		C interface{} `json:"config"`
-	}{lt.getLoadtestConfigAsJson()})
-	if err != nil {
-		return err
-	}
-
-	if _, err := w.Write([]byte("\n")); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-type metricRecordFlushables struct {
-	numTasks                                                int
-	numPass                                                 int
-	numFail                                                 int
-	numRetry                                                int
-	numPanic                                                int
-	sumLag                                                  time.Duration
-	lag                                                     time.Duration
-	minTaskDuration, maxTaskDuration, sumTaskDuration       time.Duration
-	minQueuedDuration, maxQueuedDuration, sumQueuedDuration time.Duration
-}
-
-type metricRecord struct {
-	// fields that are preserved
-	intervalID       time.Time
-	numIntervalTasks int
-	totalNumTasks    int
-
-	metricRecordFlushables
-}
-
-func (mrf *metricRecordFlushables) reset() {
-	*mrf = metricRecordFlushables{
-		minTaskDuration:   maxDuration,
-		minQueuedDuration: maxDuration,
-	}
-}
-
-func (lt *Loadtest) writeOutputCsvHeaders() error {
-
-	fields := []string{
-		"sample_time",
-		"interval_id",        // gauge
-		"num_interval_tasks", // gauge
-		"lag",                // gauge
-		"sum_lag",
-		"num_tasks",
-		"num_pass",
-		"num_fail",
-		"num_retry",
-		"num_panic",
-		"min_queued_duration",
-		"avg_queued_duration",
-		"max_queued_duration",
-		"sum_queued_duration",
-		"min_task_duration",
-		"avg_task_duration",
-		"max_task_duration",
-		"sum_task_duration",
-	}
-
-	if lt.maxTasks > 0 {
-		fields = append(fields, "percent_done")
-	}
-
-	err := lt.csvData.writer.Write(fields)
-	if err != nil {
-		return err
-	}
-
-	// ensure headers flush asap
-	lt.csvData.writer.Flush()
-
-	return lt.csvData.writer.Error()
-}
-
-func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
-	if lt.csvData.writeErr != nil {
-		return nil
-	}
-
-	nowStr := timeToString(time.Now())
-
-	fields := []string{
-		nowStr,
-		timeToString(mr.intervalID),
-		strconv.Itoa(mr.numIntervalTasks),
-		mr.lag.String(),
-		mr.sumLag.String(),
-		strconv.Itoa(mr.numTasks),
-		strconv.Itoa(mr.numPass),
-		strconv.Itoa(mr.numFail),
-		strconv.Itoa(mr.numRetry),
-		strconv.Itoa(mr.numPanic),
-		mr.minQueuedDuration.String(),
-		(mr.sumQueuedDuration / time.Duration(mr.numTasks)).String(),
-		mr.maxQueuedDuration.String(),
-		mr.sumQueuedDuration.String(),
-		mr.minTaskDuration.String(),
-		(mr.sumTaskDuration / time.Duration(mr.numTasks)).String(),
-		mr.maxTaskDuration.String(),
-		mr.sumTaskDuration.String(),
-		"",
-	}
-
-	if lt.maxTasks > 0 {
-		high := mr.totalNumTasks * 10000 / lt.maxTasks
-		low := high % 100
-		high /= 100
-		var prefix string
-		if low < 10 {
-			prefix = "0"
-		}
-		fields[len(fields)-1] = strconv.Itoa(high) + "." + prefix + strconv.Itoa(low)
-	} else {
-		fields = fields[:len(fields)-1]
-	}
-
-	return lt.csvData.writer.Write(fields)
-}
-
-// HttpTransport returns a new configured *http.Transport
-// which implements http.RoundTripper that can be used in
-// tasks which have http clients
-//
-// Note, you may need to increase the value of MaxIdleConns
-// if your tasks target multiple hosts. MaxIdleConnsPerHost
-// does not override the limit established by MaxIdleConns
-// and if the tasks are expected to communicate to multiple
-// hosts you probably need to apply some scaling factor to
-// it to let connections go idle for a time and still be reusable.
-//
-// Note that if you are not connecting to a loadbalancer
-// which preserves connections to a client much of the intent
-// we're trying to establish here is not applicable.
-//
-// Also if the loadbalancer does not have "max connection lifespan"
-// behavior nor a "round robin" or "connection balancing" feature
-// without forcing the loadtesting client to reconnect then as
-// you increase load your established connections may prevent the
-// spread of load to newly scaled-out recipients of that load.
-//
-// By default golang's http standard lib does not expose a way for us
-// to attempt to address this. The problem is also worse if your
-// loadbalancer ( or number of exposed ips for a dns record ) increase.
-//
-// Rectifying this issue requires a fix like/option like
-// https://github.com/golang/go/pull/46714
-// to be accepted by the go maintainers.
-func (lt *Loadtest) NewHttpTransport() *http.Transport {
-
-	// adding runtime CPU count to the max
-	// just to ensure whenever one worker releases
-	// a connection back to the pool we're not impacted
-	// by the delay of that connection getting re-pooled
-	maxConnections := lt.maxWorkers + runtime.NumCPU()
-
-	return &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   15 * time.Second,
-			KeepAlive: 15 * time.Second,
-		}).DialContext,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          maxConnections,
-		IdleConnTimeout:       20 * time.Second, // default was 90
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		MaxIdleConnsPerHost:   maxConnections,
-		MaxConnsPerHost:       maxConnections,
-	}
-}
-
 func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 	lt.startTime = time.Now()
@@ -725,20 +418,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			return fmt.Errorf("failed to open output csv metrics file for writing: %w", err)
 		}
 		defer func() {
-			if lt.csvData.writeErr == nil {
-				lt.csvData.writer.Flush()
-				lt.csvData.writeErr = lt.csvData.writer.Error()
-				if lt.csvData.writeErr == nil {
-					_, lt.csvData.writeErr = csvf.Write([]byte("\n# {\"done\":{\"end_time\":\"" + timeToString(time.Now()) + "\"}}\n"))
-				}
-			}
-
-			err := csvf.Close()
-			if err != nil {
-				if lt.csvData.writeErr != nil {
-					lt.csvData.writeErr = err
-				}
-			}
+			lt.writeOutputCsvFooterAndClose(csvf)
 
 			if err_result == nil && lt.csvData.writeErr != errCsvWriterDisabled {
 				err_result = lt.csvData.writeErr
@@ -805,11 +485,12 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				return nil
 			}
 
-			if ctx.Err() != nil {
+			if err := ctx.Err(); err != nil {
 				lt.logger.Warnw(
 					"not waiting on retries to flush on shutdown",
 					"reason", "user stopped loadtest",
 					"num_tasks", numTasks,
+					"error", err,
 				)
 				return nil
 			}
@@ -848,11 +529,12 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 			for {
 
-				if shutdownCtx.Err() != nil {
+				if err := shutdownCtx.Err(); err != nil {
 					lt.logger.Errorw(
 						"failed to flush all retries",
 						"preflush_num_tasks", preflushNumTasks,
 						"num_tasks", numTasks,
+						"error", err,
 					)
 
 					return ErrRetriesFailedToFlush
@@ -862,11 +544,12 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 				for {
 
-					if shutdownCtx.Err() != nil {
+					if err := shutdownCtx.Err(); err != nil {
 						lt.logger.Errorw(
 							"failed to flush all retries",
 							"preflush_num_tasks", preflushNumTasks,
 							"num_tasks", numTasks,
+							"error", err,
 						)
 
 						return ErrRetriesFailedToFlush

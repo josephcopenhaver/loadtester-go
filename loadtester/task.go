@@ -2,7 +2,12 @@ package loadtester
 
 import (
 	"context"
+	"time"
 )
+
+//
+// interfaces
+//
 
 // Doer is a basic task unit
 //
@@ -32,8 +37,32 @@ type RetryChecker interface {
 	CanRetry(ctx context.Context, workerID int, prevErr error) bool
 }
 
-// DoRetryChecker
 type DoRetryChecker interface {
 	DoRetryer
 	RetryChecker
+}
+
+//
+// structs
+//
+
+type retryTask struct {
+	DoRetryer
+	err error
+}
+
+func (rt *retryTask) Do(ctx context.Context, workerID int) error {
+	return rt.DoRetryer.Retry(ctx, workerID, rt.err)
+}
+
+type taskMeta struct {
+	IntervalID       time.Time
+	NumIntervalTasks int
+	Lag              time.Duration
+}
+
+type taskWithMeta struct {
+	doer        Doer
+	enqueueTime time.Time
+	meta        taskMeta
 }
