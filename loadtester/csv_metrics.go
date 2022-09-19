@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 )
 
@@ -178,9 +177,7 @@ func (lt *Loadtest) writeOutputCsvFooterAndClose(csvf *os.File) {
 	}
 }
 
-func (lt *Loadtest) resultsHandler(wg *sync.WaitGroup) {
-	defer wg.Done()
-
+func (lt *Loadtest) resultsHandler() {
 	var mr metricRecord
 	mr.reset()
 

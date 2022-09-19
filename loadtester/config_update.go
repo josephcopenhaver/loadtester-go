@@ -5,6 +5,7 @@ import (
 )
 
 type ConfigUpdate struct {
+	onStartup  bool
 	numWorkers struct {
 		set bool
 		val int

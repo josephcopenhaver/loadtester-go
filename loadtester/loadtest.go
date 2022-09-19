@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -20,6 +19,7 @@ const (
 var (
 	ErrBadReadTasksImpl     = errors.New("bad ReadTasks implementation: returned a value less than zero or larger than the input slice length")
 	ErrRetriesFailedToFlush = errors.New("failed to flush all retries")
+	errLoadtestContextDone  = errors.New("loadtest parent context errored")
 )
 
 // TODO: RetriesDisabled runtimes checks can turn into init time checks; same with MaxTasks based checks
@@ -102,56 +102,9 @@ type Loadtest struct {
 
 func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtest, error) {
 
-	cfg := loadtestConfig{
-		outputBufferingFactor:  4,
-		maxWorkers:             1,
-		numWorkers:             1,
-		maxIntervalTasks:       1,
-		numIntervalTasks:       1,
-		interval:               time.Second,
-		csvOutputFilename:      "metrics.csv",
-		csvOutputFlushInterval: 5 * time.Second,
-		flushRetriesTimeout:    2 * time.Minute,
-	}
-
-	for _, option := range options {
-		option(&cfg)
-	}
-
-	if !cfg.maxWorkersSet && cfg.numWorkersSet {
-		cfg.maxWorkers = cfg.numWorkers
-	}
-
-	if !cfg.maxIntervalTasksSet && cfg.numIntervalTasksSet {
-		cfg.maxIntervalTasks = cfg.numIntervalTasks
-	}
-
-	if cfg.maxWorkers < cfg.numWorkers {
-		return nil, errors.New("loadtest misconfigured: MaxWorkers < NumWorkers")
-	}
-
-	if cfg.maxWorkers < 1 {
-		return nil, errors.New("loadtest misconfigured: MaxWorkers < 1")
-	}
-
-	if cfg.maxIntervalTasks < cfg.numIntervalTasks {
-		return nil, errors.New("loadtest misconfigured: MaxIntervalTasks < NumIntervalTasks")
-	}
-
-	if cfg.maxIntervalTasks < 1 {
-		return nil, errors.New("loadtest misconfigured: maxIntervalTasks < 1")
-	}
-
-	if cfg.outputBufferingFactor <= 0 {
-		cfg.outputBufferingFactor = 1
-	}
-
-	if cfg.logger == nil {
-		logger, err := NewLogger(zap.InfoLevel)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create a default logger: %w", err)
-		}
-		cfg.logger = logger
+	cfg, err := newLoadtestConfig(options...)
+	if err != nil {
+		return nil, err
 	}
 
 	// lag results are reported per interval through the same channel as results
@@ -443,7 +396,11 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go lt.resultsHandler(&wg)
+	go func() {
+		defer wg.Done()
+
+		lt.resultsHandler()
+	}()
 
 	numWorkers := lt.numWorkers
 
@@ -761,31 +718,15 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		lt.addWorker(ctx, i)
 	}
 
-	// main task scheduling loop
-	for {
-		if maxTasks > 0 {
-			if numTasks >= maxTasks {
-				lt.logger.Warnw(
-					"loadtest finished: max task count reached",
-					"max_tasks", maxTasks,
-				)
-				return
-			}
+	configCausesPause := func() bool {
+		return meta.NumIntervalTasks <= 0 || numWorkers <= 0
+	}
 
-			numNewTasks = maxTasks - numTasks
-			if numNewTasks > meta.NumIntervalTasks {
-				numNewTasks = meta.NumIntervalTasks
-			}
-		}
+	var paused bool
+	var pauseStart time.Time
 
-		var paused bool
-		var pauseStart time.Time
-
-		select {
-		case <-ctxDone:
-			return
-		case cu := <-updatechan:
-		PausedTaskSchedulerLoop:
+	handleConfigUpdateAndPauseState := func(cu ConfigUpdate) error {
+		for {
 			var prepSemaErr error
 			var recomputeInterTaskInterval, recomputeTaskSlots bool
 
@@ -928,10 +869,12 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				}
 			}
 
-			lt.logger.Warnw(
-				"loadtest config updated",
-				configChanges...,
-			)
+			if !cu.onStartup {
+				lt.logger.Warnw(
+					"loadtest config updated",
+					configChanges...,
+				)
+			}
 			configChanges = configChanges[:0]
 
 			if prepSemaErr != nil {
@@ -939,7 +882,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			}
 
 			// pause load generation if unable to schedule anything
-			if meta.NumIntervalTasks <= 0 || numWorkers <= 0 {
+			if configCausesPause() {
 
 				if !paused {
 					paused = true
@@ -955,13 +898,14 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 				select {
 				case <-ctxDone:
-					return
+					return errLoadtestContextDone
 				case cu = <-updatechan:
-					goto PausedTaskSchedulerLoop
+					continue
 				}
 			}
 
 			if paused {
+				paused = false
 				intervalID = time.Now()
 
 				lt.logger.Warnw(
@@ -971,6 +915,47 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					"paused_at", pauseStart,
 					"resumed_at", intervalID.UTC(),
 				)
+			}
+
+			return nil
+		}
+	}
+
+	if configCausesPause() {
+		if err := handleConfigUpdateAndPauseState(ConfigUpdate{onStartup: true}); err != nil {
+			if err == errLoadtestContextDone {
+				return
+			}
+			return err
+		}
+	}
+
+	// main task scheduling loop
+	for {
+		if maxTasks > 0 {
+			if numTasks >= maxTasks {
+				lt.logger.Warnw(
+					"loadtest finished: max task count reached",
+					"max_tasks", maxTasks,
+				)
+				return
+			}
+
+			numNewTasks = maxTasks - numTasks
+			if numNewTasks > meta.NumIntervalTasks {
+				numNewTasks = meta.NumIntervalTasks
+			}
+		}
+
+		select {
+		case <-ctxDone:
+			return
+		case cu := <-updatechan:
+			if err := handleConfigUpdateAndPauseState(cu); err != nil {
+				if err == errLoadtestContextDone {
+					return
+				}
+				return err
 			}
 
 			// re-loop

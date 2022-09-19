@@ -1,7 +1,11 @@
 package loadtester
 
 import (
+	"errors"
+	"fmt"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type loadtestConfig struct {
@@ -23,6 +27,85 @@ type loadtestConfig struct {
 	flushRetriesOnShutdown bool
 	retriesDisabled        bool
 	logger                 SugaredLogger
+}
+
+func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
+	var result loadtestConfig
+
+	cfg := loadtestConfig{
+		outputBufferingFactor:  4,
+		maxWorkers:             1,
+		numWorkers:             1,
+		maxIntervalTasks:       1,
+		numIntervalTasks:       1,
+		interval:               time.Second,
+		csvOutputFilename:      "metrics.csv",
+		csvOutputFlushInterval: 5 * time.Second,
+		flushRetriesTimeout:    2 * time.Minute,
+	}
+
+	for _, option := range options {
+		option(&cfg)
+	}
+
+	if cfg.numWorkers < 0 {
+		cfg.numWorkers = 0
+	}
+
+	if cfg.numIntervalTasks < 0 {
+		cfg.numIntervalTasks = 0
+	}
+
+	if !cfg.maxWorkersSet && cfg.numWorkersSet {
+		cfg.maxWorkers = cfg.numWorkers
+	}
+
+	if !cfg.maxIntervalTasksSet && cfg.numIntervalTasksSet {
+		cfg.maxIntervalTasks = cfg.numIntervalTasks
+	}
+
+	if cfg.maxWorkers < cfg.numWorkers {
+		return result, errors.New("loadtest misconfigured: MaxWorkers < NumWorkers")
+	}
+
+	if cfg.maxWorkers < 1 {
+		return result, errors.New("loadtest misconfigured: MaxWorkers < 1")
+	}
+
+	if cfg.maxIntervalTasks < cfg.numIntervalTasks {
+		return result, errors.New("loadtest misconfigured: MaxIntervalTasks < NumIntervalTasks")
+	}
+
+	if cfg.maxIntervalTasks < 1 {
+		return result, errors.New("loadtest misconfigured: maxIntervalTasks < 1")
+	}
+
+	if cfg.outputBufferingFactor <= 0 {
+		cfg.outputBufferingFactor = 1
+	}
+
+	if cfg.interval < 0 {
+		return result, errors.New("loadtest misconfigured: interval < 0")
+	}
+
+	if cfg.csvOutputFlushInterval < 0 {
+		return result, errors.New("loadtest misconfigured: csvOutputFlushInterval < 0")
+	}
+
+	if cfg.flushRetriesTimeout < 0 {
+		return result, errors.New("loadtest misconfigured: flushRetriesTimeout < 0")
+	}
+
+	if cfg.logger == nil {
+		logger, err := NewLogger(zap.InfoLevel)
+		if err != nil {
+			return result, fmt.Errorf("failed to create a default logger: %w", err)
+		}
+		cfg.logger = logger
+	}
+
+	result = cfg
+	return result, nil
 }
 
 type LoadtestOption func(*loadtestConfig)
