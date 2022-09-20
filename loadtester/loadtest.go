@@ -916,6 +916,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	}
 
 	// main task scheduling loop
+Loop:
 	for {
 		if maxTasks > 0 {
 			if numTasks >= maxTasks {
@@ -923,7 +924,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					"loadtest finished: max task count reached",
 					"max_tasks", maxTasks,
 				)
-				return
+				break Loop // equivalent to "return nil", but safer to maintain this way
 			}
 
 			numNewTasks = maxTasks - numTasks
@@ -934,11 +935,11 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 		select {
 		case <-ctxDone:
-			return
+			break Loop // equivalent to "return nil", but safer to maintain this way
 		case cu := <-updatechan:
 			if err := handleConfigUpdateAndPauseState(cu); err != nil {
 				if err == errLoadtestContextDone {
-					return
+					break Loop // equivalent to "return nil", but safer to maintain this way
 				}
 				return err
 			}
@@ -964,7 +965,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			// all have failed tasks that wish to be retried
 			acquiredLoadGenerationSlots = true
 			if lt.intervalTasksSema.Acquire(ctx, int64(numNewTasks)) != nil {
-				return
+				break Loop // equivalent to "return nil", but safer to maintain this way
 			}
 
 			taskBufSize = lt.readRetries(taskBuf[:numNewTasks:numNewTasks])
@@ -993,7 +994,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 						"final_task_delta", 0,
 					)
 
-					return
+					break Loop // equivalent to "return nil", but safer to maintain this way
 				}
 
 				lt.logger.Debugw("scheduled: stopping loadtest: NextTask did not return a task")
@@ -1013,7 +1014,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				lt.intervalTasksSema.Release(int64(numNewTasks - taskBufSize))
 			}
 		} else if lt.intervalTasksSema.Acquire(ctx, int64(taskBufSize)) != nil {
-			return
+			break Loop // equivalent to "return nil", but safer to maintain this way
 		}
 
 		lt.resultWaitGroup.Add(taskBufSize)
@@ -1044,7 +1045,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				"stopping loadtest: NextTask did not return a task",
 				"final_task_delta", taskBufSize,
 			)
-			return
+			break Loop // equivalent to "return nil", but safer to maintain this way
 		}
 
 		taskBuf = taskBuf[:0]
@@ -1078,8 +1079,16 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		}
 	}
 
-	// note: it's impossible to reach this after-loop section now
-	// return nil
+	// nothing else should come after the above loop besides "return nil"
+	// otherwise the "break Loop" statements above can result in side effects
+	// and they should be transformed into "return" or "return nil" statements
+	//
+	// chose to use the "break Loop" approach because otherwise the "return nil"
+	// is caught by linters as unused code
+	//
+	// All hail being explicit!
+
+	return nil
 }
 
 //
