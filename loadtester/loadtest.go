@@ -126,7 +126,7 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 	var retryTaskChan chan *retryTask
 	var sm *semaphore.Weighted
 	{
-		maxNumInProgressOrQueuedTasks := cfg.maxIntervalTasks + cfg.maxWorkers
+		maxNumInProgressOrQueuedTasks := maxPendingTasks(cfg.maxWorkers, cfg.maxIntervalTasks)
 		sm = semaphore.NewWeighted(int64(maxNumInProgressOrQueuedTasks))
 		if !sm.TryAcquire(int64(maxNumInProgressOrQueuedTasks)) {
 			return nil, errors.New("failed to initialize load generation semaphore")
@@ -685,42 +685,12 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	// are allowed to be un-finished for the performance
 	// interval under normal circumstances
 	getTaskSlotCount := func() int {
-
-		// if the number of workers exceeds the number
-		// of tasks then ideally we'll always have a
-		// few idle workers
-		//
-		// in such a scenario we don't want to treat work
-		// in progress larger than the number of new tasks
-		// as expected work in progress, instead we should
-		// have only up to the task count of work in progress
-		// and ideally that work should be flushing to the
-		// results consumer routine
-		//
-		// so to create backpressure we ignore the number
-		// of workers that exceed the task count for the
-		// interval
-		//
-		// having idle workers is valid in cases where tasks
-		// are of a mixed type configuration and some take
-		// longer than others - it's just another type of
-		// throughput buffering authors can opt into using
-		// for edge case reasons/simulations
-		if numWorkers > numNewTasks {
-			return numNewTasks * 2
-		}
-
-		return numNewTasks + numWorkers
+		return maxPendingTasks(numWorkers, numNewTasks)
 	}
 
 	// apply initial task buffer limits to the interval semaphore
 	taskSlotCount := getTaskSlotCount()
 	lt.intervalTasksSema.Release(int64(taskSlotCount))
-
-	// start workers just before starting task scheduling
-	for i := 0; i < numWorkers; i++ {
-		lt.addWorker(ctx, i)
-	}
 
 	configCausesPause := func() bool {
 		return meta.NumIntervalTasks <= 0 || numWorkers <= 0
@@ -934,6 +904,11 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		}
 	}
 
+	// start workers just before starting task scheduling
+	for i := 0; i < numWorkers; i++ {
+		lt.addWorker(ctx, i)
+	}
+
 	// main task scheduling loop
 	for {
 		if maxTasks > 0 {
@@ -1100,4 +1075,36 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	}
 
 	return nil
+}
+
+//
+// helpers
+//
+
+func maxPendingTasks(numWorkers, numIntervalTasks int) int {
+	// if the number of workers exceeds the number
+	// of tasks then ideally we'll always have a
+	// few idle workers
+	//
+	// in such a scenario we don't want to treat work
+	// in progress larger than the number of new tasks
+	// as expected work in progress, instead we should
+	// have only up to the task count of work in progress
+	// and ideally that work should be flushing to the
+	// results consumer routine
+	//
+	// so to create backpressure we ignore the number
+	// of workers that exceed the task count for the
+	// interval
+	//
+	// having idle workers is valid in cases where tasks
+	// are of a mixed type configuration and some take
+	// longer than others - it's just another type of
+	// throughput buffering authors can opt into using
+	// for edge case reasons/simulations
+	if numWorkers > numIntervalTasks {
+		return numIntervalTasks * 2
+	}
+
+	return numIntervalTasks + numWorkers
 }
