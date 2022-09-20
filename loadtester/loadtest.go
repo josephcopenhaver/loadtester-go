@@ -626,6 +626,9 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 						intervalID = nextIntervalID
 
 						if taskBufSize < numNewTasks {
+							// just finished this iteration of retry enqueuing
+							//
+							// break to loop through retry drain context again
 							break
 						}
 
@@ -647,6 +650,9 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					}
 
 					if taskBufSize < numNewTasks {
+						// just finished this iteration of retry enqueuing
+						//
+						// break to loop through retry drain context again
 						break
 					}
 				}
@@ -1072,7 +1078,8 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		}
 	}
 
-	return nil
+	// note: it's impossible to reach this after-loop section now
+	// return nil
 }
 
 //
