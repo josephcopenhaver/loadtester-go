@@ -991,8 +991,6 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				}
 
 				lt.logger.Debugw("scheduled: stopping loadtest: NextTask did not return a task")
-
-				break
 			}
 
 			taskBufSize += n
