@@ -222,6 +222,8 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 	var err_resp error
 
 	task := taskWithMeta.doer
+	// phase is the name of the step which has possibly caused a panic
+	var phase string
 	defer func() {
 		if v, ok := task.(*retryTask); ok {
 			*v = retryTask{}
@@ -247,18 +249,21 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 				lt.logger.Errorw(
 					"worker recovered from panic",
 					"worker_id", workerID,
+					"phase", phase,
 					"error", v,
 				)
 			case []byte:
 				lt.logger.Errorw(
 					"worker recovered from panic",
 					"worker_id", workerID,
+					"phase", phase,
 					"error", string(v),
 				)
 			case string:
 				lt.logger.Errorw(
 					"worker recovered from panic",
 					"worker_id", workerID,
+					"phase", phase,
 					"error", v,
 				)
 			default:
@@ -267,13 +272,23 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 				lt.logger.Errorw(
 					"worker recovered from panic",
 					"worker_id", workerID,
+					"phase", phase,
 					"error", msg,
 				)
 			}
 		}
 	}()
 
+	var rt *retryTask
+
+	if v, ok := task.(*retryTask); ok {
+		rt = v
+		phase = "retry"
+	} else {
+		phase = "do"
+	}
 	err := task.Do(ctx, workerID)
+	phase = "" // done, no panic occured
 	if err == nil {
 		result.Passed = 1
 		return
@@ -291,12 +306,15 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 		return
 	}
 
+	phase = "can-retry"
 	if v, ok := dr.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
+		phase = "" // done, no panic occured
 		return
 	}
+	phase = "" // done, no panic occured
 
-	if x, ok := dr.(*retryTask); ok {
-		dr = x.DoRetryer
+	if rt != nil {
+		dr = rt.DoRetryer
 	}
 
 	lt.retryTaskChan <- lt.newRetryTask(dr, err)
