@@ -6,20 +6,20 @@ If you want to send http requests with a specific HTTP Method and not validate a
 
 Use this "framework" when you need to validate http responses in non-trivial ways, the kind of load you need to generate is not a simple http request, the kind of load you need to generate needs to increase over time in a non-trivial fashion, you desire to spread the load as evenly over your sampling interval as possible, or you need to measure exactly what's going on with your load generator host concurrent workers vs tasks for some time interval.
 
-Example trivial implementation present in [example](./loadtester/example/main.go), but know that if you are wanting to create a http request generating task you should use a single http client using the transport returned from NewHttpTransport() to avoid creating too many short-lived connections. Also on context error/shutdown make sure your http clients' CloseIdleConnections() method gets called.
-
+There is a trivial implementation present in [example](./loadtester/example/main.go), but know that if you are wanting to create a http request generating task you should use a single http client using the transport returned from NewHttpTransport() to avoid creating too many short-lived connections. Also on context error/shutdown make sure your http clients' CloseIdleConnections() method gets called.
+ 
 Features:
 
 1. Worker goroutines should never break, even if the tasks they perform panic.
 1. can retry tasks by the task implementing the DoRetryer or DoRetryChecker interface
 1. Can attempt to flush retries up to some timeout duration via the config option FlushRetriesOnShutdown(true) and FlushRetriesTimeout(<time.Duration>) if you have the need to try and get every task to pass before a normal shutdown event.
-1. Bring your own validation routines as part of your task definitions or DataDriveTests
+1. Bring your own validation routines as part of your task definitions or DataDrivenTests
 1. Implement your own logic for adjusting the load generation interval, the concurrent number of workers, and the number of tasks to complete each interval over time any way you see fit via the ConfigUpdate struct and the UpdateConfigChan any way you choose.
 1. Send any kind of load using any kind of client you can think of. You could even implement an entire workflow as a task if you like.
 1. Use the parent context to stop a loadtest after some amount of time if you like
-1. Bring your own logger, just needs to meet the bare minimum of the SugaredLogger interface.
+1. Bring your own logger, just needs to satisfy the SugaredLogger interface.
 1. Bound your loadtest to a specific count of tasks via the MaxTasks() option or by returning less tasks than ReadTasks prompts you to populate.
 1. Gracefully flushes all data and tasks when the context is canceled.
-1. Prevents overruning the upstream with extreme bursts if it experiences some kind of saturation and latency increases creating backpressure in the loadtester. Such issues are clearly present in the output metrics as lag for the current loadtest config/plan.
+1. Prevents overrunning the upstream with extreme bursts if it experiences some kind of saturation and latency increases creating back pressure in the loadtester. Such issues are clearly present in the output metrics as lag for the current loadtest config/plan.
 1. This is trivial to control via some thin control plane wrapper and coordinate multiple nodes and configs together.
-1. All load spaced greater than 20 milliseconds apart is evenly created. ( 20ms was chosen due to that being the average time for GC to interrupt processes ) All load that would be spaced less than 20 milliseconds apart is create as quickly as possible but each interval is still honored before the next batch of load is created.
+1. All load spaced greater than 20 milliseconds apart is evenly created. ( 20ms was chosen due to that being the average time for GC to interrupt processes ) All load that would be spaced less than 20 milliseconds apart is created as quickly as possible but each interval is still spaced before the next batch of load is created.

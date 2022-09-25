@@ -223,13 +223,18 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 
 	task := taskWithMeta.doer
 	// phase is the name of the step which has possibly caused a panic
-	var phase string
-	defer func() {
+	phase := "do"
+	var rt *retryTask
+	if !lt.RetriesDisabled {
 		if v, ok := task.(*retryTask); ok {
-			*v = retryTask{}
-			lt.retryTaskPool.Put(v)
+			rt = v
+			phase = "retry"
+			defer func() {
+				*rt = retryTask{}
+				lt.retryTaskPool.Put(v)
+			}()
 		}
-	}()
+	}
 	defer func() {
 
 		if err_resp != nil {
@@ -278,17 +283,8 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 			}
 		}
 	}()
-
-	var rt *retryTask
-
-	if v, ok := task.(*retryTask); ok {
-		rt = v
-		phase = "retry"
-	} else {
-		phase = "do"
-	}
 	err := task.Do(ctx, workerID)
-	phase = "" // done, no panic occured
+	phase = "" // done, no panic occurred
 	if err == nil {
 		result.Passed = 1
 		return
@@ -301,21 +297,21 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskW
 		return
 	}
 
-	dr, ok := task.(DoRetryer)
-	if !ok {
+	var dr DoRetryer
+	if rt != nil {
+		dr = rt.DoRetryer
+	} else if v, ok := task.(DoRetryer); ok {
+		dr = v
+	} else {
 		return
 	}
 
 	phase = "can-retry"
 	if v, ok := dr.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
-		phase = "" // done, no panic occured
+		phase = "" // done, no panic occurred
 		return
 	}
-	phase = "" // done, no panic occured
-
-	if rt != nil {
-		dr = rt.DoRetryer
-	}
+	phase = "" // done, no panic occurred
 
 	lt.retryTaskChan <- lt.newRetryTask(dr, err)
 
