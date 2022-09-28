@@ -142,7 +142,7 @@ func main() {
 	// routine that listens for context done and closes input channel
 	wg.Add(1)
 	go func() {
-		wg.Done()
+		defer wg.Done()
 
 		<-ctx.Done()
 		closeInputChan()
