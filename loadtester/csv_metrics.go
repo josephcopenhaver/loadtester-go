@@ -203,7 +203,7 @@ func (lt *Loadtest) resultsHandler() {
 			continue
 		}
 
-		if tr.Meta.IntervalID.IsZero() {
+		if tr.taskResultFlags.isZero() {
 
 			mr.sumLag += tr.Meta.Lag
 

@@ -56,7 +56,12 @@ func (rt *retryTask) Do(ctx context.Context, workerID int) error {
 }
 
 type taskMeta struct {
-	IntervalID       time.Time
+	IntervalID time.Time
+
+	//
+	// rate gauges:
+	//
+
 	NumIntervalTasks int
 	Lag              time.Duration
 }

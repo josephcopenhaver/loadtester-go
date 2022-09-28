@@ -1,0 +1,23 @@
+name: test project
+on:
+  push:
+  schedule:
+    - cron: "15 12 * * 6" # INIT_CRON_EXPRESSION: echo "$(((RANDOM%60))) $(((RANDOM%24)))"' * * '"$( if [[ $(((RANDOM%2))) -eq 0 ]]; then echo 0; else echo 6; fi )"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: [ '1.18', '1.19' ]
+    name: Go ${{ matrix.go }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go }}
+      - name: test without race
+        run: go test ./...
+      - name: test with race
+        run: go test -race ./...

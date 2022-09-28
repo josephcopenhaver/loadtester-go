@@ -54,6 +54,10 @@ type taskResultFlags struct {
 	Errored     uint8
 }
 
+func (trf taskResultFlags) isZero() bool {
+	return trf == taskResultFlags{}
+}
+
 type taskResult struct {
 	taskResultFlags
 	QueuedDuration, TaskDuration time.Duration
@@ -541,6 +545,24 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 							return ErrRetriesFailedToFlush
 						}
 
+						// 1. the below looks off/odd, why not use?:
+						//
+						// ```
+						// if n := maxTasks - numTasks; n < numNewTasks {
+						// 	numNewTasks = n
+						// }
+						// ```
+						//
+						// 2. Any for that matter, why not keep meta.NumIntervalTasks in sync with numNewTasks?
+						//
+						// ---
+						//
+						// 1. The implementation would be exactly the same, just using another variable
+						// 2. the meta.NumIntervalTasks value is used in RATE calculations, if we keep it in sync
+						//    with BOUNDS values then the last tasks could run at a lower RATE than intended. It
+						//    is only kept in sync when a user adjusts the RATE via a ConfigUpdate. Don't confuse
+						//    bounds purpose values with rate purpose values.
+						//
 						numNewTasks = maxTasks - numTasks
 						if numNewTasks > meta.NumIntervalTasks {
 							numNewTasks = meta.NumIntervalTasks
@@ -1090,7 +1112,8 @@ Loop:
 			lt.resultWaitGroup.Add(1)
 			lt.resultsChan <- taskResult{
 				Meta: taskMeta{
-					Lag: lag,
+					IntervalID: intervalID,
+					Lag:        lag,
 				},
 			}
 		}
