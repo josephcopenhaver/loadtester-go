@@ -1004,14 +1004,17 @@ Loop:
 					// new to enqueue
 
 					lt.logger.Warnw(
-						"stopping loadtest: NextTask did not return a task",
+						"stopping loadtest: ReadTasks did not load enough tasks",
 						"final_task_delta", 0,
 					)
 
 					break Loop // equivalent to "return nil", but safer to maintain this way
 				}
 
-				lt.logger.Debugw("scheduled: stopping loadtest: NextTask did not return a task")
+				lt.logger.Debugw(
+					"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
+					"retry_count", taskBufSize,
+				)
 			}
 
 			taskBufSize += n
@@ -1051,12 +1054,12 @@ Loop:
 		}
 
 		if numNewTasks > taskBufSize {
-			// must have hit the end of NextTask iterator
+			// must have hit the end of ReadTasks iterator
 			// increase numTasks total by actual number queued
 			// and stop traffic generation
 			numTasks += taskBufSize
 			lt.logger.Warnw(
-				"stopping loadtest: NextTask did not return a task",
+				"stopping loadtest: ReadTasks did not load enough tasks",
 				"final_task_delta", taskBufSize,
 			)
 			break Loop // equivalent to "return nil", but safer to maintain this way
