@@ -18,11 +18,11 @@ import (
 // hosts you probably need to apply some scaling factor to
 // it to let connections go idle for a time and still be reusable.
 //
-// Note that if you are not connecting to a loadbalancer
+// Note that if you are not connecting to a load balancer
 // which preserves connections to a client much of the intent
 // we're trying to establish here is not applicable.
 //
-// Also if the loadbalancer does not have "max connection lifespan"
+// Also if the load balancer does not have "max connection lifespan"
 // behavior nor a "round robin" or "connection balancing" feature
 // without forcing the loadtesting client to reconnect then as
 // you increase load your established connections may prevent the
@@ -30,7 +30,7 @@ import (
 //
 // By default golang's http standard lib does not expose a way for us
 // to attempt to address this. The problem is also worse if your
-// loadbalancer ( or number of exposed ips for a dns record ) increase.
+// load balancer ( or number of exposed ips for a dns record ) increase.
 //
 // Rectifying this issue requires a fix like/option like
 // https://github.com/golang/go/pull/46714

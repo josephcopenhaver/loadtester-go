@@ -103,7 +103,7 @@ func main() {
 		defer wg.Done()
 
 		// note, if you do not want to support user input then just end main by starting
-		// the loadtest and don't use a waitgroup or goroutine for it
+		// the loadtest and don't use a wait group or goroutine for it
 
 		logger.Infow("running")
 		defer func() {
@@ -124,12 +124,12 @@ func main() {
 	// define input handling channel and closer
 	inputChan := make(chan string)
 	closeInputChan := func() func() {
-		var oncer sync.Once
+		var once sync.Once
 
 		c := inputChan
 
 		return func() {
-			oncer.Do(func() {
+			once.Do(func() {
 				close(c)
 			})
 		}
@@ -168,7 +168,7 @@ func main() {
 			// write to panic due to the user
 			// doing thing really fast and pressing control-c afterward
 			//
-			// but in that case we're still going through the stop proceedure so meh
+			// but in that case we're still going through the stop procedure so meh
 
 			inputChan <- strings.TrimSuffix(s, "\n")
 		}

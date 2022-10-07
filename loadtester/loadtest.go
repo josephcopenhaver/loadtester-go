@@ -22,7 +22,7 @@ var (
 	errLoadtestContextDone  = errors.New("loadtest parent context errored")
 )
 
-// TODO: RetriesDisabled runtimes checks can turn into init time checks; same with MaxTasks based checks
+// TODO: RetriesDisabled runtime checks can turn into init time checks; same with MaxTasks based checks
 // I would not dream of doing this before proving it is warranted first.
 
 // TaskProvider describes how to read tasks into a
@@ -88,7 +88,7 @@ type Loadtest struct {
 	//
 	// As a result this does slow down each task runner, but only slightly as it's just acquiring
 	// a lock, doing some simple math, and then unlocking as the task worker calls release on
-	// the sempahore. It's worth it to me.
+	// the semaphore. It's worth it to me.
 	intervalTasksSema *semaphore.Weighted
 
 	numIntervalTasks int
@@ -385,23 +385,23 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 	if lt.csvData.writeErr == nil {
 
-		csvf, err := os.Create(lt.csvData.outputFilename)
+		csvFile, err := os.Create(lt.csvData.outputFilename)
 		if err != nil {
 			return fmt.Errorf("failed to open output csv metrics file for writing: %w", err)
 		}
 		defer func() {
-			lt.writeOutputCsvFooterAndClose(csvf)
+			lt.writeOutputCsvFooterAndClose(csvFile)
 
 			if err_result == nil && lt.csvData.writeErr != errCsvWriterDisabled {
 				err_result = lt.csvData.writeErr
 			}
 		}()
 
-		lt.csvData.writeErr = lt.writeOutputCsvConfigComment(csvf)
+		lt.csvData.writeErr = lt.writeOutputCsvConfigComment(csvFile)
 
 		if lt.csvData.writeErr == nil {
 
-			lt.csvData.writer = csv.NewWriter(csvf)
+			lt.csvData.writer = csv.NewWriter(csvFile)
 
 			lt.csvData.writeErr = lt.writeOutputCsvHeaders()
 		}
@@ -434,7 +434,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
-	updatechan := lt.taskProvider.UpdateConfigChan()
+	updateChan := lt.taskProvider.UpdateConfigChan()
 	configChanges := make([]interface{}, 0, 12)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
@@ -702,7 +702,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		lt.logger.Debugw("waiting for loadtest results")
 		lt.resultWaitGroup.Wait()
 
-		lt.logger.Debugw("stopping result handler routines and workers")
+		lt.logger.Debugw("stopping result handler routine")
 
 		// signal for result handler routines to stop
 		close(lt.resultsChan)
@@ -722,7 +722,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		lt.workerWaitGroup.Wait()
 	}()
 
-	// getTaskSlotCount is the task emission backpressure
+	// getTaskSlotCount is the task emission back pressure
 	// throttle that conveys the number of tasks that
 	// are allowed to be un-finished for the performance
 	// interval under normal circumstances
@@ -751,7 +751,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 				n := cu.numWorkers.val
 
-				// prevent over commiting on the maxWorkers count
+				// prevent over committing on the maxWorkers count
 				if n < 0 {
 					lt.logger.Errorw(
 						"config update not within loadtest boundary conditions: numWorkers",
@@ -765,7 +765,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					lt.logger.Errorw(
 						"config update not within loadtest boundary conditions: numWorkers",
 						"reason", "update tried to set numWorkers too high",
-						"remediation_hint", "increase the loadtests's MaxWorkers setting",
+						"remediation_hint", "increase the loadtest MaxWorkers setting",
 						"remediation_taken", "using max value",
 						"requested", n,
 						"max", lt.maxWorkers,
@@ -805,7 +805,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 				n := cu.numIntervalTasks.val
 
-				// prevent over commiting on the maxIntervalTasks count
+				// prevent over committing on the maxIntervalTasks count
 				if n < 0 {
 					lt.logger.Errorw(
 						"config update not within loadtest boundary conditions: numIntervalTasks",
@@ -819,7 +819,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 					lt.logger.Errorw(
 						"config update not within loadtest boundary conditions: numIntervalTasks",
 						"reason", "update tried to set numIntervalTasks too high",
-						"remediation_hint", "increase the loadtests's MaxIntervalTasks setting",
+						"remediation_hint", "increase the loadtest MaxIntervalTasks setting",
 						"remediation_taken", "using max value",
 						"requested", n,
 						"max", lt.maxIntervalTasks,
@@ -872,7 +872,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 						prepSemaErr = lt.intervalTasksSema.Acquire(ctx, int64(taskSlotCount-newTaskSlotCount))
 						if prepSemaErr != nil {
 							lt.logger.Errorw(
-								"loadtest config udpate: failed to pre-acquire load generation slots",
+								"loadtest config update: failed to pre-acquire load generation slots",
 								"error", prepSemaErr,
 							)
 
@@ -915,7 +915,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				select {
 				case <-ctxDone:
 					return errLoadtestContextDone
-				case cu = <-updatechan:
+				case cu = <-updateChan:
 					continue
 				}
 			}
@@ -972,7 +972,7 @@ Loop:
 		select {
 		case <-ctxDone:
 			break Loop // equivalent to "return nil", but safer to maintain this way
-		case cu := <-updatechan:
+		case cu := <-updateChan:
 			if err := handleConfigUpdateAndPauseState(cu); err != nil {
 				if err == errLoadtestContextDone {
 					break Loop // equivalent to "return nil", but safer to maintain this way
@@ -1147,7 +1147,7 @@ func maxPendingTasks(numWorkers, numIntervalTasks int) int {
 	// and ideally that work should be flushing to the
 	// results consumer routine
 	//
-	// so to create backpressure we ignore the number
+	// so to create back pressure we ignore the number
 	// of workers that exceed the task count for the
 	// interval
 	//

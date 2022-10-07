@@ -110,7 +110,7 @@ func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
 
 type LoadtestOption func(*loadtestConfig)
 
-// MaxTasks sets an upperbound on the number of tasks the loadtest could perform
+// MaxTasks sets an upper bound on the number of tasks the loadtest could perform
 func MaxTasks(max int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.maxTasks = max
@@ -176,7 +176,7 @@ func MetricsCsvWriterDisabled(b bool) LoadtestOption {
 }
 
 // FlushRetriesOnShutdown is useful when your loadtest is more like a smoke test
-// that must have all tasks flush and be succesful
+// that must have all tasks flush and be successful
 func FlushRetriesOnShutdown(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.flushRetriesOnShutdown = b

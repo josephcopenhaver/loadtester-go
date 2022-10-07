@@ -159,9 +159,9 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 	return lt.csvData.writer.Write(fields)
 }
 
-func (lt *Loadtest) writeOutputCsvFooterAndClose(csvf *os.File) {
+func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
 	defer func() {
-		if err := csvf.Close(); err != nil {
+		if err := csvFile.Close(); err != nil {
 			if lt.csvData.writeErr != nil {
 				lt.csvData.writeErr = err
 			}
@@ -172,7 +172,7 @@ func (lt *Loadtest) writeOutputCsvFooterAndClose(csvf *os.File) {
 		lt.csvData.writer.Flush()
 		lt.csvData.writeErr = lt.csvData.writer.Error()
 		if lt.csvData.writeErr == nil {
-			_, lt.csvData.writeErr = csvf.Write([]byte("\n# {\"done\":{\"end_time\":\"" + timeToString(time.Now()) + "\"}}\n"))
+			_, lt.csvData.writeErr = csvFile.Write([]byte("\n# {\"done\":{\"end_time\":\"" + timeToString(time.Now()) + "\"}}\n"))
 		}
 	}
 }
