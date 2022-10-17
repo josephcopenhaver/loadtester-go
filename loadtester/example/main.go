@@ -73,7 +73,9 @@ func main() {
 
 	var wg sync.WaitGroup
 	defer func() {
+		logger.Warnw("waiting for all goroutines to finish")
 		wg.Wait()
+		logger.Warnw("all goroutines finished")
 	}()
 
 	ctx, cancel := loadtester.RootContext(logger)
