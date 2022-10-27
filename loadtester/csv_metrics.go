@@ -114,9 +114,10 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 	return lt.csvData.writer.Error()
 }
 
-func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
+// writeOutputCsvRow writes the metric record to the target csv file
+func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) {
 	if lt.csvData.writeErr != nil {
-		return nil
+		return
 	}
 
 	nowStr := timeToString(time.Now())
@@ -156,13 +157,13 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) error {
 		fields = fields[:len(fields)-1]
 	}
 
-	return lt.csvData.writer.Write(fields)
+	lt.csvData.writeErr = lt.csvData.writer.Write(fields)
 }
 
 func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
 	defer func() {
 		if err := csvFile.Close(); err != nil {
-			if lt.csvData.writeErr != nil {
+			if lt.csvData.writeErr == nil {
 				lt.csvData.writeErr = err
 			}
 		}
@@ -183,7 +184,7 @@ func (lt *Loadtest) resultsHandler() {
 
 	writeRow := func() {
 		mr.totalNumTasks += mr.numTasks
-		lt.csvData.writeErr = lt.writeOutputCsvRow(mr)
+		lt.writeOutputCsvRow(mr)
 	}
 
 	lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushInterval)
