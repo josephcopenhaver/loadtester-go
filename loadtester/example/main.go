@@ -21,11 +21,11 @@ func (t *task) Do(ctx context.Context, workerID int) error {
 	return nil
 }
 
-type MyLoadtest struct {
+type myLoadtest struct {
 	cfgChan chan loadtester.ConfigUpdate
 }
 
-func (lt *MyLoadtest) ReadTasks(p []loadtester.Doer) int {
+func (mlt *myLoadtest) ReadTasks(p []loadtester.Doer) int {
 	// make sure you only fill up to len
 	// filling less than len will signal that the loadtest is over
 
@@ -38,12 +38,12 @@ func (lt *MyLoadtest) ReadTasks(p []loadtester.Doer) int {
 	return i
 }
 
-func (lt *MyLoadtest) UpdateConfigChan() <-chan loadtester.ConfigUpdate {
-	return lt.cfgChan
+func (mlt *myLoadtest) UpdateConfigChan() <-chan loadtester.ConfigUpdate {
+	return mlt.cfgChan
 }
 
-func NewMyLoadtest() *MyLoadtest {
-	return &MyLoadtest{
+func newMyLoadtest() *myLoadtest {
+	return &myLoadtest{
 		cfgChan: make(chan loadtester.ConfigUpdate),
 	}
 }
@@ -81,7 +81,7 @@ func main() {
 	ctx, cancel := loadtester.RootContext(logger)
 	defer cancel()
 
-	mlt := NewMyLoadtest()
+	mlt := newMyLoadtest()
 
 	numWorkers := 5
 
@@ -104,13 +104,12 @@ func main() {
 	go func() {
 		defer wg.Done()
 
+		// ensure the parent context is canceled when this critical goroutine ends
+		defer cancel()
+
 		// note, if you do not want to support user input then just end main by starting
 		// the loadtest and don't use a wait group or goroutine for it
 
-		logger.Infow("running")
-		defer func() {
-			logger.Infow("stopped")
-		}()
 		if err := lt.Run(ctx); err != nil {
 			logger.Panicw(
 				"loadtest errored",
@@ -179,6 +178,13 @@ func main() {
 	// user input channel processing loop
 	for s := range inputChan {
 		var cu loadtester.ConfigUpdate
+
+		// note when calling SetNumWorkers() you likely also want to call SetNumIntervalTasks() to increase
+		// the concurrent throughput for a given interval-segment of time for the change in parallelism SetNumWorkers provides
+		//
+		// most people will choose to keep these two values exactly the same because their goal is to
+		// increase parallelism as well as concurrency and such a lock-step approach ensures that no
+		// single outlier task affects the throughput of all the others in the same interval-segment of time.
 
 		switch s {
 		case "stop":

@@ -6,7 +6,7 @@ If you want to send http requests with a specific HTTP Method and not validate a
 
 Use this "framework" when you need to validate http responses in non-trivial ways, the kind of load you need to generate is not a simple http request, the kind of load you need to generate needs to increase over time in a non-trivial fashion, you desire to spread the load as evenly over your sampling interval as possible, or you need to measure exactly what's going on with your load generator host concurrent workers vs tasks for some time interval.
 
-There is a trivial implementation present in [example](./loadtester/example/main.go), but know that if you are wanting to create a http request generating task you should use a single http client using the transport returned from NewHttpTransport() to avoid creating too many short-lived connections. Also on context error/shutdown make sure your http clients' CloseIdleConnections() method gets called.
+There is a trivial implementation present in [example](./loadtester/example/main.go), but know that if you are wanting to create a http request generating task you should use a single http client using the transport returned from NewHttpTransport() to avoid creating too many short-lived connections. Also on context error/shutdown make sure your http clients' CloseIdleConnections() method gets called. Also, don't forget to always read all of the response body of the http response to ensure you achieve connection reuse! You can find a [stateless http loadtest example here](./loadtester/example_http/main.go)
  
 Features:
 

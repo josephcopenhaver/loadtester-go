@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -23,7 +24,27 @@ type csvData struct {
 	writer         *csv.Writer
 	flushInterval  time.Duration
 	flushDeadline  time.Time
-	writeErr       error
+
+	writeRWM sync.RWMutex
+	writeErr error
+}
+
+func (cd *csvData) err() error {
+	cd.writeRWM.RLock()
+	defer cd.writeRWM.RUnlock()
+
+	return cd.writeErr
+}
+
+func (cd *csvData) setErr(err error) {
+	cd.writeRWM.Lock()
+	defer cd.writeRWM.Unlock()
+
+	if cd.writeErr != nil {
+		return
+	}
+
+	cd.writeErr = err
 }
 
 func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
@@ -78,6 +99,8 @@ func (mr *metricRecord) reset() {
 
 func (lt *Loadtest) writeOutputCsvHeaders() error {
 
+	cd := &lt.csvData
+
 	fields := []string{
 		"sample_time",
 		"interval_id",        // gauge
@@ -103,20 +126,22 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 		fields = append(fields, "percent_done")
 	}
 
-	err := lt.csvData.writer.Write(fields)
+	err := cd.writer.Write(fields)
 	if err != nil {
 		return err
 	}
 
 	// ensure headers flush asap
-	lt.csvData.writer.Flush()
+	cd.writer.Flush()
 
-	return lt.csvData.writer.Error()
+	return cd.writer.Error()
 }
 
 // writeOutputCsvRow writes the metric record to the target csv file
 func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) {
-	if lt.csvData.writeErr != nil {
+
+	cd := &lt.csvData
+	if cd.writeErr != nil {
 		return
 	}
 
@@ -157,28 +182,33 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) {
 		fields = fields[:len(fields)-1]
 	}
 
-	lt.csvData.writeErr = lt.csvData.writer.Write(fields)
+	if err := cd.writer.Write(fields); err != nil {
+		cd.setErr(err) // sets error state in multiple goroutine safe way
+	}
 }
 
 func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
+	cd := &lt.csvData
+	cd.writeErr = cd.err() // read error state after other goroutines have settled ( guaranteed )
+
 	defer func() {
-		if err := csvFile.Close(); err != nil {
-			if lt.csvData.writeErr == nil {
-				lt.csvData.writeErr = err
-			}
+		if err := csvFile.Close(); err != nil && cd.writeErr == nil {
+			cd.writeErr = err
 		}
 	}()
 
-	if lt.csvData.writeErr == nil {
-		lt.csvData.writer.Flush()
-		lt.csvData.writeErr = lt.csvData.writer.Error()
-		if lt.csvData.writeErr == nil {
-			_, lt.csvData.writeErr = csvFile.Write([]byte("\n# {\"done\":{\"end_time\":\"" + timeToString(time.Now()) + "\"}}\n"))
+	if cd.writeErr == nil {
+		cd.writer.Flush()
+		cd.writeErr = cd.writer.Error()
+		if cd.writeErr == nil {
+			_, cd.writeErr = csvFile.Write([]byte("\n# {\"done\":{\"end_time\":\"" + timeToString(time.Now()) + "\"}}\n"))
 		}
 	}
 }
 
 func (lt *Loadtest) resultsHandler() {
+
+	cd := &lt.csvData
 	var mr metricRecord
 	mr.reset()
 
@@ -187,12 +217,12 @@ func (lt *Loadtest) resultsHandler() {
 		lt.writeOutputCsvRow(mr)
 	}
 
-	lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushInterval)
+	cd.flushDeadline = time.Now().Add(cd.flushInterval)
 
 	for {
 		tr, ok := <-lt.resultsChan
 		if !ok {
-			if lt.csvData.writeErr == nil && mr.numTasks > 0 {
+			if cd.writeErr == nil && mr.numTasks > 0 {
 				writeRow()
 			}
 			return
@@ -200,7 +230,7 @@ func (lt *Loadtest) resultsHandler() {
 
 		lt.resultWaitGroup.Done()
 
-		if lt.csvData.writeErr != nil {
+		if cd.writeErr != nil {
 			continue
 		}
 
@@ -247,10 +277,12 @@ func (lt *Loadtest) resultsHandler() {
 			writeRow()
 			mr.reset()
 
-			if lt.csvData.writeErr == nil && !lt.csvData.flushDeadline.After(time.Now()) {
-				lt.csvData.writer.Flush()
-				lt.csvData.writeErr = lt.csvData.writer.Error()
-				lt.csvData.flushDeadline = time.Now().Add(lt.csvData.flushInterval)
+			if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
+				cd.writer.Flush()
+				if err := cd.writer.Error(); err != nil {
+					cd.setErr(err) // sets error state in multiple goroutine safe way
+				}
+				cd.flushDeadline = time.Now().Add(cd.flushInterval)
 			}
 		}
 	}

@@ -99,7 +99,7 @@ type Loadtest struct {
 	retryTaskPool sync.Pool
 
 	startTime time.Time
-	csvData
+	csvData   csvData
 
 	flushRetriesOnShutdown bool
 	flushRetriesTimeout    time.Duration
@@ -383,27 +383,33 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 	lt.startTime = time.Now()
 
-	if lt.csvData.writeErr == nil {
+	cd := &lt.csvData
 
-		csvFile, err := os.Create(lt.csvData.outputFilename)
+	if cd.writeErr == nil {
+
+		csvFile, err := os.Create(cd.outputFilename)
 		if err != nil {
 			return fmt.Errorf("failed to open output csv metrics file for writing: %w", err)
 		}
 		defer func() {
 			lt.writeOutputCsvFooterAndClose(csvFile)
 
-			if err_result == nil && lt.csvData.writeErr != errCsvWriterDisabled {
-				err_result = lt.csvData.writeErr
+			if err_result != nil {
+				return
+			}
+
+			if err := cd.writeErr; err != errCsvWriterDisabled {
+				err_result = err
 			}
 		}()
 
-		lt.csvData.writeErr = lt.writeOutputCsvConfigComment(csvFile)
+		cd.writeErr = lt.writeOutputCsvConfigComment(csvFile)
 
-		if lt.csvData.writeErr == nil {
+		if cd.writeErr == nil {
 
-			lt.csvData.writer = csv.NewWriter(csvFile)
+			cd.writer = csv.NewWriter(csvFile)
 
-			lt.csvData.writeErr = lt.writeOutputCsvHeaders()
+			cd.writeErr = lt.writeOutputCsvHeaders()
 		}
 	}
 
@@ -720,6 +726,8 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		// wait for workers to stop
 		lt.logger.Debugw("waiting for workers to stop")
 		lt.workerWaitGroup.Wait()
+
+		lt.logger.Infow("loadtest stopped")
 	}()
 
 	// getTaskSlotCount is the task emission back pressure
