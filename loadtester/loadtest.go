@@ -208,7 +208,7 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 		}
 
 		taskStart := time.Now()
-		respFlags := lt.doTask(ctx, workerID, task)
+		respFlags := lt.doTask(ctx, workerID, task.doer)
 		taskEnd := time.Now()
 
 		lt.resultsChan <- taskResult{
@@ -222,10 +222,9 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 	}
 }
 
-func (lt *Loadtest) doTask(ctx context.Context, workerID int, taskWithMeta taskWithMeta) (result taskResultFlags) {
+func (lt *Loadtest) doTask(ctx context.Context, workerID int, task Doer) (result taskResultFlags) {
 	var err_resp error
 
-	task := taskWithMeta.doer
 	// phase is the name of the step which has possibly caused a panic
 	phase := "do"
 	var rt *retryTask
@@ -381,6 +380,34 @@ func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 
 func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
+	// all that should ever be present in this function is logic to aggregate async errors
+	// into one error response
+	//
+	// and then a call to the internal lt.run(ctx, &cleanupErr) func
+
+	// this defer ensures that any async csv writing error bubbles up to the err_result
+	// if it would be nil
+	var shutdownErr error
+	defer func() {
+		if err_result != nil {
+			return
+		}
+
+		if shutdownErr != nil {
+			err_result = shutdownErr
+			return
+		}
+
+		if err := lt.csvData.writeErr; err != nil && err != errCsvWriterDisabled {
+			err_result = err
+		}
+	}()
+
+	return lt.run(ctx, &shutdownErr)
+}
+
+func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
+
 	lt.startTime = time.Now()
 
 	cd := &lt.csvData
@@ -391,17 +418,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		if err != nil {
 			return fmt.Errorf("failed to open output csv metrics file for writing: %w", err)
 		}
-		defer func() {
-			lt.writeOutputCsvFooterAndClose(csvFile)
-
-			if err_result != nil {
-				return
-			}
-
-			if err := cd.writeErr; err != errCsvWriterDisabled {
-				err_result = err
-			}
-		}()
+		defer lt.writeOutputCsvFooterAndClose(csvFile)
 
 		cd.writeErr = lt.writeOutputCsvConfigComment(csvFile)
 
@@ -559,7 +576,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 						// }
 						// ```
 						//
-						// 2. Any for that matter, why not keep meta.NumIntervalTasks in sync with numNewTasks?
+						// 2. And for that matter, why not keep meta.NumIntervalTasks in sync with numNewTasks?
 						//
 						// ---
 						//
@@ -700,8 +717,8 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 				}
 			}
 		}(!lt.RetriesDisabled && lt.flushRetriesOnShutdown)
-		if err != nil && err_result == nil {
-			err_result = err
+		if err != nil {
+			*shutdownErrResp = err
 		}
 
 		// wait for all results to come in
@@ -948,7 +965,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	if configCausesPause() {
 		if err := handleConfigUpdateAndPauseState(ConfigUpdate{onStartup: true}); err != nil {
 			if err == errLoadtestContextDone {
-				return
+				return nil
 			}
 			return err
 		}
@@ -960,7 +977,6 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	}
 
 	// main task scheduling loop
-Loop:
 	for {
 		if maxTasks > 0 {
 			if numTasks >= maxTasks {
@@ -968,7 +984,7 @@ Loop:
 					"loadtest finished: max task count reached",
 					"max_tasks", maxTasks,
 				)
-				break Loop // equivalent to "return nil", but safer to maintain this way
+				return nil
 			}
 
 			numNewTasks = maxTasks - numTasks
@@ -979,11 +995,11 @@ Loop:
 
 		select {
 		case <-ctxDone:
-			break Loop // equivalent to "return nil", but safer to maintain this way
+			return nil
 		case cu := <-updateChan:
 			if err := handleConfigUpdateAndPauseState(cu); err != nil {
 				if err == errLoadtestContextDone {
-					break Loop // equivalent to "return nil", but safer to maintain this way
+					return nil
 				}
 				return err
 			}
@@ -1009,7 +1025,7 @@ Loop:
 			// all have failed tasks that wish to be retried
 			acquiredLoadGenerationSlots = true
 			if lt.intervalTasksSema.Acquire(ctx, int64(numNewTasks)) != nil {
-				break Loop // equivalent to "return nil", but safer to maintain this way
+				return nil
 			}
 
 			taskBufSize = lt.readRetries(taskBuf[:numNewTasks:numNewTasks])
@@ -1038,7 +1054,7 @@ Loop:
 						"final_task_delta", 0,
 					)
 
-					break Loop // equivalent to "return nil", but safer to maintain this way
+					return nil
 				}
 
 				lt.logger.Debugw(
@@ -1061,7 +1077,7 @@ Loop:
 				lt.intervalTasksSema.Release(int64(numNewTasks - taskBufSize))
 			}
 		} else if lt.intervalTasksSema.Acquire(ctx, int64(taskBufSize)) != nil {
-			break Loop // equivalent to "return nil", but safer to maintain this way
+			return nil
 		}
 
 		lt.resultWaitGroup.Add(taskBufSize)
@@ -1092,7 +1108,7 @@ Loop:
 				"stopping loadtest: ReadTasks did not load enough tasks",
 				"final_task_delta", taskBufSize,
 			)
-			break Loop // equivalent to "return nil", but safer to maintain this way
+			return nil
 		}
 
 		taskBuf = taskBuf[:0]
@@ -1126,17 +1142,6 @@ Loop:
 			}
 		}
 	}
-
-	// nothing else should come after the above loop besides "return nil"
-	// otherwise the "break Loop" statements above can result in side effects
-	// and they should be transformed into "return" or "return nil" statements
-	//
-	// chose to use the "break Loop" approach because otherwise the "return nil"
-	// is caught by linters as unused code
-	//
-	// All hail being explicit!
-
-	return nil
 }
 
 //

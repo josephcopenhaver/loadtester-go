@@ -48,6 +48,7 @@ func (cd *csvData) setErr(err error) {
 }
 
 func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
+
 	if _, err := w.Write([]byte(`# `)); err != nil {
 		return err
 	}
@@ -188,6 +189,7 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) {
 }
 
 func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
+
 	cd := &lt.csvData
 	cd.writeErr = cd.err() // read error state after other goroutines have settled ( guaranteed )
 
@@ -197,13 +199,22 @@ func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
 		}
 	}()
 
-	if cd.writeErr == nil {
-		cd.writer.Flush()
-		cd.writeErr = cd.writer.Error()
-		if cd.writeErr == nil {
-			_, cd.writeErr = csvFile.Write([]byte("\n# {\"done\":{\"end_time\":\"" + timeToString(time.Now()) + "\"}}\n"))
-		}
+	if cd.writeErr != nil {
+		return
 	}
+
+	if cd.writer == nil {
+		return
+	}
+
+	cd.writer.Flush()
+
+	cd.writeErr = cd.writer.Error()
+	if cd.writeErr != nil {
+		return
+	}
+
+	_, cd.writeErr = csvFile.Write([]byte("\n# {\"done\":{\"end_time\":\"" + timeToString(time.Now()) + "\"}}\n"))
 }
 
 func (lt *Loadtest) resultsHandler() {

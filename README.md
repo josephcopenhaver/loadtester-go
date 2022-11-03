@@ -13,10 +13,10 @@ Features:
 1. Worker goroutines should never break, even if the tasks they perform panic.
 1. can retry tasks by the task implementing the DoRetryer or DoRetryChecker interface
 1. Can attempt to flush retries up to some timeout duration via the config option FlushRetriesOnShutdown(true) and FlushRetriesTimeout(<time.Duration>) if you have the need to try and get every task to pass before a normal shutdown event.
-1. Bring your own validation routines as part of your task definitions or DataDrivenTests
+1. Bring your own validation routines as part of your task definitions or Data Driven Tests
 1. Implement your own logic for adjusting the load generation interval, the concurrent number of workers, and the number of tasks to complete each interval over time any way you see fit via the ConfigUpdate struct and the UpdateConfigChan any way you choose.
 1. Send any kind of load using any kind of client you can think of. You could even implement an entire workflow as a task if you like.
-1. Use the parent context to stop a loadtest after some amount of time if you like
+1. Use the parent context to stop a loadtest after some amount of time if you like.
 1. Bring your own logger, just needs to satisfy the SugaredLogger interface.
 1. Bound your loadtest to a specific count of tasks via the MaxTasks() option or by returning less tasks than ReadTasks prompts you to populate.
 1. Gracefully flushes all data and tasks when the context is canceled.
