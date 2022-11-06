@@ -103,7 +103,7 @@ type Loadtest struct {
 
 	flushRetriesOnShutdown bool
 	flushRetriesTimeout    time.Duration
-	RetriesDisabled        bool
+	retriesDisabled        bool
 
 	logger SugaredLogger
 }
@@ -168,7 +168,7 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 
 		flushRetriesTimeout:    cfg.flushRetriesTimeout,
 		flushRetriesOnShutdown: cfg.flushRetriesOnShutdown,
-		RetriesDisabled:        cfg.retriesDisabled,
+		retriesDisabled:        cfg.retriesDisabled,
 		logger:                 cfg.logger,
 		intervalTasksSema:      sm,
 	}, nil
@@ -228,7 +228,7 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, task Doer) (result
 	// phase is the name of the step which has possibly caused a panic
 	phase := "do"
 	var rt *retryTask
-	if !lt.RetriesDisabled {
+	if !lt.retriesDisabled {
 		if v, ok := task.(*retryTask); ok {
 			rt = v
 			phase = "retry"
@@ -296,7 +296,7 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, task Doer) (result
 	err_resp = err
 	result.Errored = 1
 
-	if lt.RetriesDisabled {
+	if lt.retriesDisabled {
 		return
 	}
 
@@ -374,7 +374,7 @@ func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 		MetricsFlushInterval:   lt.csvData.flushInterval.String(),
 		FlushRetriesOnShutdown: lt.flushRetriesOnShutdown,
 		FlushRetriesTimeout:    lt.flushRetriesTimeout.String(),
-		RetriesDisabled:        lt.RetriesDisabled,
+		RetriesDisabled:        lt.retriesDisabled,
 	}
 }
 
@@ -716,7 +716,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 					}
 				}
 			}
-		}(!lt.RetriesDisabled && lt.flushRetriesOnShutdown)
+		}(!lt.retriesDisabled && lt.flushRetriesOnShutdown)
 		if err != nil {
 			*shutdownErrResp = err
 		}
@@ -1014,7 +1014,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 
 		// read up to numNewTasks from retry slice
 		taskBufSize := 0
-		if !lt.RetriesDisabled {
+		if !lt.retriesDisabled {
 
 			// acquire load generation opportunity slots ( smooths bursts )
 			//
