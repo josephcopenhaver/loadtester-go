@@ -703,6 +703,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 						lt.resultWaitGroup.Add(1)
 						lt.resultsChan <- taskResult{
 							Meta: taskMeta{
+								IntervalID: intervalID,
 								Lag: lag,
 							},
 						}
