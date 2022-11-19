@@ -17,6 +17,11 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go }}
+      - name: verify golang files are consistently formatted
+        run: |
+          [ `git status --porcelain=1 | wc -l` -eq 0 ] || (echo "failed to establish that files were unchanged before running format check" ; exit 1)
+          find . -type f -name '*.go' ! -path './vendor/*' -exec gofmt -l -s -w {} +
+          [ `git status --porcelain=1 | wc -l` -eq 0 ] || (echo "files exist that need to be formatted by gofmt" ; exit 1)
       - name: test without race
         run: go test ./...
       - name: test with race

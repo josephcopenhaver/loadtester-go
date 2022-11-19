@@ -189,6 +189,25 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 	for {
 		var task taskWithMeta
 
+		// duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
+		// that follows
+		//
+		// ref: https://go.dev/ref/spec#Select_statements
+		select {
+		case _, ok := <-pauseChan:
+			if !ok {
+				// all work is done
+				return
+			}
+
+			// paused
+			_, ok = <-pauseChan
+			if !ok {
+				// all work is done
+				return
+			}
+		default:
+		}
 		select {
 		case _, ok := <-pauseChan:
 			if !ok {
@@ -704,7 +723,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 						lt.resultsChan <- taskResult{
 							Meta: taskMeta{
 								IntervalID: intervalID,
-								Lag: lag,
+								Lag:        lag,
 							},
 						}
 					}
@@ -938,6 +957,15 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 					)
 				}
 
+				// duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
+				// that follows
+				//
+				// ref: https://go.dev/ref/spec#Select_statements
+				select {
+				case <-ctxDone:
+					return errLoadtestContextDone
+				default:
+				}
 				select {
 				case <-ctxDone:
 					return errLoadtestContextDone
