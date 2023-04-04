@@ -3,11 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -71,13 +68,6 @@ func main() {
 		logger = v
 	}
 
-	var wg sync.WaitGroup
-	defer func() {
-		logger.Warnw("waiting for all goroutines to finish")
-		wg.Wait()
-		logger.Warnw("all goroutines finished")
-	}()
-
 	ctx, cancel := loadtester.RootContext(logger)
 	defer cancel()
 
@@ -96,6 +86,18 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	// TODO: defer any loadtest cleanup here
+
+	var wg sync.WaitGroup
+	defer func() {
+		// just to ensure all child workers exit before any cleanup runs
+		//
+		// it's duplicated on the positive path and does no harm to be called twice on the positive path
+		logger.Debugw("post-wg-decl: waiting for all goroutines to finish")
+		wg.Wait()
+		logger.Debugw("post-wg-decl: all goroutines finished")
+	}()
 
 	//
 	// start loadtest routine
@@ -155,14 +157,13 @@ func main() {
 		// there is no way to make the reader context aware
 		defer closeInputChan()
 
-		reader := bufio.NewReader(os.Stdin)
-		for {
-			s, err := reader.ReadString('\n')
-			if err != nil {
-				if errors.Is(err, io.EOF) && ctx.Err() != nil {
-					return
-				}
-				panic(err)
+		sc := bufio.NewScanner(os.Stdin)
+		sc.Split(bufio.ScanLines)
+
+		for sc.Scan() {
+			s := sc.Text()
+			if s == "" {
+				continue
 			}
 
 			// note it's possible for this channel
@@ -171,37 +172,45 @@ func main() {
 			//
 			// but in that case we're still going through the stop procedure so meh
 
-			inputChan <- strings.TrimSuffix(s, "\n")
+			inputChan <- s
 		}
 	}()
 
 	// user input channel processing loop
-	for s := range inputChan {
-		var cu loadtester.ConfigUpdate
+	func() {
+		for s := range inputChan {
+			var cu loadtester.ConfigUpdate
 
-		// note when calling SetNumWorkers() you likely also want to call SetNumIntervalTasks() to increase
-		// the concurrent throughput for a given interval-segment of time for the change in parallelism SetNumWorkers provides
-		//
-		// most people will choose to keep these two values exactly the same because their goal is to
-		// increase parallelism as well as concurrency and such a lock-step approach ensures that no
-		// single outlier task affects the throughput of all the others in the same interval-segment of time.
+			// note when calling SetNumWorkers() you likely also want to call SetNumIntervalTasks() to increase
+			// the concurrent throughput for a given interval-segment of time for the change in parallelism SetNumWorkers provides
+			//
+			// most people will choose to keep these two values exactly the same because their goal is to
+			// increase parallelism as well as concurrency and such a lock-step approach ensures that no
+			// single outlier task affects the throughput of all the others in the same interval-segment of time.
 
-		switch s {
-		case "stop":
-			return
-		case "set workers":
-			cu.SetNumWorkers(numWorkers)
-			mlt.cfgChan <- cu
-		case "del worker", "remove worker":
-			numWorkers -= 1
+			switch s {
+			case "stop":
+				return
+			case "set workers":
+				cu.SetNumWorkers(numWorkers)
+				mlt.cfgChan <- cu
+			case "del worker", "remove worker":
+				numWorkers -= 1
 
-			cu.SetNumWorkers(numWorkers)
-			mlt.cfgChan <- cu
-		case "add worker":
-			numWorkers += 1
+				cu.SetNumWorkers(numWorkers)
+				mlt.cfgChan <- cu
+			case "add worker":
+				numWorkers += 1
 
-			cu.SetNumWorkers(numWorkers)
-			mlt.cfgChan <- cu
+				cu.SetNumWorkers(numWorkers)
+				mlt.cfgChan <- cu
+			}
 		}
-	}
+	}()
+
+	cancel()
+
+	logger.Warnw("waiting for all goroutines to finish")
+	wg.Wait()
+	logger.Warnw("all goroutines finished")
 }
