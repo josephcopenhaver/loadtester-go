@@ -41,6 +41,12 @@ type TaskProvider interface {
 	//
 	// Note that if you have only partially filled the slice, those filled task slots
 	// will still be run before termination of the loadtest.
+	//
+	// It is important to remember that if your loadtest loops around and you keep a large slice of
+	// tasks in memory just to place small chunks of that list into the passed in slice of this function
+	// that you could have a task executed by two separate goroutines at the same time under the right circumstances.
+	// Therefore, it's really important that the tasks either be stateless or concrete copies of the original task object are
+	// created when saved to the passed in slice of this function.
 	ReadTasks([]Doer) int
 	// UpdateConfigChan should return the same channel each time or nil;
 	// but once nil it must never be non-nil again
