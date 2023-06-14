@@ -18,11 +18,11 @@ func (t *task) Do(ctx context.Context, workerID int) error {
 	return nil
 }
 
-type myLoadtest struct {
+type myTaskProvider struct {
 	cfgChan chan loadtester.ConfigUpdate
 }
 
-func (mlt *myLoadtest) ReadTasks(p []loadtester.Doer) int {
+func (tp *myTaskProvider) ReadTasks(p []loadtester.Doer) int {
 	// make sure you only fill up to len
 	// filling less than len will signal that the loadtest is over
 
@@ -35,12 +35,12 @@ func (mlt *myLoadtest) ReadTasks(p []loadtester.Doer) int {
 	return i
 }
 
-func (mlt *myLoadtest) UpdateConfigChan() <-chan loadtester.ConfigUpdate {
-	return mlt.cfgChan
+func (tp *myTaskProvider) UpdateConfigChan() <-chan loadtester.ConfigUpdate {
+	return tp.cfgChan
 }
 
-func newMyLoadtest() *myLoadtest {
-	return &myLoadtest{
+func newMyTaskProvider() *myTaskProvider {
+	return &myTaskProvider{
 		cfgChan: make(chan loadtester.ConfigUpdate),
 	}
 }
@@ -71,12 +71,12 @@ func main() {
 	ctx, cancel := loadtester.RootContext(logger)
 	defer cancel()
 
-	mlt := newMyLoadtest()
+	tp := newMyTaskProvider()
 
 	numWorkers := 5
 
 	lt, err := loadtester.NewLoadtest(
-		mlt,
+		tp,
 		loadtester.Logger(logger),
 		loadtester.NumWorkers(numWorkers),
 		loadtester.NumIntervalTasks(25),
@@ -193,17 +193,17 @@ func main() {
 				return
 			case "set workers":
 				cu.SetNumWorkers(numWorkers)
-				mlt.cfgChan <- cu
+				tp.cfgChan <- cu
 			case "del worker", "remove worker":
 				numWorkers -= 1
 
 				cu.SetNumWorkers(numWorkers)
-				mlt.cfgChan <- cu
+				tp.cfgChan <- cu
 			case "add worker":
 				numWorkers += 1
 
 				cu.SetNumWorkers(numWorkers)
-				mlt.cfgChan <- cu
+				tp.cfgChan <- cu
 			}
 		}
 	}()
