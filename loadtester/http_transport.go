@@ -41,7 +41,7 @@ func (lt *Loadtest) NewHttpTransport() *http.Transport {
 	// just to ensure whenever one worker releases
 	// a connection back to the pool we're not impacted
 	// by the delay of that connection getting re-pooled
-	// it the underlying implementation which makes it available
+	// if the underlying implementation which makes it available
 	// for use again is asynchronous
 	maxConnections := lt.maxWorkers + runtime.NumCPU()
 
