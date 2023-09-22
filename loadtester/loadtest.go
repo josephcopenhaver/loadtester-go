@@ -158,7 +158,7 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		numIntervalTasks: cfg.numIntervalTasks,
 		interval:         cfg.interval,
 		retryTaskPool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				return &retryTask{}
 			},
 		},
@@ -385,7 +385,7 @@ func (lt *Loadtest) readRetries(p []Doer) int {
 	return i
 }
 
-func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
+func (lt *Loadtest) loadtestConfigAsJson() any {
 	type Config struct {
 		StartTime              string `json:"start_time"`
 		Interval               string `json:"interval"`
@@ -473,7 +473,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 
 	lt.logger.InfoContext(ctx,
 		"starting loadtest",
-		"config", lt.getLoadtestConfigAsJson(),
+		"config", lt.loadtestConfigAsJson(),
 	)
 
 	var wg sync.WaitGroup
@@ -499,7 +499,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]interface{}, 0, 12)
+	configChanges := make([]any, 0, 12)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
