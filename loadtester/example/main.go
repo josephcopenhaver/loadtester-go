@@ -4,12 +4,12 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/josephcopenhaver/loadtester-go/loadtester"
-	"go.uber.org/zap/zapcore"
 )
 
 type task struct{}
@@ -47,12 +47,13 @@ func newMyTaskProvider() *myTaskProvider {
 
 func main() {
 
-	var logger loadtester.SugaredLogger
+	var logger loadtester.StructuredLogger
 	{
-		level := zapcore.InfoLevel
+		level := slog.LevelInfo
 
 		if s := os.Getenv("LOG_LEVEL"); s != "" {
-			v, err := zapcore.ParseLevel(s)
+			var v slog.Level
+			err := v.UnmarshalText([]byte(s))
 			if err != nil {
 				panic(fmt.Errorf("failed to parse LOG_LEVEL environment variable: %w", err))
 			}
@@ -94,9 +95,9 @@ func main() {
 		// just to ensure all child workers exit before any cleanup runs
 		//
 		// it's duplicated on the positive path and does no harm to be called twice on the positive path
-		logger.Debugw("post-wg-decl: waiting for all goroutines to finish")
+		logger.DebugContext(ctx, "post-wg-decl: waiting for all goroutines to finish")
 		wg.Wait()
-		logger.Debugw("post-wg-decl: all goroutines finished")
+		logger.DebugContext(ctx, "post-wg-decl: all goroutines finished")
 	}()
 
 	//
@@ -113,10 +114,12 @@ func main() {
 		// the loadtest and don't use a wait group or goroutine for it
 
 		if err := lt.Run(ctx); err != nil {
-			logger.Panicw(
+			logger.ErrorContext(ctx,
 				"loadtest errored",
 				"error", err,
+				"panic", true,
 			)
+			panic(err)
 		}
 	}()
 
@@ -210,7 +213,7 @@ func main() {
 
 	cancel()
 
-	logger.Warnw("waiting for all goroutines to finish")
+	logger.WarnContext(ctx, "waiting for all goroutines to finish")
 	wg.Wait()
-	logger.Warnw("all goroutines finished")
+	logger.WarnContext(ctx, "all goroutines finished")
 }

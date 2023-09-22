@@ -7,13 +7,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/josephcopenhaver/loadtester-go/loadtester"
-	"go.uber.org/zap/zapcore"
 )
 
 type task struct {
@@ -30,7 +29,7 @@ func (t *task) Do(ctx context.Context, workerId int) error {
 		return err
 	}
 	defer res.Body.Close()
-	_, _ = io.Copy(ioutil.Discard, res.Body) // purposefully ignoring the read error: just trying to read the full body to ensure connection reuse on the happy path
+	_, _ = io.Copy(io.Discard, res.Body) // purposefully ignoring the read error: just trying to read the full body to ensure connection reuse on the happy path
 
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("expected status code of 200; got %d instead", res.StatusCode)
@@ -96,12 +95,13 @@ func newMyTaskProvider(timeout time.Duration, req *http.Request) *myTaskProvider
 
 func main() {
 
-	var logger loadtester.SugaredLogger
+	var logger loadtester.StructuredLogger
 	{
-		level := zapcore.InfoLevel
+		level := slog.LevelInfo
 
 		if s := os.Getenv("LOG_LEVEL"); s != "" {
-			v, err := zapcore.ParseLevel(s)
+			var v slog.Level
+			err := v.UnmarshalText([]byte(s))
 			if err != nil {
 				panic(fmt.Errorf("failed to parse LOG_LEVEL environment variable: %w", err))
 			}
