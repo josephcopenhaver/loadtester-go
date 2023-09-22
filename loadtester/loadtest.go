@@ -25,10 +25,8 @@ var (
 // TODO: RetriesDisabled runtime checks can turn into init time checks; same with MaxTasks based checks
 // I would not dream of doing this before proving it is warranted first.
 
-// TaskProvider describes how to read tasks into a
-// loadtest and how to control a loadtest's configuration
-// over time
-type TaskProvider interface {
+// TaskReader describes how to read tasks into a loadtest
+type TaskReader interface {
 	// ReadTasks fills the provided slice up to slice length starting at index 0 and returns how many records have been inserted
 	//
 	// Failing to fill the whole slice will signal the end of the loadtest.
@@ -48,9 +46,6 @@ type TaskProvider interface {
 	// Therefore, it's really important that the tasks either be stateless or concrete copies of the original task object are
 	// created when saved to the passed in slice of this function.
 	ReadTasks([]Doer) int
-	// UpdateConfigChan should return the same channel each time or nil;
-	// but once nil it must never be non-nil again
-	UpdateConfigChan() <-chan ConfigUpdate
 }
 
 type taskResultFlags struct {
@@ -71,7 +66,7 @@ type taskResult struct {
 }
 
 type Loadtest struct {
-	taskProvider    TaskProvider
+	taskReader      TaskReader
 	maxTasks        int
 	maxWorkers      int
 	numWorkers      int
@@ -80,6 +75,7 @@ type Loadtest struct {
 	resultWaitGroup sync.WaitGroup
 	taskChan        chan taskWithMeta
 	resultsChan     chan taskResult
+	cfgUpdateChan   chan ConfigUpdate
 
 	// intervalTasksSema will always have capacity set to the task interval rate + worker count
 	// but it is created with the maximum weight to allow up to max task interval rate + max
@@ -111,10 +107,10 @@ type Loadtest struct {
 	flushRetriesTimeout    time.Duration
 	retriesDisabled        bool
 
-	logger SugaredLogger
+	logger StructuredLogger
 }
 
-func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtest, error) {
+func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, error) {
 
 	cfg, err := newLoadtestConfig(options...)
 	if err != nil {
@@ -148,13 +144,14 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 	}
 
 	return &Loadtest{
-		taskProvider:  taskProvider,
+		taskReader:    taskReader,
 		maxTasks:      cfg.maxTasks,
 		maxWorkers:    cfg.maxWorkers,
 		numWorkers:    cfg.numWorkers,
 		workers:       make([]chan struct{}, 0, cfg.maxWorkers),
 		taskChan:      make(chan taskWithMeta, cfg.maxIntervalTasks),
 		resultsChan:   make(chan taskResult, resultsChanSize),
+		cfgUpdateChan: make(chan ConfigUpdate),
 		retryTaskChan: retryTaskChan,
 
 		maxIntervalTasks: cfg.maxIntervalTasks,
@@ -178,6 +175,21 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 		logger:                 cfg.logger,
 		intervalTasksSema:      sm,
 	}, nil
+}
+
+// UpdateConfig only returns false if the loadtest's run method has exited
+//
+// This call can potentially block the caller on loadtest shutdown phase.
+func (lt *Loadtest) UpdateConfig(cu ConfigUpdate) (handled bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			handled = false
+		}
+	}()
+
+	lt.cfgUpdateChan <- cu
+
+	return true
 }
 
 func (lt *Loadtest) addWorker(ctx context.Context, workerID int) {
@@ -266,7 +278,7 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, task Doer) (result
 	defer func() {
 
 		if err_resp != nil {
-			lt.logger.Warnw(
+			lt.logger.WarnContext(ctx,
 				"task error",
 				"worker_id", workerID,
 				"error", err_resp,
@@ -279,21 +291,21 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, task Doer) (result
 
 			switch v := r.(type) {
 			case error:
-				lt.logger.Errorw(
+				lt.logger.ErrorContext(ctx,
 					"worker recovered from panic",
 					"worker_id", workerID,
 					"phase", phase,
 					"error", v,
 				)
 			case []byte:
-				lt.logger.Errorw(
+				lt.logger.ErrorContext(ctx,
 					"worker recovered from panic",
 					"worker_id", workerID,
 					"phase", phase,
 					"error", string(v),
 				)
 			case string:
-				lt.logger.Errorw(
+				lt.logger.ErrorContext(ctx,
 					"worker recovered from panic",
 					"worker_id", workerID,
 					"phase", phase,
@@ -302,7 +314,7 @@ func (lt *Loadtest) doTask(ctx context.Context, workerID int, task Doer) (result
 			default:
 				const msg = "unknown cause"
 
-				lt.logger.Errorw(
+				lt.logger.ErrorContext(ctx,
 					"worker recovered from panic",
 					"worker_id", workerID,
 					"phase", phase,
@@ -403,6 +415,7 @@ func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 	}
 }
 
+// Run can only be called once per loadtest instance, it is stateful
 func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 	// all that should ever be present in this function is logic to aggregate async errors
@@ -433,6 +446,9 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 
+	cfgUpdateChan := lt.cfgUpdateChan
+	defer close(cfgUpdateChan)
+
 	lt.startTime = time.Now()
 
 	cd := &lt.csvData
@@ -455,7 +471,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 		}
 	}
 
-	lt.logger.Infow(
+	lt.logger.InfoContext(ctx,
 		"starting loadtest",
 		"config", lt.getLoadtestConfigAsJson(),
 	)
@@ -482,7 +498,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
-	updateChan := lt.taskProvider.UpdateConfigChan()
+	taskReader := lt.taskReader
 	configChanges := make([]interface{}, 0, 12)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
@@ -503,7 +519,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 		err := func(flushRetries bool) error {
 			if !flushRetries {
 
-				lt.logger.Debugw(
+				lt.logger.DebugContext(ctx,
 					"not waiting on retries to flush on shutdown",
 					"reason", "retries disabled or flush retries on shutdown disabled",
 					"num_tasks", numTasks,
@@ -513,7 +529,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 			}
 
 			if err := ctx.Err(); err != nil {
-				lt.logger.Warnw(
+				lt.logger.WarnContext(ctx,
 					"not waiting on retries to flush on shutdown",
 					"reason", "user stopped loadtest",
 					"num_tasks", numTasks,
@@ -522,14 +538,14 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 				return nil
 			}
 
-			lt.logger.Debugw(
+			lt.logger.DebugContext(ctx,
 				"waiting on retries to flush",
 				"num_tasks", numTasks,
 			)
 
 			if meta.NumIntervalTasks <= 0 || numWorkers <= 0 {
 
-				lt.logger.Errorw(
+				lt.logger.ErrorContext(ctx,
 					"retry flushing could not be attempted",
 					"num_tasks", numTasks,
 					"num_interval_tasks", meta.NumIntervalTasks,
@@ -541,7 +557,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 
 			preflushNumTasks := numTasks
 
-			lt.logger.Warnw(
+			lt.logger.WarnContext(ctx,
 				"shutting down: flushing retries",
 				"num_tasks", numTasks,
 				"flush_retries_timeout", lt.flushRetriesTimeout.String(),
@@ -557,7 +573,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 			for {
 
 				if err := shutdownCtx.Err(); err != nil {
-					lt.logger.Errorw(
+					lt.logger.ErrorContext(ctx,
 						"failed to flush all retries",
 						"preflush_num_tasks", preflushNumTasks,
 						"num_tasks", numTasks,
@@ -572,7 +588,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 				for {
 
 					if err := shutdownCtx.Err(); err != nil {
-						lt.logger.Errorw(
+						lt.logger.ErrorContext(ctx,
 							"failed to flush all retries",
 							"preflush_num_tasks", preflushNumTasks,
 							"num_tasks", numTasks,
@@ -584,7 +600,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 
 					if maxTasks > 0 {
 						if numTasks >= maxTasks {
-							lt.logger.Errorw(
+							lt.logger.ErrorContext(ctx,
 								"failed to flush all retries",
 								"preflush_num_tasks", preflushNumTasks,
 								"num_tasks", numTasks,
@@ -619,7 +635,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 
 					select {
 					case <-ctxDone:
-						lt.logger.Warnw(
+						lt.logger.WarnContext(ctx,
 							"user stopped loadtest while attempting to flush retries",
 							"preflush_num_tasks", preflushNumTasks,
 							"num_tasks", numTasks,
@@ -634,7 +650,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 					// in the shutdown retry flow we always want to acquire before reading retries
 					// to avoid a deadlock edge case of the retry queue being full, all workers tasks failed and need to be retried
 					if err := lt.intervalTasksSema.Acquire(shutdownCtx, int64(numNewTasks)); err != nil {
-						lt.logger.Errorw(
+						lt.logger.ErrorContext(ctx,
 							"failed to flush all retries",
 							"preflush_num_tasks", preflushNumTasks,
 							"num_tasks", numTasks,
@@ -649,7 +665,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 					if taskBufSize <= 0 {
 						// wait for any pending tasks to flush and try read again
 
-						lt.logger.Debugw(
+						lt.logger.DebugContext(ctx,
 							"verifying all retries have flushed",
 							"preflush_num_tasks", preflushNumTasks,
 							"num_tasks", numTasks,
@@ -661,7 +677,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 						taskBufSize = lt.readRetries(taskBuf[:numNewTasks:numNewTasks])
 						if taskBufSize <= 0 {
 
-							lt.logger.Infow(
+							lt.logger.InfoContext(ctx,
 								"all retries flushed",
 								"preflush_num_tasks", preflushNumTasks,
 								"num_tasks", numTasks,
@@ -748,29 +764,41 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 		}
 
 		// wait for all results to come in
-		lt.logger.Debugw("waiting for loadtest results")
+		lt.logger.DebugContext(ctx,
+			"waiting for loadtest results",
+		)
 		lt.resultWaitGroup.Wait()
 
-		lt.logger.Debugw("stopping result handler routine")
+		lt.logger.DebugContext(ctx,
+			"stopping result handler routine",
+		)
 
 		// signal for result handler routines to stop
 		close(lt.resultsChan)
 
 		// signal for workers to stop
-		lt.logger.Debugw("stopping workers")
+		lt.logger.DebugContext(ctx,
+			"stopping workers",
+		)
 		for i := 0; i < len(lt.workers); i++ {
 			close(lt.workers[i])
 		}
 
 		// wait for result handler routines to stop
-		lt.logger.Debugw("waiting for result handler routines to stop")
+		lt.logger.DebugContext(ctx,
+			"waiting for result handler routines to stop",
+		)
 		wg.Wait()
 
 		// wait for workers to stop
-		lt.logger.Debugw("waiting for workers to stop")
+		lt.logger.DebugContext(ctx,
+			"waiting for workers to stop",
+		)
 		lt.workerWaitGroup.Wait()
 
-		lt.logger.Infow("loadtest stopped")
+		lt.logger.InfoContext(ctx,
+			"loadtest stopped",
+		)
 	}()
 
 	// getTaskSlotCount is the task emission back pressure
@@ -804,7 +832,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 
 				// prevent over committing on the maxWorkers count
 				if n < 0 {
-					lt.logger.Errorw(
+					lt.logger.ErrorContext(ctx,
 						"config update not within loadtest boundary conditions: numWorkers",
 						"reason", "update tried to set numWorkers too low",
 						"remediation_taken", "using min value",
@@ -813,7 +841,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 					)
 					n = 0
 				} else if n > lt.maxWorkers {
-					lt.logger.Errorw(
+					lt.logger.ErrorContext(ctx,
 						"config update not within loadtest boundary conditions: numWorkers",
 						"reason", "update tried to set numWorkers too high",
 						"remediation_hint", "increase the loadtest MaxWorkers setting",
@@ -858,7 +886,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 
 				// prevent over committing on the maxIntervalTasks count
 				if n < 0 {
-					lt.logger.Errorw(
+					lt.logger.ErrorContext(ctx,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
 						"reason", "update tried to set numIntervalTasks too low",
 						"remediation_taken", "using min value",
@@ -867,7 +895,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 					)
 					n = 0
 				} else if n > lt.maxIntervalTasks {
-					lt.logger.Errorw(
+					lt.logger.ErrorContext(ctx,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
 						"reason", "update tried to set numIntervalTasks too high",
 						"remediation_hint", "increase the loadtest MaxIntervalTasks setting",
@@ -892,7 +920,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 				n := cu.interval.val
 
 				if n < 0 {
-					lt.logger.Errorw(
+					lt.logger.ErrorContext(ctx,
 						"config update not within loadtest boundary conditions: interval",
 						"reason", "update tried to set interval too low",
 						"remediation_taken", "using min value",
@@ -922,7 +950,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 					} else {
 						prepSemaErr = lt.intervalTasksSema.Acquire(ctx, int64(taskSlotCount-newTaskSlotCount))
 						if prepSemaErr != nil {
-							lt.logger.Errorw(
+							lt.logger.ErrorContext(ctx,
 								"loadtest config update: failed to pre-acquire load generation slots",
 								"error", prepSemaErr,
 							)
@@ -937,7 +965,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 			}
 
 			if !cu.onStartup {
-				lt.logger.Warnw(
+				lt.logger.WarnContext(ctx,
 					"loadtest config updated",
 					configChanges...,
 				)
@@ -955,7 +983,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 					paused = true
 					pauseStart = time.Now().UTC()
 
-					lt.logger.Warnw(
+					lt.logger.WarnContext(ctx,
 						"pausing load generation",
 						"num_interval_tasks", meta.NumIntervalTasks,
 						"num_workers", numWorkers,
@@ -975,7 +1003,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 				select {
 				case <-ctxDone:
 					return errLoadtestContextDone
-				case cu = <-updateChan:
+				case cu = <-cfgUpdateChan:
 					continue
 				}
 			}
@@ -984,7 +1012,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 				paused = false
 				intervalID = time.Now()
 
-				lt.logger.Warnw(
+				lt.logger.WarnContext(ctx,
 					"resuming load generation",
 					"num_interval_tasks", meta.NumIntervalTasks,
 					"num_workers", numWorkers,
@@ -1015,7 +1043,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 	for {
 		if maxTasks > 0 {
 			if numTasks >= maxTasks {
-				lt.logger.Warnw(
+				lt.logger.WarnContext(ctx,
 					"loadtest finished: max task count reached",
 					"max_tasks", maxTasks,
 				)
@@ -1031,7 +1059,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 		select {
 		case <-ctxDone:
 			return nil
-		case cu := <-updateChan:
+		case cu := <-cfgUpdateChan:
 			if err := handleConfigUpdateAndPauseState(cu); err != nil {
 				if err == errLoadtestContextDone {
 					return nil
@@ -1069,7 +1097,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 
 		if taskBufSize < numNewTasks {
 			maxSize := numNewTasks - taskBufSize
-			n := lt.taskProvider.ReadTasks(taskBuf[taskBufSize:numNewTasks:numNewTasks])
+			n := taskReader.ReadTasks(taskBuf[taskBufSize:numNewTasks:numNewTasks])
 			if n < 0 || n > maxSize {
 				panic(ErrBadReadTasksImpl)
 			}
@@ -1084,7 +1112,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 					// return immediately if there is nothing
 					// new to enqueue
 
-					lt.logger.Warnw(
+					lt.logger.WarnContext(ctx,
 						"stopping loadtest: ReadTasks did not load enough tasks",
 						"final_task_delta", 0,
 					)
@@ -1092,7 +1120,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 					return nil
 				}
 
-				lt.logger.Debugw(
+				lt.logger.DebugContext(ctx,
 					"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
 					"retry_count", taskBufSize,
 				)
@@ -1139,7 +1167,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 			// increase numTasks total by actual number queued
 			// and stop traffic generation
 			numTasks += taskBufSize
-			lt.logger.Warnw(
+			lt.logger.WarnContext(ctx,
 				"stopping loadtest: ReadTasks did not load enough tasks",
 				"final_task_delta", taskBufSize,
 			)

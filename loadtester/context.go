@@ -11,7 +11,7 @@ import (
 // system process receives an interrupt, sigint, or sigterm
 //
 // Also returns a function that can be used to cancel the context.
-func RootContext(logger SugaredLogger) (context.Context, func()) {
+func RootContext(logger StructuredLogger) (context.Context, func()) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -24,7 +24,7 @@ func RootContext(logger SugaredLogger) (context.Context, func()) {
 
 		done := ctx.Done()
 
-		requester := "unknown"
+		var requester string
 		select {
 		case <-procDone:
 			requester = "user"
@@ -36,7 +36,7 @@ func RootContext(logger SugaredLogger) (context.Context, func()) {
 			return
 		}
 
-		logger.Warnw(
+		logger.WarnContext(ctx,
 			"shutdown requested",
 			"requester", requester,
 		)

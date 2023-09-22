@@ -4,12 +4,12 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
 
-	"github.com/josephcopenhaver/loadtester-go/loadtester"
-	"go.uber.org/zap/zapcore"
+	"github.com/josephcopenhaver/loadtester-go/v2/loadtester"
 )
 
 type task struct{}
@@ -18,11 +18,9 @@ func (t *task) Do(ctx context.Context, workerID int) error {
 	return nil
 }
 
-type myTaskProvider struct {
-	cfgChan chan loadtester.ConfigUpdate
-}
+type myTaskReader struct{}
 
-func (tp *myTaskProvider) ReadTasks(p []loadtester.Doer) int {
+func (tr *myTaskReader) ReadTasks(p []loadtester.Doer) int {
 	// make sure you only fill up to len
 	// filling less than len will signal that the loadtest is over
 
@@ -35,24 +33,19 @@ func (tp *myTaskProvider) ReadTasks(p []loadtester.Doer) int {
 	return i
 }
 
-func (tp *myTaskProvider) UpdateConfigChan() <-chan loadtester.ConfigUpdate {
-	return tp.cfgChan
-}
-
-func newMyTaskProvider() *myTaskProvider {
-	return &myTaskProvider{
-		cfgChan: make(chan loadtester.ConfigUpdate),
-	}
+func newMyTaskReader() *myTaskReader {
+	return &myTaskReader{}
 }
 
 func main() {
 
-	var logger loadtester.SugaredLogger
+	var logger loadtester.StructuredLogger
 	{
-		level := zapcore.InfoLevel
+		level := slog.LevelInfo
 
 		if s := os.Getenv("LOG_LEVEL"); s != "" {
-			v, err := zapcore.ParseLevel(s)
+			var v slog.Level
+			err := v.UnmarshalText([]byte(s))
 			if err != nil {
 				panic(fmt.Errorf("failed to parse LOG_LEVEL environment variable: %w", err))
 			}
@@ -65,18 +58,19 @@ func main() {
 			panic(err)
 		}
 
+		slog.SetDefault(v)
 		logger = v
 	}
 
 	ctx, cancel := loadtester.RootContext(logger)
 	defer cancel()
 
-	tp := newMyTaskProvider()
+	tr := newMyTaskReader()
 
 	numWorkers := 5
 
 	lt, err := loadtester.NewLoadtest(
-		tp,
+		tr,
 		loadtester.Logger(logger),
 		loadtester.NumWorkers(numWorkers),
 		loadtester.NumIntervalTasks(25),
@@ -94,9 +88,9 @@ func main() {
 		// just to ensure all child workers exit before any cleanup runs
 		//
 		// it's duplicated on the positive path and does no harm to be called twice on the positive path
-		logger.Debugw("post-wg-decl: waiting for all goroutines to finish")
+		logger.DebugContext(ctx, "post-wg-decl: waiting for all goroutines to finish")
 		wg.Wait()
-		logger.Debugw("post-wg-decl: all goroutines finished")
+		logger.DebugContext(ctx, "post-wg-decl: all goroutines finished")
 	}()
 
 	//
@@ -113,10 +107,12 @@ func main() {
 		// the loadtest and don't use a wait group or goroutine for it
 
 		if err := lt.Run(ctx); err != nil {
-			logger.Panicw(
+			logger.ErrorContext(ctx,
 				"loadtest errored",
 				"error", err,
+				"panic", true,
 			)
+			panic(err)
 		}
 	}()
 
@@ -193,24 +189,22 @@ func main() {
 				return
 			case "set workers":
 				cu.SetNumWorkers(numWorkers)
-				tp.cfgChan <- cu
 			case "del worker", "remove worker":
 				numWorkers -= 1
 
 				cu.SetNumWorkers(numWorkers)
-				tp.cfgChan <- cu
 			case "add worker":
 				numWorkers += 1
 
 				cu.SetNumWorkers(numWorkers)
-				tp.cfgChan <- cu
 			}
+			_ = lt.UpdateConfig(cu)
 		}
 	}()
 
 	cancel()
 
-	logger.Warnw("waiting for all goroutines to finish")
+	logger.WarnContext(ctx, "waiting for all goroutines to finish")
 	wg.Wait()
-	logger.Warnw("all goroutines finished")
+	logger.WarnContext(ctx, "all goroutines finished")
 }

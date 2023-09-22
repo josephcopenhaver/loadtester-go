@@ -3,9 +3,8 @@ package loadtester
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 type loadtestConfig struct {
@@ -26,7 +25,7 @@ type loadtestConfig struct {
 	flushRetriesTimeout    time.Duration
 	flushRetriesOnShutdown bool
 	retriesDisabled        bool
-	logger                 SugaredLogger
+	logger                 StructuredLogger
 }
 
 func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
@@ -97,7 +96,7 @@ func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
 	}
 
 	if cfg.logger == nil {
-		logger, err := NewLogger(zap.InfoLevel)
+		logger, err := NewLogger(slog.LevelInfo)
 		if err != nil {
 			return result, fmt.Errorf("failed to create a default logger: %w", err)
 		}
@@ -197,7 +196,7 @@ func RetriesDisabled(b bool) LoadtestOption {
 	}
 }
 
-func Logger(logger SugaredLogger) LoadtestOption {
+func Logger(logger StructuredLogger) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.logger = logger
 	}
