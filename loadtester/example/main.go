@@ -198,7 +198,7 @@ func main() {
 
 				cu.SetNumWorkers(numWorkers)
 			}
-			lt.UpdateConfig(cu)
+			_ = lt.UpdateConfig(cu)
 		}
 	}()
 

@@ -151,7 +151,7 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		workers:       make([]chan struct{}, 0, cfg.maxWorkers),
 		taskChan:      make(chan taskWithMeta, cfg.maxIntervalTasks),
 		resultsChan:   make(chan taskResult, resultsChanSize),
-		cfgUpdateChan: make(chan ConfigUpdate, 1),
+		cfgUpdateChan: make(chan ConfigUpdate),
 		retryTaskChan: retryTaskChan,
 
 		maxIntervalTasks: cfg.maxIntervalTasks,
@@ -177,8 +177,19 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 	}, nil
 }
 
-func (lt *Loadtest) UpdateConfig(cu ConfigUpdate) {
+// UpdateConfig only returns false if the loadtest's run method has exited
+//
+// This call can potentially block the caller on loadtest shutdown phase.
+func (lt *Loadtest) UpdateConfig(cu ConfigUpdate) (handled bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			handled = false
+		}
+	}()
+
 	lt.cfgUpdateChan <- cu
+
+	return true
 }
 
 func (lt *Loadtest) addWorker(ctx context.Context, workerID int) {
@@ -404,6 +415,7 @@ func (lt *Loadtest) getLoadtestConfigAsJson() interface{} {
 	}
 }
 
+// Run can only be called once per loadtest instance, it is stateful
 func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 
 	// all that should ever be present in this function is logic to aggregate async errors
@@ -433,6 +445,9 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 }
 
 func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
+
+	cfgUpdateChan := lt.cfgUpdateChan
+	defer close(cfgUpdateChan)
 
 	lt.startTime = time.Now()
 
@@ -484,7 +499,6 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	cfgUpdateChan := lt.cfgUpdateChan
 	configChanges := make([]interface{}, 0, 12)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
