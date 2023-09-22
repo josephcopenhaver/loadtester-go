@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/josephcopenhaver/loadtester-go/loadtester"
+	"github.com/josephcopenhaver/loadtester-go/v2/loadtester"
 )
 
 type task struct {
@@ -38,12 +38,11 @@ func (t *task) Do(ctx context.Context, workerId int) error {
 	return nil
 }
 
-type myTaskProvider struct {
-	task    *task
-	cfgChan chan loadtester.ConfigUpdate
+type myTaskReader struct {
+	task *task
 }
 
-func (tp *myTaskProvider) ReadTasks(p []loadtester.Doer) int {
+func (tr *myTaskReader) ReadTasks(p []loadtester.Doer) int {
 	// make sure you only fill up to len
 	// filling less than len will signal that the loadtest is over
 
@@ -58,26 +57,22 @@ func (tp *myTaskProvider) ReadTasks(p []loadtester.Doer) int {
 		//
 		// there is no state involved
 
-		p[i] = tp.task
+		p[i] = tr.task
 		i++
 	}
 
 	return i
 }
 
-func (tp *myTaskProvider) UpdateConfigChan() <-chan loadtester.ConfigUpdate {
-	return tp.cfgChan
+func (tr *myTaskReader) SetTransport(rt http.RoundTripper) {
+	tr.task.client.Transport = rt
 }
 
-func (tp *myTaskProvider) SetTransport(rt http.RoundTripper) {
-	tp.task.client.Transport = rt
+func (tr *myTaskReader) CloseIdleConnections() {
+	tr.task.client.CloseIdleConnections()
 }
 
-func (tp *myTaskProvider) CloseIdleConnections() {
-	tp.task.client.CloseIdleConnections()
-}
-
-func newMyTaskProvider(timeout time.Duration, req *http.Request) *myTaskProvider {
+func newMyTaskReader(timeout time.Duration, req *http.Request) *myTaskReader {
 
 	t := task{
 		baseReq: req,
@@ -87,9 +82,8 @@ func newMyTaskProvider(timeout time.Duration, req *http.Request) *myTaskProvider
 		},
 	}
 
-	return &myTaskProvider{
-		task:    &t,
-		cfgChan: make(chan loadtester.ConfigUpdate),
+	return &myTaskReader{
+		task: &t,
 	}
 }
 
@@ -114,6 +108,7 @@ func main() {
 			panic(err)
 		}
 
+		slog.SetDefault(v)
 		logger = v
 	}
 
@@ -124,7 +119,7 @@ func main() {
 		ctx = c
 	}
 
-	var tp *myTaskProvider
+	var tr *myTaskReader
 	{
 		req, err := http.NewRequest(http.MethodGet, "https://example.com/", http.NoBody)
 		if err != nil {
@@ -135,16 +130,16 @@ func main() {
 		// see https://www.rfc-editor.org/rfc/rfc7231#section-5.5.3
 		req.Header.Set("User-Agent", "github.com--josephcopenhaver--loadtester-go--loadtester--example_http--main.go/1.0")
 
-		v := newMyTaskProvider(20*time.Second, req)
+		v := newMyTaskReader(20*time.Second, req)
 		defer v.CloseIdleConnections() // ensures your process closes idle connections in the http client's connection pool on shutdown
 
-		tp = v
+		tr = v
 	}
 
 	const parallelism = 1
 
 	lt, err := loadtester.NewLoadtest(
-		tp,
+		tr,
 		loadtester.Logger(logger),
 		loadtester.NumWorkers(parallelism),
 		loadtester.NumIntervalTasks(parallelism),
@@ -161,7 +156,7 @@ func main() {
 
 		// TODO: feel free to customize the transport's IdleConnTimeout or TLSHandshakeTimeout as needed for your case
 
-		tp.SetTransport(ht)
+		tr.SetTransport(ht)
 	}
 
 	if err := lt.Run(ctx); err != nil {

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/josephcopenhaver/loadtester-go/loadtester"
+	"github.com/josephcopenhaver/loadtester-go/v2/loadtester"
 )
 
 type task struct{}
@@ -18,11 +18,9 @@ func (t *task) Do(ctx context.Context, workerID int) error {
 	return nil
 }
 
-type myTaskProvider struct {
-	cfgChan chan loadtester.ConfigUpdate
-}
+type myTaskReader struct{}
 
-func (tp *myTaskProvider) ReadTasks(p []loadtester.Doer) int {
+func (tr *myTaskReader) ReadTasks(p []loadtester.Doer) int {
 	// make sure you only fill up to len
 	// filling less than len will signal that the loadtest is over
 
@@ -35,14 +33,8 @@ func (tp *myTaskProvider) ReadTasks(p []loadtester.Doer) int {
 	return i
 }
 
-func (tp *myTaskProvider) UpdateConfigChan() <-chan loadtester.ConfigUpdate {
-	return tp.cfgChan
-}
-
-func newMyTaskProvider() *myTaskProvider {
-	return &myTaskProvider{
-		cfgChan: make(chan loadtester.ConfigUpdate),
-	}
+func newMyTaskReader() *myTaskReader {
+	return &myTaskReader{}
 }
 
 func main() {
@@ -66,18 +58,19 @@ func main() {
 			panic(err)
 		}
 
+		slog.SetDefault(v)
 		logger = v
 	}
 
 	ctx, cancel := loadtester.RootContext(logger)
 	defer cancel()
 
-	tp := newMyTaskProvider()
+	tr := newMyTaskReader()
 
 	numWorkers := 5
 
 	lt, err := loadtester.NewLoadtest(
-		tp,
+		tr,
 		loadtester.Logger(logger),
 		loadtester.NumWorkers(numWorkers),
 		loadtester.NumIntervalTasks(25),
@@ -196,18 +189,16 @@ func main() {
 				return
 			case "set workers":
 				cu.SetNumWorkers(numWorkers)
-				tp.cfgChan <- cu
 			case "del worker", "remove worker":
 				numWorkers -= 1
 
 				cu.SetNumWorkers(numWorkers)
-				tp.cfgChan <- cu
 			case "add worker":
 				numWorkers += 1
 
 				cu.SetNumWorkers(numWorkers)
-				tp.cfgChan <- cu
 			}
+			lt.UpdateConfig(cu)
 		}
 	}()
 

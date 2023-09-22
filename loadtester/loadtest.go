@@ -25,10 +25,8 @@ var (
 // TODO: RetriesDisabled runtime checks can turn into init time checks; same with MaxTasks based checks
 // I would not dream of doing this before proving it is warranted first.
 
-// TaskProvider describes how to read tasks into a
-// loadtest and how to control a loadtest's configuration
-// over time
-type TaskProvider interface {
+// TaskReader describes how to read tasks into a loadtest
+type TaskReader interface {
 	// ReadTasks fills the provided slice up to slice length starting at index 0 and returns how many records have been inserted
 	//
 	// Failing to fill the whole slice will signal the end of the loadtest.
@@ -48,9 +46,6 @@ type TaskProvider interface {
 	// Therefore, it's really important that the tasks either be stateless or concrete copies of the original task object are
 	// created when saved to the passed in slice of this function.
 	ReadTasks([]Doer) int
-	// UpdateConfigChan should return the same channel each time or nil;
-	// but once nil it must never be non-nil again
-	UpdateConfigChan() <-chan ConfigUpdate
 }
 
 type taskResultFlags struct {
@@ -71,7 +66,7 @@ type taskResult struct {
 }
 
 type Loadtest struct {
-	taskProvider    TaskProvider
+	taskReader      TaskReader
 	maxTasks        int
 	maxWorkers      int
 	numWorkers      int
@@ -80,6 +75,7 @@ type Loadtest struct {
 	resultWaitGroup sync.WaitGroup
 	taskChan        chan taskWithMeta
 	resultsChan     chan taskResult
+	cfgUpdateChan   chan ConfigUpdate
 
 	// intervalTasksSema will always have capacity set to the task interval rate + worker count
 	// but it is created with the maximum weight to allow up to max task interval rate + max
@@ -114,7 +110,7 @@ type Loadtest struct {
 	logger StructuredLogger
 }
 
-func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtest, error) {
+func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, error) {
 
 	cfg, err := newLoadtestConfig(options...)
 	if err != nil {
@@ -148,13 +144,14 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 	}
 
 	return &Loadtest{
-		taskProvider:  taskProvider,
+		taskReader:    taskReader,
 		maxTasks:      cfg.maxTasks,
 		maxWorkers:    cfg.maxWorkers,
 		numWorkers:    cfg.numWorkers,
 		workers:       make([]chan struct{}, 0, cfg.maxWorkers),
 		taskChan:      make(chan taskWithMeta, cfg.maxIntervalTasks),
 		resultsChan:   make(chan taskResult, resultsChanSize),
+		cfgUpdateChan: make(chan ConfigUpdate, 1),
 		retryTaskChan: retryTaskChan,
 
 		maxIntervalTasks: cfg.maxIntervalTasks,
@@ -178,6 +175,10 @@ func NewLoadtest(taskProvider TaskProvider, options ...LoadtestOption) (*Loadtes
 		logger:                 cfg.logger,
 		intervalTasksSema:      sm,
 	}, nil
+}
+
+func (lt *Loadtest) UpdateConfig(cu ConfigUpdate) {
+	lt.cfgUpdateChan <- cu
 }
 
 func (lt *Loadtest) addWorker(ctx context.Context, workerID int) {
@@ -482,7 +483,8 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
-	updateChan := lt.taskProvider.UpdateConfigChan()
+	taskReader := lt.taskReader
+	cfgUpdateChan := lt.cfgUpdateChan
 	configChanges := make([]interface{}, 0, 12)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
@@ -987,7 +989,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 				select {
 				case <-ctxDone:
 					return errLoadtestContextDone
-				case cu = <-updateChan:
+				case cu = <-cfgUpdateChan:
 					continue
 				}
 			}
@@ -1043,7 +1045,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 		select {
 		case <-ctxDone:
 			return nil
-		case cu := <-updateChan:
+		case cu := <-cfgUpdateChan:
 			if err := handleConfigUpdateAndPauseState(cu); err != nil {
 				if err == errLoadtestContextDone {
 					return nil
@@ -1081,7 +1083,7 @@ func (lt *Loadtest) run(ctx context.Context, shutdownErrResp *error) error {
 
 		if taskBufSize < numNewTasks {
 			maxSize := numNewTasks - taskBufSize
-			n := lt.taskProvider.ReadTasks(taskBuf[taskBufSize:numNewTasks:numNewTasks])
+			n := taskReader.ReadTasks(taskBuf[taskBufSize:numNewTasks:numNewTasks])
 			if n < 0 || n > maxSize {
 				panic(ErrBadReadTasksImpl)
 			}
