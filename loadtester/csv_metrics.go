@@ -57,8 +57,8 @@ func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
 	enc.SetEscapeHTML(false)
 
 	err := enc.Encode(struct {
-		C interface{} `json:"config"`
-	}{lt.getLoadtestConfigAsJson()})
+		C any `json:"config"`
+	}{lt.loadtestConfigAsJson()})
 	if err != nil {
 		return err
 	}
