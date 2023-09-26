@@ -100,13 +100,12 @@ type Loadtest struct {
 	flushRetriesTimeout    time.Duration
 	logger                 StructuredLogger
 	run                    func(context.Context, *error) error
-	doTask                 func(context.Context, int, Doer) taskResultFlags
+	doTask                 func(context.Context, int, taskWithMeta)
 	writeOutputCsvRow      func(metricRecord)
 	flushRetriesOnShutdown bool
 	retriesDisabled        bool
+	metricsEnabled         bool
 }
-
-// TODO: convert csvOutputDisabled from a repeated side-effect runtime inline-check to a config-load time check without side effects
 
 func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, error) {
 
@@ -122,9 +121,9 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 	const intervalPossibleLagResultCount = 1
 	resultsChanSize := (cfg.maxIntervalTasks + intervalPossibleLagResultCount) * cfg.outputBufferingFactor
 
-	var csvWriteErr error
-	if cfg.csvOutputDisabled {
-		csvWriteErr = errCsvWriterDisabled
+	var resultsChan chan taskResult
+	if !cfg.csvOutputDisabled {
+		resultsChan = make(chan taskResult, resultsChanSize)
 	}
 
 	var retryTaskChan chan *retryTask
@@ -155,7 +154,7 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		numWorkers:    cfg.numWorkers,
 		workers:       make([]chan struct{}, 0, cfg.maxWorkers),
 		taskChan:      make(chan taskWithMeta, cfg.maxIntervalTasks),
-		resultsChan:   make(chan taskResult, resultsChanSize),
+		resultsChan:   resultsChan,
 		cfgUpdateChan: make(chan ConfigUpdate),
 		retryTaskChan: retryTaskChan,
 
@@ -169,7 +168,6 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		csvData: csvData{
 			outputFilename: cfg.csvOutputFilename,
 			flushInterval:  cfg.csvOutputFlushInterval,
-			writeErr:       csvWriteErr,
 		},
 
 		flushRetriesTimeout:    cfg.flushRetriesTimeout,
@@ -177,6 +175,7 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		retriesDisabled:        cfg.retriesDisabled,
 		logger:                 cfg.logger,
 		intervalTasksSema:      sm,
+		metricsEnabled:         !cfg.csvOutputDisabled,
 	}
 
 	if cfg.maxTasks > 0 {
@@ -186,18 +185,38 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 	}
 
 	if !cfg.retriesDisabled {
-		lt.doTask = lt.doTask_retriesEnabled
-		if cfg.maxTasks > 0 {
-			lt.run = lt.run_retriesEnabled_maxTasksGTZero
+		if !cfg.csvOutputDisabled {
+			lt.doTask = lt.doTask_retriesEnabled_metricsEnabled
 		} else {
-			lt.run = lt.run_retriesEnabled_maxTasksNotGTZero
+			lt.doTask = lt.doTask_retriesEnabled_metricsDisabled
+		}
+		if cfg.maxTasks > 0 {
+			if !cfg.csvOutputDisabled {
+				lt.run = lt.run_retriesEnabled_maxTasksGTZero_metricsEnabled
+			} else {
+				lt.run = lt.run_retriesEnabled_maxTasksGTZero_metricsDisabled
+			}
+		} else if !cfg.csvOutputDisabled {
+			lt.run = lt.run_retriesEnabled_maxTasksNotGTZero_metricsEnabled
+		} else {
+			lt.run = lt.run_retriesEnabled_maxTasksNotGTZero_metricsDisabled
 		}
 	} else {
-		lt.doTask = lt.doTask_retriesDisabled
-		if cfg.maxTasks > 0 {
-			lt.run = lt.run_retriesDisabled_maxTasksGTZero
+		if !cfg.csvOutputDisabled {
+			lt.doTask = lt.doTask_retriesDisabled_metricsEnabled
 		} else {
-			lt.run = lt.run_retriesDisabled_maxTasksNotGTZero
+			lt.doTask = lt.doTask_retriesDisabled_metricsDisabled
+		}
+		if cfg.maxTasks > 0 {
+			if !cfg.csvOutputDisabled {
+				lt.run = lt.run_retriesDisabled_maxTasksGTZero_metricsEnabled
+			} else {
+				lt.run = lt.run_retriesDisabled_maxTasksGTZero_metricsDisabled
+			}
+		} else if !cfg.csvOutputDisabled {
+			lt.run = lt.run_retriesDisabled_maxTasksNotGTZero_metricsEnabled
+		} else {
+			lt.run = lt.run_retriesDisabled_maxTasksNotGTZero_metricsDisabled
 		}
 	}
 
@@ -239,6 +258,7 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		MaxWorkers             int    `json:"max_workers"`
 		NumIntervalTasks       int    `json:"num_interval_tasks"`
 		NumWorkers             int    `json:"num_workers"`
+		MetricsEnabled         bool   `json:"metrics_enabled"`
 		MetricsFlushInterval   string `json:"metrics_flush_interval"`
 		FlushRetriesOnShutdown bool   `json:"flush_retries_on_shutdown"`
 		FlushRetriesTimeout    string `json:"flush_retries_timeout"`
@@ -253,6 +273,7 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		MaxWorkers:             lt.maxWorkers,
 		NumIntervalTasks:       lt.numIntervalTasks,
 		NumWorkers:             lt.numWorkers,
+		MetricsEnabled:         lt.metricsEnabled,
 		MetricsFlushInterval:   lt.csvData.flushInterval.String(),
 		FlushRetriesOnShutdown: lt.flushRetriesOnShutdown,
 		FlushRetriesTimeout:    lt.flushRetriesTimeout.String(),
@@ -301,16 +322,7 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 		case task = <-lt.taskChan:
 		}
 
-		taskStart := time.Now()
-		respFlags := lt.doTask(ctx, workerID, task.doer)
-		taskEnd := time.Now()
-
-		lt.resultsChan <- taskResult{
-			taskResultFlags: respFlags,
-			QueuedDuration:  taskStart.Sub(task.enqueueTime),
-			TaskDuration:    taskEnd.Sub(taskStart),
-			Meta:            task.meta,
-		}
+		lt.doTask(ctx, workerID, task)
 
 		lt.intervalTasksSema.Release(1)
 	}
@@ -337,7 +349,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 			return
 		}
 
-		if err := lt.csvData.writeErr; err != nil && err != errCsvWriterDisabled {
+		if err := lt.csvData.writeErr; err != nil {
 			err_result = err
 		}
 	}()
