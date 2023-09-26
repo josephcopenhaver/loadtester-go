@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: [ '1.18', '1.19' ]
+        go: ["1.21"]
     name: Go ${{ matrix.go }}
     steps:
       - uses: actions/checkout@v3
@@ -17,9 +17,10 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go }}
-      - name: verify golang files are consistently formatted
+      - name: verify golang files are consistently formatted and generated
         run: |
           [ `git status --porcelain=1 | wc -l` -eq 0 ] || (echo "failed to establish that files were unchanged before running format check" ; exit 1)
+          go generate ./...
           find . -type f -name '*.go' ! -path './vendor/*' -exec gofmt -l -s -w {} +
           [ `git status --porcelain=1 | wc -l` -eq 0 ] || (echo "files exist that need to be formatted by gofmt" ; exit 1)
       - name: test without race

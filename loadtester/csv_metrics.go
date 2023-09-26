@@ -121,10 +121,13 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 		"avg_task_duration",
 		"max_task_duration",
 		"sum_task_duration",
+		"",
 	}
 
 	if lt.maxTasks > 0 {
-		fields = append(fields, "percent_done")
+		fields[len(fields)-1] = "percent_done"
+	} else {
+		fields = fields[:len(fields)-1]
 	}
 
 	err := cd.writer.Write(fields)
@@ -138,8 +141,61 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 	return cd.writer.Error()
 }
 
-// writeOutputCsvRow writes the metric record to the target csv file
-func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) {
+// writeOutputCsvRow_maxTasksGTZero writes the metric record to the target csv file when maxTasks is > 0
+func (lt *Loadtest) writeOutputCsvRow_maxTasksGTZero(mr metricRecord) {
+
+	cd := &lt.csvData
+	if cd.writeErr != nil {
+		return
+	}
+
+	nowStr := timeToString(time.Now())
+
+	var percent string
+	{
+		high := mr.totalNumTasks * 10000 / lt.maxTasks
+		low := high % 100
+		high /= 100
+
+		var sep string
+		if low < 10 {
+			sep = ".0"
+		} else {
+			sep = "."
+		}
+
+		percent = strconv.Itoa(high) + sep + strconv.Itoa(low)
+	}
+
+	fields := []string{
+		nowStr,
+		timeToString(mr.intervalID),
+		strconv.Itoa(mr.numIntervalTasks),
+		mr.lag.String(),
+		mr.sumLag.String(),
+		strconv.Itoa(mr.numTasks),
+		strconv.Itoa(mr.numPass),
+		strconv.Itoa(mr.numFail),
+		strconv.Itoa(mr.numRetry),
+		strconv.Itoa(mr.numPanic),
+		mr.minQueuedDuration.String(),
+		(mr.sumQueuedDuration / time.Duration(mr.numTasks)).String(),
+		mr.maxQueuedDuration.String(),
+		mr.sumQueuedDuration.String(),
+		mr.minTaskDuration.String(),
+		(mr.sumTaskDuration / time.Duration(mr.numTasks)).String(),
+		mr.maxTaskDuration.String(),
+		mr.sumTaskDuration.String(),
+		percent,
+	}
+
+	if err := cd.writer.Write(fields); err != nil {
+		cd.setErr(err) // sets error state in multiple goroutine safe way
+	}
+}
+
+// writeOutputCsvRow_maxTasksNotGTZero writes the metric record to the target csv file when maxTasks is <= 0
+func (lt *Loadtest) writeOutputCsvRow_maxTasksNotGTZero(mr metricRecord) {
 
 	cd := &lt.csvData
 	if cd.writeErr != nil {
@@ -167,20 +223,6 @@ func (lt *Loadtest) writeOutputCsvRow(mr metricRecord) {
 		(mr.sumTaskDuration / time.Duration(mr.numTasks)).String(),
 		mr.maxTaskDuration.String(),
 		mr.sumTaskDuration.String(),
-		"",
-	}
-
-	if lt.maxTasks > 0 {
-		high := mr.totalNumTasks * 10000 / lt.maxTasks
-		low := high % 100
-		high /= 100
-		var prefix string
-		if low < 10 {
-			prefix = "0"
-		}
-		fields[len(fields)-1] = strconv.Itoa(high) + "." + prefix + strconv.Itoa(low)
-	} else {
-		fields = fields[:len(fields)-1]
 	}
 
 	if err := cd.writer.Write(fields); err != nil {
