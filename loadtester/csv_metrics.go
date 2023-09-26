@@ -3,7 +3,6 @@ package loadtester
 import (
 	"encoding/csv"
 	"encoding/json"
-	"errors"
 	"io"
 	"os"
 	"strconv"
@@ -13,10 +12,6 @@ import (
 
 const (
 	maxDuration = time.Duration((^uint64(0)) >> 1)
-)
-
-var (
-	errCsvWriterDisabled = errors.New("csv metrics writer disabled")
 )
 
 type csvData struct {
