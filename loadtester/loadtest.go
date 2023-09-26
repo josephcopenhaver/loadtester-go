@@ -9,8 +9,15 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-// TODO: RetriesDisabled runtime checks can turn into init time checks; same with MaxTasks based checks
-// I would not dream of doing this before proving it is warranted first.
+const (
+	skipInterTaskSchedulingThreshold = 20 * time.Millisecond
+)
+
+var (
+	ErrBadReadTasksImpl     = errors.New("bad ReadTasks implementation: returned a value less than zero or larger than the input slice length")
+	ErrRetriesFailedToFlush = errors.New("failed to flush all retries")
+	errLoadtestContextDone  = errors.New("loadtest parent context errored")
+)
 
 // TaskReader describes how to read tasks into a loadtest
 type TaskReader interface {
@@ -92,11 +99,14 @@ type Loadtest struct {
 
 	flushRetriesTimeout    time.Duration
 	logger                 StructuredLogger
-	run                    func(context.Context, *Loadtest, *error) error
-	doTask                 func(context.Context, *Loadtest, int, Doer) taskResultFlags
+	run                    func(context.Context, *error) error
+	doTask                 func(context.Context, int, Doer) taskResultFlags
+	writeOutputCsvRow      func(metricRecord)
 	flushRetriesOnShutdown bool
 	retriesDisabled        bool
 }
+
+// TODO: convert csvOutputDisabled from a repeated side-effect runtime inline-check to a config-load time check without side effects
 
 func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, error) {
 
@@ -131,28 +141,14 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		}
 	}
 
-	// TODO: remove defaults
-	doTask := defaultDoTask
-	run := defaultRun
-	_ = doTask
-	_ = run
-
 	var newRetryTask func() any
 	if !cfg.retriesDisabled {
 		newRetryTask = func() any {
 			return &retryTask{}
 		}
-
-		doTask = doTaskRetriesEnabled
-		run = runRetriesEnabled
-	} else {
-		doTask = doTaskRetriesDisabled
-		run = runRetriesDisabled
 	}
 
-	// TODO: switch on config and mutate the above
-
-	return &Loadtest{
+	lt := &Loadtest{
 		taskReader:    taskReader,
 		maxTasks:      cfg.maxTasks,
 		maxWorkers:    cfg.maxWorkers,
@@ -181,10 +177,31 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		retriesDisabled:        cfg.retriesDisabled,
 		logger:                 cfg.logger,
 		intervalTasksSema:      sm,
+	}
 
-		doTask: doTask,
-		run:    run,
-	}, nil
+	if cfg.maxTasks > 0 {
+		lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero
+	} else {
+		lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero
+	}
+
+	if !cfg.retriesDisabled {
+		lt.doTask = lt.doTask_retriesEnabled
+		if cfg.maxTasks > 0 {
+			lt.run = lt.run_retriesEnabled_maxTasksGTZero
+		} else {
+			lt.run = lt.run_retriesEnabled_maxTasksNotGTZero
+		}
+	} else {
+		lt.doTask = lt.doTask_retriesDisabled
+		if cfg.maxTasks > 0 {
+			lt.run = lt.run_retriesDisabled_maxTasksGTZero
+		} else {
+			lt.run = lt.run_retriesDisabled_maxTasksNotGTZero
+		}
+	}
+
+	return lt, nil
 }
 
 // UpdateConfig only returns false if the loadtest's run method has exited
@@ -285,7 +302,7 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 		}
 
 		taskStart := time.Now()
-		respFlags := lt.doTask(ctx, lt, workerID, task.doer)
+		respFlags := lt.doTask(ctx, workerID, task.doer)
 		taskEnd := time.Now()
 
 		lt.resultsChan <- taskResult{
@@ -325,7 +342,7 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 		}
 	}()
 
-	return lt.run(ctx, lt, &shutdownErr)
+	return lt.run(ctx, &shutdownErr)
 }
 
 //

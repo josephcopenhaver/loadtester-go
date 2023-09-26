@@ -1,43 +1,32 @@
+{{if .ImportsOnly -}}
 package loadtester
 
 import (
 	"context"
 	"encoding/csv"
-	"errors"
 	"fmt"
 	"os"
 	"sync"
 	"time"
 )
-
-// TODO: delete this file
-
-const (
-	skipInterTaskSchedulingThreshold = 20 * time.Millisecond
-)
-
-var (
-	ErrBadReadTasksImpl     = errors.New("bad ReadTasks implementation: returned a value less than zero or larger than the input slice length")
-	ErrRetriesFailedToFlush = errors.New("failed to flush all retries")
-	errLoadtestContextDone  = errors.New("loadtest parent context errored")
-)
-
-func defaultDoTask(ctx context.Context, lt *Loadtest, workerID int, task Doer) (result taskResultFlags) {
+{{else -}}
+{{if .GenDoTask}}
+func (lt *Loadtest) doTask_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}(ctx context.Context, workerID int, task Doer) (result taskResultFlags) {
 	var err_resp error
 
 	// phase is the name of the step which has possibly caused a panic
 	phase := "do"
+	{{if .RetriesEnabled}}
 	var rt *retryTask
-	if !lt.retriesDisabled {
-		if v, ok := task.(*retryTask); ok {
-			rt = v
-			phase = "retry"
-			defer func() {
-				*rt = retryTask{}
-				lt.retryTaskPool.Put(v)
-			}()
-		}
+	if v, ok := task.(*retryTask); ok {
+		rt = v
+		phase = "retry"
+		defer func() {
+			*rt = retryTask{}
+			lt.retryTaskPool.Put(v)
+		}()
 	}
+	{{- end}}
 	defer func() {
 
 		if err_resp != nil {
@@ -96,10 +85,7 @@ func defaultDoTask(ctx context.Context, lt *Loadtest, workerID int, task Doer) (
 	err_resp = err
 	result.Errored = 1
 
-	if lt.retriesDisabled {
-		return
-	}
-
+	{{if .RetriesEnabled}}
 	var dr DoRetryer
 	if rt != nil {
 		dr = rt.DoRetryer
@@ -127,10 +113,11 @@ func defaultDoTask(ctx context.Context, lt *Loadtest, workerID int, task Doer) (
 
 	result.RetryQueued = 1
 
+    {{- end}}
 	return
 }
-
-func defaultRun(ctx context.Context, lt *Loadtest, shutdownErrResp *error) error {
+{{end}}
+func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if .MaxTasksGTZero}}GTZero{{else}}NotGTZero{{end}}(ctx context.Context, shutdownErrResp *error) error {
 
 	cfgUpdateChan := lt.cfgUpdateChan
 	defer close(cfgUpdateChan)
@@ -178,8 +165,9 @@ func defaultRun(ctx context.Context, lt *Loadtest, shutdownErrResp *error) error
 	var numTasks int
 
 	intervalID := time.Now()
-
+	{{if .MaxTasksGTZero}}
 	maxTasks := lt.maxTasks
+	{{end}}
 
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
@@ -198,6 +186,7 @@ func defaultRun(ctx context.Context, lt *Loadtest, shutdownErrResp *error) error
 
 	var delay time.Duration
 
+    {{if .RetriesEnabled}}
 	readRetries := func(p []Doer) int {
 		// make sure you only fill up to len
 
@@ -214,11 +203,13 @@ func defaultRun(ctx context.Context, lt *Loadtest, shutdownErrResp *error) error
 
 		return i
 	}
+    {{- end}}
 
 	// stopping routine runs on return
 	// flushing as much as possible
 	defer func() {
 
+        {{if .RetriesEnabled}}
 		err := func(flushRetries bool) error {
 			if !flushRetries {
 
@@ -301,7 +292,9 @@ func defaultRun(ctx context.Context, lt *Loadtest, shutdownErrResp *error) error
 						return ErrRetriesFailedToFlush
 					}
 
-					if maxTasks > 0 {
+					{{if .MaxTasksGTZero -}}
+					// if maxTasks > 0
+					{
 						if numTasks >= maxTasks {
 							lt.logger.ErrorContext(ctx,
 								"failed to flush all retries",
@@ -335,6 +328,7 @@ func defaultRun(ctx context.Context, lt *Loadtest, shutdownErrResp *error) error
 							numNewTasks = meta.NumIntervalTasks
 						}
 					}
+					{{end}}
 
 					select {
 					case <-ctxDone:
@@ -461,10 +455,11 @@ func defaultRun(ctx context.Context, lt *Loadtest, shutdownErrResp *error) error
 					}
 				}
 			}
-		}(!lt.retriesDisabled && lt.flushRetriesOnShutdown)
+		}(lt.flushRetriesOnShutdown)
 		if err != nil {
 			*shutdownErrResp = err
 		}
+        {{- end}}
 
 		// wait for all results to come in
 		lt.logger.DebugContext(ctx,
@@ -744,7 +739,9 @@ func defaultRun(ctx context.Context, lt *Loadtest, shutdownErrResp *error) error
 
 	// main task scheduling loop
 	for {
-		if maxTasks > 0 {
+		{{if .MaxTasksGTZero -}}
+		// if maxTasks > 0
+		{
 			if numTasks >= maxTasks {
 				lt.logger.WarnContext(ctx,
 					"loadtest finished: max task count reached",
@@ -758,6 +755,7 @@ func defaultRun(ctx context.Context, lt *Loadtest, shutdownErrResp *error) error
 				numNewTasks = meta.NumIntervalTasks
 			}
 		}
+		{{end}}
 
 		select {
 		case <-ctxDone:
@@ -776,26 +774,26 @@ func defaultRun(ctx context.Context, lt *Loadtest, shutdownErrResp *error) error
 			// continue with load generation
 		}
 
-		var acquiredLoadGenerationSlots bool
-
+		{{if .RetriesEnabled}}
 		// read up to numNewTasks from retry slice
+        {{- end}}
 		taskBufSize := 0
-		if !lt.retriesDisabled {
+        {{- if .RetriesEnabled}}
 
-			// acquire load generation opportunity slots ( smooths bursts )
-			//
-			// do this early conditionally to allow retries to settle in the retry channel
-			// so we can pick them up when enough buffer space has cleared
-			//
-			// thus we avoid a possible deadlock where the retry queue is full and the workers
-			// all have failed tasks that wish to be retried
-			acquiredLoadGenerationSlots = true
-			if lt.intervalTasksSema.Acquire(ctx, int64(numNewTasks)) != nil {
-				return nil
-			}
-
-			taskBufSize = readRetries(taskBuf[:numNewTasks:numNewTasks])
+		// acquire load generation opportunity slots ( smooths bursts )
+		//
+		// do this early conditionally to allow retries to settle in the retry channel
+		// so we can pick them up when enough buffer space has cleared
+		//
+		// thus we avoid a possible deadlock where the retry queue is full and the workers
+		// all have failed tasks that wish to be retried
+		if lt.intervalTasksSema.Acquire(ctx, int64(numNewTasks)) != nil {
+			return nil
 		}
+
+		taskBufSize = readRetries(taskBuf[:numNewTasks:numNewTasks])
+		
+		{{end}}
 		taskBuf = taskBuf[:taskBufSize]
 
 		if taskBufSize < numNewTasks {
@@ -804,29 +802,41 @@ func defaultRun(ctx context.Context, lt *Loadtest, shutdownErrResp *error) error
 			if n < 0 || n > maxSize {
 				panic(ErrBadReadTasksImpl)
 			}
-			if n == 0 {
-				// iteration is technically done now
-				// but there could be straggling retries
-				// queued after this, those should continue
-				// to be flushed if and only if maxTasks
-				// has not been reached and if it is greater
-				// than zero
-				if taskBufSize == 0 {
-					// return immediately if there is nothing
-					// new to enqueue
+            if n == 0 {
+                {{if .RetriesEnabled}}
+				// if !lt.retriesDisabled
+				{
+					// iteration is technically done now
+					// but there could be straggling retries
+					// queued after this, those should continue
+					// to be flushed if and only if maxTasks
+					// has not been reached and if it is greater
+					// than zero
+					if taskBufSize == 0 {
+						// return immediately if there is nothing
+						// new to enqueue
 
-					lt.logger.WarnContext(ctx,
-						"stopping loadtest: ReadTasks did not load enough tasks",
-						"final_task_delta", 0,
+						lt.logger.WarnContext(ctx,
+							"stopping loadtest: ReadTasks did not load enough tasks",
+							"final_task_delta", 0,
+						)
+
+						return nil
+					}
+
+					lt.logger.DebugContext(ctx,
+						"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
+						"retry_count", taskBufSize,
 					)
-
-					return nil
 				}
+                {{- else}}
+                lt.logger.WarnContext(ctx,
+                    "stopping loadtest: ReadTasks did not load enough tasks",
+                    "final_task_delta", 0,
+                )
 
-				lt.logger.DebugContext(ctx,
-					"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
-					"retry_count", taskBufSize,
-				)
+				return nil
+                {{- end}}
 			}
 
 			taskBufSize += n
@@ -834,17 +844,18 @@ func defaultRun(ctx context.Context, lt *Loadtest, shutdownErrResp *error) error
 		}
 
 		// acquire load generation opportunity slots ( smooths bursts )
-		// if not done already
+		// if not done already{{if .RetriesEnabled}}
 		//
 		// but if we allocated too many in our retry prep phase then release the
 		// difference
-		if acquiredLoadGenerationSlots {
-			if numNewTasks > taskBufSize {
-				lt.intervalTasksSema.Release(int64(numNewTasks - taskBufSize))
-			}
-		} else if lt.intervalTasksSema.Acquire(ctx, int64(taskBufSize)) != nil {
+		if numNewTasks > taskBufSize {
+			lt.intervalTasksSema.Release(int64(numNewTasks - taskBufSize))
+		}
+		{{else}}
+		if lt.intervalTasksSema.Acquire(ctx, int64(taskBufSize)) != nil {
 			return nil
 		}
+		{{end}}
 
 		lt.resultWaitGroup.Add(taskBufSize)
 
@@ -869,7 +880,7 @@ func defaultRun(ctx context.Context, lt *Loadtest, shutdownErrResp *error) error
 			// must have hit the end of ReadTasks iterator
 			// increase numTasks total by actual number queued
 			// and stop traffic generation
-			numTasks += taskBufSize
+			{{if not .RetriesEnabled}}// {{end}}numTasks += taskBufSize{{if not .RetriesEnabled}} // this line only has an effect except in a retries enabled context{{end}}
 			lt.logger.WarnContext(ctx,
 				"stopping loadtest: ReadTasks did not load enough tasks",
 				"final_task_delta", taskBufSize,
@@ -909,3 +920,4 @@ func defaultRun(ctx context.Context, lt *Loadtest, shutdownErrResp *error) error
 		}
 	}
 }
+{{end}}
