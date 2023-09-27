@@ -127,6 +127,7 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 	}
 
 	var retryTaskChan chan *retryTask
+	var newRetryTask func() any
 	var sm *semaphore.Weighted
 	{
 		maxNumInProgressOrQueuedTasks := maxPendingTasks(cfg.maxWorkers, cfg.maxIntervalTasks)
@@ -137,13 +138,9 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 
 		if !cfg.retriesDisabled {
 			retryTaskChan = make(chan *retryTask, maxNumInProgressOrQueuedTasks)
-		}
-	}
-
-	var newRetryTask func() any
-	if !cfg.retriesDisabled {
-		newRetryTask = func() any {
-			return &retryTask{}
+			newRetryTask = func() any {
+				return &retryTask{}
+			}
 		}
 	}
 

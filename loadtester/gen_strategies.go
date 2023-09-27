@@ -14,20 +14,19 @@ import (
 func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
 
 	var respFlags taskResultFlags
-	taskStart := time.Now()
+	{
+		taskStart := time.Now()
+		defer func() {
+			taskEnd := time.Now()
 
-	defer func() {
-
-		taskEnd := time.Now()
-
-		lt.resultsChan <- taskResult{
-			taskResultFlags: respFlags,
-			QueuedDuration:  taskStart.Sub(twm.enqueueTime),
-			TaskDuration:    taskEnd.Sub(taskStart),
-			Meta:            twm.meta,
-		}
-
-	}()
+			lt.resultsChan <- taskResult{
+				taskResultFlags: respFlags,
+				QueuedDuration:  taskStart.Sub(twm.enqueueTime),
+				TaskDuration:    taskEnd.Sub(taskStart),
+				Meta:            twm.meta,
+			}
+		}()
+	}
 
 	// phase is the name of the step which has possibly caused a panic
 	phase := "do"
@@ -854,20 +853,19 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
 
 	var respFlags taskResultFlags
-	taskStart := time.Now()
+	{
+		taskStart := time.Now()
+		defer func() {
+			taskEnd := time.Now()
 
-	defer func() {
-
-		taskEnd := time.Now()
-
-		lt.resultsChan <- taskResult{
-			taskResultFlags: respFlags,
-			QueuedDuration:  taskStart.Sub(twm.enqueueTime),
-			TaskDuration:    taskEnd.Sub(taskStart),
-			Meta:            twm.meta,
-		}
-
-	}()
+			lt.resultsChan <- taskResult{
+				taskResultFlags: respFlags,
+				QueuedDuration:  taskStart.Sub(twm.enqueueTime),
+				TaskDuration:    taskEnd.Sub(taskStart),
+				Meta:            twm.meta,
+			}
+		}()
+	}
 
 	// phase is the name of the step which has possibly caused a panic
 	phase := "do"
@@ -1391,11 +1389,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 
 func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
 
-	defer func() {
-
-		lt.resultWaitGroup.Done()
-
-	}()
+	defer lt.resultWaitGroup.Done()
 
 	// phase is the name of the step which has possibly caused a panic
 	phase := "do"
@@ -2147,11 +2141,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 
 func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
 
-	defer func() {
-
-		lt.resultWaitGroup.Done()
-
-	}()
+	defer lt.resultWaitGroup.Done()
 
 	// phase is the name of the step which has possibly caused a panic
 	phase := "do"
