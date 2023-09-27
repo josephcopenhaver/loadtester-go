@@ -203,6 +203,34 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 	taskBuf := make([]Doer, 0, lt.maxIntervalTasks)
 
+	var enqueueTasks func()
+	var updateEnqueueTasksStrategy func()
+	{
+		staggerStrategy := func(){
+			for _, task := range taskBuf {
+				lt.taskChan <- taskWithMeta{task, intervalID, meta}
+			}
+		}
+
+		floodStrategy := func(){
+			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
+
+			for _, task := range taskBuf[1:] {
+				time.Sleep(interTaskInterval)
+				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
+			}
+		}
+
+		updateEnqueueTasksStrategy = func() {
+			if interTaskInterval <= skipInterTaskSchedulingThreshold {
+				enqueueTasks = floodStrategy
+			} else {
+				enqueueTasks = staggerStrategy
+			}
+		}
+	}
+	updateEnqueueTasksStrategy()
+
 	var delay time.Duration
 
 	{{if .RetriesEnabled}}
@@ -412,20 +440,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 					meta.IntervalID = intervalID
 
-					if taskBufSize == 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
-
-						for _, task := range taskBuf {
-							lt.taskChan <- taskWithMeta{task, intervalID, meta}
-						}
-					} else {
-
-						lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
-
-						for _, task := range taskBuf[1:] {
-							time.Sleep(interTaskInterval)
-							lt.taskChan <- taskWithMeta{task, time.Now(), meta}
-						}
-					}
+					enqueueTasks()
 
 					taskBuf = taskBuf[:0]
 
@@ -662,6 +677,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 			// && clause: protects against divide by zero
 			if recomputeInterTaskInterval && meta.NumIntervalTasks > 0 {
 				interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
+				updateEnqueueTasksStrategy()
 			}
 
 			if recomputeTaskSlots {
@@ -894,20 +910,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 		meta.IntervalID = intervalID
 
-		if taskBufSize <= 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
-
-			for _, task := range taskBuf {
-				lt.taskChan <- taskWithMeta{task, intervalID, meta}
-			}
-		} else {
-
-			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
-
-			for _, task := range taskBuf[1:] {
-				time.Sleep(interTaskInterval)
-				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
-			}
-		}
+		enqueueTasks()
 
 		if numNewTasks > taskBufSize {
 			// must have hit the end of ReadTasks iterator

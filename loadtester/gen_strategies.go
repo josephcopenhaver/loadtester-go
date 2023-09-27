@@ -188,6 +188,34 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 
 	taskBuf := make([]Doer, 0, lt.maxIntervalTasks)
 
+	var enqueueTasks func()
+	var updateEnqueueTasksStrategy func()
+	{
+		staggerStrategy := func() {
+			for _, task := range taskBuf {
+				lt.taskChan <- taskWithMeta{task, intervalID, meta}
+			}
+		}
+
+		floodStrategy := func() {
+			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
+
+			for _, task := range taskBuf[1:] {
+				time.Sleep(interTaskInterval)
+				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
+			}
+		}
+
+		updateEnqueueTasksStrategy = func() {
+			if interTaskInterval <= skipInterTaskSchedulingThreshold {
+				enqueueTasks = floodStrategy
+			} else {
+				enqueueTasks = staggerStrategy
+			}
+		}
+	}
+	updateEnqueueTasksStrategy()
+
 	var delay time.Duration
 
 	readRetries := func(p []Doer) int {
@@ -356,20 +384,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 
 					meta.IntervalID = intervalID
 
-					if taskBufSize == 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
-
-						for _, task := range taskBuf {
-							lt.taskChan <- taskWithMeta{task, intervalID, meta}
-						}
-					} else {
-
-						lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
-
-						for _, task := range taskBuf[1:] {
-							time.Sleep(interTaskInterval)
-							lt.taskChan <- taskWithMeta{task, time.Now(), meta}
-						}
-					}
+					enqueueTasks()
 
 					taskBuf = taskBuf[:0]
 
@@ -600,6 +615,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 			// && clause: protects against divide by zero
 			if recomputeInterTaskInterval && meta.NumIntervalTasks > 0 {
 				interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
+				updateEnqueueTasksStrategy()
 			}
 
 			if recomputeTaskSlots {
@@ -798,20 +814,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 
 		meta.IntervalID = intervalID
 
-		if taskBufSize <= 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
-
-			for _, task := range taskBuf {
-				lt.taskChan <- taskWithMeta{task, intervalID, meta}
-			}
-		} else {
-
-			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
-
-			for _, task := range taskBuf[1:] {
-				time.Sleep(interTaskInterval)
-				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
-			}
-		}
+		enqueueTasks()
 
 		if numNewTasks > taskBufSize {
 			// must have hit the end of ReadTasks iterator
@@ -1001,6 +1004,34 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 
 	taskBuf := make([]Doer, 0, lt.maxIntervalTasks)
 
+	var enqueueTasks func()
+	var updateEnqueueTasksStrategy func()
+	{
+		staggerStrategy := func() {
+			for _, task := range taskBuf {
+				lt.taskChan <- taskWithMeta{task, intervalID, meta}
+			}
+		}
+
+		floodStrategy := func() {
+			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
+
+			for _, task := range taskBuf[1:] {
+				time.Sleep(interTaskInterval)
+				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
+			}
+		}
+
+		updateEnqueueTasksStrategy = func() {
+			if interTaskInterval <= skipInterTaskSchedulingThreshold {
+				enqueueTasks = floodStrategy
+			} else {
+				enqueueTasks = staggerStrategy
+			}
+		}
+	}
+	updateEnqueueTasksStrategy()
+
 	var delay time.Duration
 
 	// stopping routine runs on return
@@ -1183,6 +1214,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 			// && clause: protects against divide by zero
 			if recomputeInterTaskInterval && meta.NumIntervalTasks > 0 {
 				interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
+				updateEnqueueTasksStrategy()
 			}
 
 			if recomputeTaskSlots {
@@ -1344,20 +1376,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 
 		meta.IntervalID = intervalID
 
-		if taskBufSize <= 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
-
-			for _, task := range taskBuf {
-				lt.taskChan <- taskWithMeta{task, intervalID, meta}
-			}
-		} else {
-
-			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
-
-			for _, task := range taskBuf[1:] {
-				time.Sleep(interTaskInterval)
-				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
-			}
-		}
+		enqueueTasks()
 
 		if numNewTasks > taskBufSize {
 			// must have hit the end of ReadTasks iterator
@@ -1535,6 +1554,34 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 
 	taskBuf := make([]Doer, 0, lt.maxIntervalTasks)
 
+	var enqueueTasks func()
+	var updateEnqueueTasksStrategy func()
+	{
+		staggerStrategy := func() {
+			for _, task := range taskBuf {
+				lt.taskChan <- taskWithMeta{task, intervalID, meta}
+			}
+		}
+
+		floodStrategy := func() {
+			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
+
+			for _, task := range taskBuf[1:] {
+				time.Sleep(interTaskInterval)
+				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
+			}
+		}
+
+		updateEnqueueTasksStrategy = func() {
+			if interTaskInterval <= skipInterTaskSchedulingThreshold {
+				enqueueTasks = floodStrategy
+			} else {
+				enqueueTasks = staggerStrategy
+			}
+		}
+	}
+	updateEnqueueTasksStrategy()
+
 	var delay time.Duration
 
 	readRetries := func(p []Doer) int {
@@ -1702,20 +1749,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 
 					meta.IntervalID = intervalID
 
-					if taskBufSize == 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
-
-						for _, task := range taskBuf {
-							lt.taskChan <- taskWithMeta{task, intervalID, meta}
-						}
-					} else {
-
-						lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
-
-						for _, task := range taskBuf[1:] {
-							time.Sleep(interTaskInterval)
-							lt.taskChan <- taskWithMeta{task, time.Now(), meta}
-						}
-					}
+					enqueueTasks()
 
 					taskBuf = taskBuf[:0]
 
@@ -1920,6 +1954,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 			// && clause: protects against divide by zero
 			if recomputeInterTaskInterval && meta.NumIntervalTasks > 0 {
 				interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
+				updateEnqueueTasksStrategy()
 			}
 
 			if recomputeTaskSlots {
@@ -2118,20 +2153,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 
 		meta.IntervalID = intervalID
 
-		if taskBufSize <= 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
-
-			for _, task := range taskBuf {
-				lt.taskChan <- taskWithMeta{task, intervalID, meta}
-			}
-		} else {
-
-			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
-
-			for _, task := range taskBuf[1:] {
-				time.Sleep(interTaskInterval)
-				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
-			}
-		}
+		enqueueTasks()
 
 		if numNewTasks > taskBufSize {
 			// must have hit the end of ReadTasks iterator
@@ -2261,6 +2283,34 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 	}
 
 	taskBuf := make([]Doer, 0, lt.maxIntervalTasks)
+
+	var enqueueTasks func()
+	var updateEnqueueTasksStrategy func()
+	{
+		staggerStrategy := func() {
+			for _, task := range taskBuf {
+				lt.taskChan <- taskWithMeta{task, intervalID, meta}
+			}
+		}
+
+		floodStrategy := func() {
+			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
+
+			for _, task := range taskBuf[1:] {
+				time.Sleep(interTaskInterval)
+				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
+			}
+		}
+
+		updateEnqueueTasksStrategy = func() {
+			if interTaskInterval <= skipInterTaskSchedulingThreshold {
+				enqueueTasks = floodStrategy
+			} else {
+				enqueueTasks = staggerStrategy
+			}
+		}
+	}
+	updateEnqueueTasksStrategy()
 
 	var delay time.Duration
 
@@ -2431,6 +2481,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 			// && clause: protects against divide by zero
 			if recomputeInterTaskInterval && meta.NumIntervalTasks > 0 {
 				interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
+				updateEnqueueTasksStrategy()
 			}
 
 			if recomputeTaskSlots {
@@ -2592,20 +2643,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 
 		meta.IntervalID = intervalID
 
-		if taskBufSize <= 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
-
-			for _, task := range taskBuf {
-				lt.taskChan <- taskWithMeta{task, intervalID, meta}
-			}
-		} else {
-
-			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
-
-			for _, task := range taskBuf[1:] {
-				time.Sleep(interTaskInterval)
-				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
-			}
-		}
+		enqueueTasks()
 
 		if numNewTasks > taskBufSize {
 			// must have hit the end of ReadTasks iterator
@@ -2704,6 +2742,34 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 	}
 
 	taskBuf := make([]Doer, 0, lt.maxIntervalTasks)
+
+	var enqueueTasks func()
+	var updateEnqueueTasksStrategy func()
+	{
+		staggerStrategy := func() {
+			for _, task := range taskBuf {
+				lt.taskChan <- taskWithMeta{task, intervalID, meta}
+			}
+		}
+
+		floodStrategy := func() {
+			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
+
+			for _, task := range taskBuf[1:] {
+				time.Sleep(interTaskInterval)
+				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
+			}
+		}
+
+		updateEnqueueTasksStrategy = func() {
+			if interTaskInterval <= skipInterTaskSchedulingThreshold {
+				enqueueTasks = floodStrategy
+			} else {
+				enqueueTasks = staggerStrategy
+			}
+		}
+	}
+	updateEnqueueTasksStrategy()
 
 	var delay time.Duration
 
@@ -2909,20 +2975,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 
 					meta.IntervalID = intervalID
 
-					if taskBufSize == 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
-
-						for _, task := range taskBuf {
-							lt.taskChan <- taskWithMeta{task, intervalID, meta}
-						}
-					} else {
-
-						lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
-
-						for _, task := range taskBuf[1:] {
-							time.Sleep(interTaskInterval)
-							lt.taskChan <- taskWithMeta{task, time.Now(), meta}
-						}
-					}
+					enqueueTasks()
 
 					taskBuf = taskBuf[:0]
 
@@ -3153,6 +3206,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 			// && clause: protects against divide by zero
 			if recomputeInterTaskInterval && meta.NumIntervalTasks > 0 {
 				interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
+				updateEnqueueTasksStrategy()
 			}
 
 			if recomputeTaskSlots {
@@ -3366,20 +3420,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 
 		meta.IntervalID = intervalID
 
-		if taskBufSize <= 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
-
-			for _, task := range taskBuf {
-				lt.taskChan <- taskWithMeta{task, intervalID, meta}
-			}
-		} else {
-
-			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
-
-			for _, task := range taskBuf[1:] {
-				time.Sleep(interTaskInterval)
-				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
-			}
-		}
+		enqueueTasks()
 
 		if numNewTasks > taskBufSize {
 			// must have hit the end of ReadTasks iterator
@@ -3491,6 +3532,34 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 	}
 
 	taskBuf := make([]Doer, 0, lt.maxIntervalTasks)
+
+	var enqueueTasks func()
+	var updateEnqueueTasksStrategy func()
+	{
+		staggerStrategy := func() {
+			for _, task := range taskBuf {
+				lt.taskChan <- taskWithMeta{task, intervalID, meta}
+			}
+		}
+
+		floodStrategy := func() {
+			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
+
+			for _, task := range taskBuf[1:] {
+				time.Sleep(interTaskInterval)
+				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
+			}
+		}
+
+		updateEnqueueTasksStrategy = func() {
+			if interTaskInterval <= skipInterTaskSchedulingThreshold {
+				enqueueTasks = floodStrategy
+			} else {
+				enqueueTasks = staggerStrategy
+			}
+		}
+	}
+	updateEnqueueTasksStrategy()
 
 	var delay time.Duration
 
@@ -3674,6 +3743,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 			// && clause: protects against divide by zero
 			if recomputeInterTaskInterval && meta.NumIntervalTasks > 0 {
 				interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
+				updateEnqueueTasksStrategy()
 			}
 
 			if recomputeTaskSlots {
@@ -3850,20 +3920,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 
 		meta.IntervalID = intervalID
 
-		if taskBufSize <= 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
-
-			for _, task := range taskBuf {
-				lt.taskChan <- taskWithMeta{task, intervalID, meta}
-			}
-		} else {
-
-			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
-
-			for _, task := range taskBuf[1:] {
-				time.Sleep(interTaskInterval)
-				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
-			}
-		}
+		enqueueTasks()
 
 		if numNewTasks > taskBufSize {
 			// must have hit the end of ReadTasks iterator
@@ -3947,6 +4004,34 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 	}
 
 	taskBuf := make([]Doer, 0, lt.maxIntervalTasks)
+
+	var enqueueTasks func()
+	var updateEnqueueTasksStrategy func()
+	{
+		staggerStrategy := func() {
+			for _, task := range taskBuf {
+				lt.taskChan <- taskWithMeta{task, intervalID, meta}
+			}
+		}
+
+		floodStrategy := func() {
+			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
+
+			for _, task := range taskBuf[1:] {
+				time.Sleep(interTaskInterval)
+				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
+			}
+		}
+
+		updateEnqueueTasksStrategy = func() {
+			if interTaskInterval <= skipInterTaskSchedulingThreshold {
+				enqueueTasks = floodStrategy
+			} else {
+				enqueueTasks = staggerStrategy
+			}
+		}
+	}
+	updateEnqueueTasksStrategy()
 
 	var delay time.Duration
 
@@ -4151,20 +4236,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 
 					meta.IntervalID = intervalID
 
-					if taskBufSize == 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
-
-						for _, task := range taskBuf {
-							lt.taskChan <- taskWithMeta{task, intervalID, meta}
-						}
-					} else {
-
-						lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
-
-						for _, task := range taskBuf[1:] {
-							time.Sleep(interTaskInterval)
-							lt.taskChan <- taskWithMeta{task, time.Now(), meta}
-						}
-					}
+					enqueueTasks()
 
 					taskBuf = taskBuf[:0]
 
@@ -4369,6 +4441,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 			// && clause: protects against divide by zero
 			if recomputeInterTaskInterval && meta.NumIntervalTasks > 0 {
 				interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
+				updateEnqueueTasksStrategy()
 			}
 
 			if recomputeTaskSlots {
@@ -4582,20 +4655,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 
 		meta.IntervalID = intervalID
 
-		if taskBufSize <= 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
-
-			for _, task := range taskBuf {
-				lt.taskChan <- taskWithMeta{task, intervalID, meta}
-			}
-		} else {
-
-			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
-
-			for _, task := range taskBuf[1:] {
-				time.Sleep(interTaskInterval)
-				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
-			}
-		}
+		enqueueTasks()
 
 		if numNewTasks > taskBufSize {
 			// must have hit the end of ReadTasks iterator
@@ -4666,6 +4726,34 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 	}
 
 	taskBuf := make([]Doer, 0, lt.maxIntervalTasks)
+
+	var enqueueTasks func()
+	var updateEnqueueTasksStrategy func()
+	{
+		staggerStrategy := func() {
+			for _, task := range taskBuf {
+				lt.taskChan <- taskWithMeta{task, intervalID, meta}
+			}
+		}
+
+		floodStrategy := func() {
+			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
+
+			for _, task := range taskBuf[1:] {
+				time.Sleep(interTaskInterval)
+				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
+			}
+		}
+
+		updateEnqueueTasksStrategy = func() {
+			if interTaskInterval <= skipInterTaskSchedulingThreshold {
+				enqueueTasks = floodStrategy
+			} else {
+				enqueueTasks = staggerStrategy
+			}
+		}
+	}
+	updateEnqueueTasksStrategy()
 
 	var delay time.Duration
 
@@ -4836,6 +4924,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 			// && clause: protects against divide by zero
 			if recomputeInterTaskInterval && meta.NumIntervalTasks > 0 {
 				interTaskInterval = interval / time.Duration(meta.NumIntervalTasks)
+				updateEnqueueTasksStrategy()
 			}
 
 			if recomputeTaskSlots {
@@ -5012,20 +5101,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 
 		meta.IntervalID = intervalID
 
-		if taskBufSize <= 1 || interTaskInterval <= skipInterTaskSchedulingThreshold {
-
-			for _, task := range taskBuf {
-				lt.taskChan <- taskWithMeta{task, intervalID, meta}
-			}
-		} else {
-
-			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
-
-			for _, task := range taskBuf[1:] {
-				time.Sleep(interTaskInterval)
-				lt.taskChan <- taskWithMeta{task, time.Now(), meta}
-			}
-		}
+		enqueueTasks()
 
 		if numNewTasks > taskBufSize {
 			// must have hit the end of ReadTasks iterator
