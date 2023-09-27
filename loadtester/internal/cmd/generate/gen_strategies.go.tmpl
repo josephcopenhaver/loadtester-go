@@ -14,22 +14,22 @@ import (
 func (lt *Loadtest) doTask_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_metrics{{if .MetricsEnabled}}Enabled{{else}}Disabled{{end}}(ctx context.Context, workerID int, twm taskWithMeta) {
 	{{if .MetricsEnabled}}
 	var respFlags taskResultFlags
-	taskStart := time.Now()
-	{{end}}
-	defer func(){
-		{{if .MetricsEnabled}}
-		taskEnd := time.Now()
+	{
+		taskStart := time.Now()
+		defer func(){
+			taskEnd := time.Now()
 
-		lt.resultsChan <- taskResult{
-			taskResultFlags: respFlags,
-			QueuedDuration:  taskStart.Sub(twm.enqueueTime),
-			TaskDuration:    taskEnd.Sub(taskStart),
-			Meta:            twm.meta,
-		}
-		{{else}}
-		lt.resultWaitGroup.Done()
-		{{end}}
-	}()
+			lt.resultsChan <- taskResult{
+				taskResultFlags: respFlags,
+				QueuedDuration:  taskStart.Sub(twm.enqueueTime),
+				TaskDuration:    taskEnd.Sub(taskStart),
+				Meta:            twm.meta,
+			}
+		}()
+	}
+	{{else}}
+	defer lt.resultWaitGroup.Done()
+	{{end}}
 
 	// phase is the name of the step which has possibly caused a panic
 	phase := "do"
@@ -129,7 +129,7 @@ func (lt *Loadtest) doTask_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{
 
 	{{if .MetricsEnabled}}respFlags.RetryQueued = 1{{end}}
 
-    {{- end}}
+	{{- end}}
 	return
 }
 {{end}}
@@ -205,7 +205,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 	var delay time.Duration
 
-    {{if .RetriesEnabled}}
+	{{if .RetriesEnabled}}
 	readRetries := func(p []Doer) int {
 		// make sure you only fill up to len
 
@@ -222,13 +222,13 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 		return i
 	}
-    {{- end}}
+	{{- end}}
 
 	// stopping routine runs on return
 	// flushing as much as possible
 	defer func() {
 
-        {{if .RetriesEnabled}}
+		{{if .RetriesEnabled}}
 		err := func(flushRetries bool) error {
 			if !flushRetries {
 
@@ -480,7 +480,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 		if err != nil {
 			*shutdownErrResp = err
 		}
-        {{- end}}
+		{{- end}}
 
 		lt.logger.DebugContext(ctx,
 			"waiting for running tasks to stop",
@@ -781,6 +781,15 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 		}
 		{{end}}
 
+		// duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
+		// that follows
+		//
+		// ref: https://go.dev/ref/spec#Select_statements
+		select {
+		case <-ctxDone:
+			return nil
+		default:
+		}
 		select {
 		case <-ctxDone:
 			return nil
@@ -800,9 +809,9 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 		{{if .RetriesEnabled}}
 		// read up to numNewTasks from retry slice
-        {{- end}}
+		{{- end}}
 		taskBufSize := 0
-        {{- if .RetriesEnabled}}
+		{{- if .RetriesEnabled}}
 
 		// acquire load generation opportunity slots ( smooths bursts )
 		//
@@ -816,7 +825,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 		}
 
 		taskBufSize = readRetries(taskBuf[:numNewTasks:numNewTasks])
-		
+
 		{{end}}
 		taskBuf = taskBuf[:taskBufSize]
 
@@ -826,8 +835,8 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 			if n < 0 || n > maxSize {
 				panic(ErrBadReadTasksImpl)
 			}
-            if n == 0 {
-                {{if .RetriesEnabled}}
+			if n == 0 {
+				{{if .RetriesEnabled}}
 				// if !lt.retriesDisabled
 				{
 					// iteration is technically done now
@@ -853,14 +862,14 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 						"retry_count", taskBufSize,
 					)
 				}
-                {{- else}}
-                lt.logger.WarnContext(ctx,
-                    "stopping loadtest: ReadTasks did not load enough tasks",
-                    "final_task_delta", 0,
-                )
+				{{- else}}
+				lt.logger.WarnContext(ctx,
+					"stopping loadtest: ReadTasks did not load enough tasks",
+					"final_task_delta", 0,
+				)
 
 				return nil
-                {{- end}}
+				{{- end}}
 			}
 
 			taskBufSize += n
