@@ -81,7 +81,8 @@ type metricRecord struct {
 	// fields that are preserved
 	intervalID       time.Time
 	numIntervalTasks int
-	totalNumTasks    int
+	// totalNumTasks is only modified if the loadtest's maxTasks setting is > 0
+	totalNumTasks int
 
 	metricRecordResetables
 }
@@ -260,9 +261,16 @@ func (lt *Loadtest) resultsHandler() {
 	var mr metricRecord
 	mr.reset()
 
-	writeRow := func() {
-		mr.totalNumTasks += mr.numTasks
-		lt.writeOutputCsvRow(mr)
+	var writeRow func()
+	if lt.maxTasks > 0 {
+		writeRow = func() {
+			mr.totalNumTasks += mr.numTasks
+			lt.writeOutputCsvRow(mr)
+		}
+	} else {
+		writeRow = func() {
+			lt.writeOutputCsvRow(mr)
+		}
 	}
 
 	cd.flushDeadline = time.Now().Add(cd.flushInterval)

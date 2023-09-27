@@ -279,9 +279,9 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 }
 
 func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-chan struct{}) {
-	for {
-		var task taskWithMeta
+	var task taskWithMeta
 
+	for {
 		// duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
 		// that follows
 		//
@@ -299,6 +299,8 @@ func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-ch
 				// all work is done
 				return
 			}
+
+			continue
 		default:
 		}
 		select {
