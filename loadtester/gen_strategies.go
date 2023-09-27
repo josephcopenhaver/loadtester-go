@@ -191,13 +191,13 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 	var enqueueTasks func()
 	var updateEnqueueTasksStrategy func()
 	{
-		staggerStrategy := func() {
+		floodStrategy := func() {
 			for _, task := range taskBuf {
 				lt.taskChan <- taskWithMeta{task, intervalID, meta}
 			}
 		}
 
-		floodStrategy := func() {
+		staggerStrategy := func() {
 			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
 
 			for _, task := range taskBuf[1:] {
@@ -1007,13 +1007,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 	var enqueueTasks func()
 	var updateEnqueueTasksStrategy func()
 	{
-		staggerStrategy := func() {
+		floodStrategy := func() {
 			for _, task := range taskBuf {
 				lt.taskChan <- taskWithMeta{task, intervalID, meta}
 			}
 		}
 
-		floodStrategy := func() {
+		staggerStrategy := func() {
 			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
 
 			for _, task := range taskBuf[1:] {
@@ -1557,13 +1557,13 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 	var enqueueTasks func()
 	var updateEnqueueTasksStrategy func()
 	{
-		staggerStrategy := func() {
+		floodStrategy := func() {
 			for _, task := range taskBuf {
 				lt.taskChan <- taskWithMeta{task, intervalID, meta}
 			}
 		}
 
-		floodStrategy := func() {
+		staggerStrategy := func() {
 			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
 
 			for _, task := range taskBuf[1:] {
@@ -2287,13 +2287,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 	var enqueueTasks func()
 	var updateEnqueueTasksStrategy func()
 	{
-		staggerStrategy := func() {
+		floodStrategy := func() {
 			for _, task := range taskBuf {
 				lt.taskChan <- taskWithMeta{task, intervalID, meta}
 			}
 		}
 
-		floodStrategy := func() {
+		staggerStrategy := func() {
 			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
 
 			for _, task := range taskBuf[1:] {
@@ -2746,13 +2746,13 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 	var enqueueTasks func()
 	var updateEnqueueTasksStrategy func()
 	{
-		staggerStrategy := func() {
+		floodStrategy := func() {
 			for _, task := range taskBuf {
 				lt.taskChan <- taskWithMeta{task, intervalID, meta}
 			}
 		}
 
-		floodStrategy := func() {
+		staggerStrategy := func() {
 			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
 
 			for _, task := range taskBuf[1:] {
@@ -3536,13 +3536,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 	var enqueueTasks func()
 	var updateEnqueueTasksStrategy func()
 	{
-		staggerStrategy := func() {
+		floodStrategy := func() {
 			for _, task := range taskBuf {
 				lt.taskChan <- taskWithMeta{task, intervalID, meta}
 			}
 		}
 
-		floodStrategy := func() {
+		staggerStrategy := func() {
 			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
 
 			for _, task := range taskBuf[1:] {
@@ -4008,13 +4008,13 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 	var enqueueTasks func()
 	var updateEnqueueTasksStrategy func()
 	{
-		staggerStrategy := func() {
+		floodStrategy := func() {
 			for _, task := range taskBuf {
 				lt.taskChan <- taskWithMeta{task, intervalID, meta}
 			}
 		}
 
-		floodStrategy := func() {
+		staggerStrategy := func() {
 			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
 
 			for _, task := range taskBuf[1:] {
@@ -4730,13 +4730,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 	var enqueueTasks func()
 	var updateEnqueueTasksStrategy func()
 	{
-		staggerStrategy := func() {
+		floodStrategy := func() {
 			for _, task := range taskBuf {
 				lt.taskChan <- taskWithMeta{task, intervalID, meta}
 			}
 		}
 
-		floodStrategy := func() {
+		staggerStrategy := func() {
 			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
 
 			for _, task := range taskBuf[1:] {

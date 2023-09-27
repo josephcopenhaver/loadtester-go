@@ -206,13 +206,13 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 	var enqueueTasks func()
 	var updateEnqueueTasksStrategy func()
 	{
-		staggerStrategy := func(){
+		floodStrategy := func(){
 			for _, task := range taskBuf {
 				lt.taskChan <- taskWithMeta{task, intervalID, meta}
 			}
 		}
 
-		floodStrategy := func(){
+		staggerStrategy := func(){
 			lt.taskChan <- taskWithMeta{taskBuf[0], intervalID, meta}
 
 			for _, task := range taskBuf[1:] {
