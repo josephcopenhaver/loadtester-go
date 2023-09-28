@@ -4,7 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
+)
+
+const (
+	// a value of 10000 yields a precision of two decimal places
+	//
+	// a value of 100000 would yield 3 decimal places
+	percentDonePrecisionFactor = 10000
 )
 
 type loadtestConfig struct {
@@ -26,6 +34,8 @@ type loadtestConfig struct {
 	flushRetriesOnShutdown bool
 	retriesDisabled        bool
 	logger                 StructuredLogger
+	latencyPercentile      uint8
+	resultsChanSize        int
 }
 
 func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
@@ -95,12 +105,46 @@ func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
 		return result, errors.New("loadtest misconfigured: flushRetriesTimeout < 0")
 	}
 
+	if !(cfg.latencyPercentile > 49 && cfg.latencyPercentile < 100) && cfg.latencyPercentile != 0 {
+		return result, errors.New("latency percentile must be greater than 49 and less than 100; or 0 to disable gathering percentile latencies")
+	}
+
 	if cfg.logger == nil {
 		logger, err := NewLogger(slog.LevelInfo)
 		if err != nil {
 			return result, fmt.Errorf("failed to create a default logger: %w", err)
 		}
 		cfg.logger = logger
+	}
+
+	// check for integer overflows from user input when computing metrics
+	if !cfg.csvOutputDisabled {
+		const intervalPossibleLagResultCount = 1
+		// note: if intervalPossibleLagResultCount is ever adjusted, then the bellow if statement needs to change
+		if cfg.maxIntervalTasks == math.MaxInt {
+			return result, errors.New("MaxIntervalTasks value is too large")
+		}
+
+		maxIntervalResultCount := cfg.maxIntervalTasks + intervalPossibleLagResultCount
+		if maxIntervalResultCount > (math.MaxInt / cfg.outputBufferingFactor) {
+			return result, errors.New("MaxIntervalTasks and OutputBufferingFactor values combination is too large")
+		}
+
+		cfg.resultsChanSize = maxIntervalResultCount * cfg.outputBufferingFactor
+
+		if cfg.maxTasks > 0 {
+			if cfg.maxTasks > (math.MaxInt / percentDonePrecisionFactor) {
+				return result, errors.New("MaxTasks value is too large")
+			}
+		}
+	}
+
+	if cfg.maxIntervalTasks > (math.MaxInt / 2) {
+		return result, errors.New("MaxIntervalTasks value is too large")
+	}
+
+	if cfg.maxWorkers > (math.MaxInt / 2) {
+		return result, errors.New("MaxWorkers value is too large")
 	}
 
 	result = cfg
@@ -171,6 +215,15 @@ func MetricsCsvFlushInterval(d time.Duration) LoadtestOption {
 func MetricsCsvWriterDisabled(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.csvOutputDisabled = b
+	}
+}
+
+// LatencyPercentileUint8 when called with a value other than zero will enable
+// calculating latency percentiles which could significantly increase heap memory usage
+// and increase latency in load generation and metrics reporting.
+func LatencyPercentileUint8(v uint8) LoadtestOption {
+	return func(cfg *loadtestConfig) {
+		cfg.latencyPercentile = v
 	}
 }
 

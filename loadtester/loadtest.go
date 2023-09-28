@@ -102,6 +102,8 @@ type Loadtest struct {
 	run                    func(context.Context, *error) error
 	doTask                 func(context.Context, int, taskWithMeta)
 	writeOutputCsvRow      func(metricRecord)
+	resultsHandler         func()
+	latencyPercentile      uint8
 	flushRetriesOnShutdown bool
 	retriesDisabled        bool
 	metricsEnabled         bool
@@ -118,12 +120,9 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 	// so it's important to account for them per interval when constructing max
 	// config buffers
 
-	const intervalPossibleLagResultCount = 1
-	resultsChanSize := (cfg.maxIntervalTasks + intervalPossibleLagResultCount) * cfg.outputBufferingFactor
-
 	var resultsChan chan taskResult
 	if !cfg.csvOutputDisabled {
-		resultsChan = make(chan taskResult, resultsChanSize)
+		resultsChan = make(chan taskResult, cfg.resultsChanSize)
 	}
 
 	var retryTaskChan chan *retryTask
@@ -173,12 +172,21 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		logger:                 cfg.logger,
 		intervalTasksSema:      sm,
 		metricsEnabled:         !cfg.csvOutputDisabled,
+		latencyPercentile:      cfg.latencyPercentile,
 	}
 
 	if cfg.maxTasks > 0 {
-		lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero
+		if cfg.latencyPercentile != 0 {
+			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileEnabled
+		} else {
+			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileDisabled
+		}
 	} else {
-		lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero
+		if cfg.latencyPercentile != 0 {
+			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled
+		} else {
+			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled
+		}
 	}
 
 	if !cfg.retriesDisabled {
@@ -215,6 +223,12 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		} else {
 			lt.run = lt.run_retriesDisabled_maxTasksNotGTZero_metricsDisabled
 		}
+	}
+
+	if cfg.latencyPercentile != 0 {
+		lt.resultsHandler = lt.resultsHandler_percentileEnabled
+	} else {
+		lt.resultsHandler = lt.resultsHandler_percentileDisabled
 	}
 
 	return lt, nil
@@ -260,6 +274,7 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		FlushRetriesOnShutdown bool   `json:"flush_retries_on_shutdown"`
 		FlushRetriesTimeout    string `json:"flush_retries_timeout"`
 		RetriesDisabled        bool   `json:"retries_disabled"`
+		LatencyPercentile      uint8  `json:"latency_percentile"`
 	}
 
 	return Config{
@@ -275,6 +290,7 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		FlushRetriesOnShutdown: lt.flushRetriesOnShutdown,
 		FlushRetriesTimeout:    lt.flushRetriesTimeout.String(),
 		RetriesDisabled:        lt.retriesDisabled,
+		LatencyPercentile:      lt.latencyPercentile,
 	}
 }
 
