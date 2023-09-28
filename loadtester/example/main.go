@@ -75,7 +75,7 @@ func main() {
 		loadtester.NumWorkers(numWorkers),
 		loadtester.NumIntervalTasks(25),
 		loadtester.Interval(1*time.Second),
-		// loadtester.LatencyPercentileUint8(95), // default is 0 (disabled/not-calculated)
+		// loadtester.LatencyPercentilesEnabled(true), // default is false
 		// loadtester.FlushRetriesOnShutdown(true), // default is false
 	)
 	if err != nil {

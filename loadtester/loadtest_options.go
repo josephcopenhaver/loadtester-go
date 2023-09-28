@@ -34,7 +34,7 @@ type loadtestConfig struct {
 	flushRetriesOnShutdown bool
 	retriesDisabled        bool
 	logger                 StructuredLogger
-	latencyPercentile      uint8
+	percentilesEnabled     bool
 	resultsChanSize        int
 }
 
@@ -103,10 +103,6 @@ func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
 
 	if cfg.flushRetriesTimeout < 0 {
 		return result, errors.New("loadtest misconfigured: flushRetriesTimeout < 0")
-	}
-
-	if !(cfg.latencyPercentile > 49 && cfg.latencyPercentile < 100) && cfg.latencyPercentile != 0 {
-		return result, errors.New("latency percentile must be greater than 49 and less than 100; or 0 to disable gathering percentile latencies")
 	}
 
 	if cfg.logger == nil {
@@ -218,12 +214,14 @@ func MetricsCsvWriterDisabled(b bool) LoadtestOption {
 	}
 }
 
-// LatencyPercentileUint8 when called with a value other than zero will enable
-// calculating latency percentiles which could significantly increase heap memory usage
-// and increase latency in load generation and metrics reporting.
-func LatencyPercentileUint8(v uint8) LoadtestOption {
+// LatencyPercentilesEnabled can greatly increase the amount of memory used
+// and create additional delay while processing results.
+//
+// Make sure MaxIntervalTasks is either not set or if it must be set make
+// sure it is not too large for the hosts's ram availability.
+func LatencyPercentilesEnabled(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
-		cfg.latencyPercentile = v
+		cfg.percentilesEnabled = b
 	}
 }
 

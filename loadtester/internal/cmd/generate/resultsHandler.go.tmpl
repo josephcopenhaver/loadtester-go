@@ -3,10 +3,6 @@ func (lt *Loadtest) resultsHandler_percentile{{if .PercentileEnabled}}Enabled{{e
 	cd := &lt.csvData
 	var mr metricRecord
 	mr.reset()
-	{{if .PercentileEnabled -}}
-	mr.queuedDurations = newLatencyList()
-	mr.taskDurations = newLatencyList()
-	{{end}}
 
 	var writeRow func()
 	if lt.maxTasks > 0 {
@@ -50,8 +46,8 @@ func (lt *Loadtest) resultsHandler_percentile{{if .PercentileEnabled}}Enabled{{e
 			mr.lag = tr.Meta.Lag
 		}
 
-		if mr.minQueuedDuration > tr.QueuedDuration {
-			mr.minQueuedDuration = tr.QueuedDuration
+		if mr.minQueueDuration > tr.QueueDuration {
+			mr.minQueueDuration = tr.QueueDuration
 		}
 
 		if mr.minTaskDuration > tr.TaskDuration {
@@ -62,12 +58,12 @@ func (lt *Loadtest) resultsHandler_percentile{{if .PercentileEnabled}}Enabled{{e
 			mr.maxTaskDuration = tr.TaskDuration
 		}
 
-		if mr.maxQueuedDuration < tr.QueuedDuration {
-			mr.maxQueuedDuration = tr.QueuedDuration
+		if mr.maxQueueDuration < tr.QueueDuration {
+			mr.maxQueueDuration = tr.QueueDuration
 		}
 
-		mr.sumQueuedDuration += tr.QueuedDuration
-		mr.sumTaskDuration += tr.TaskDuration
+		mr.sumQueueDuration.Add(&mr.sumQueueDuration, big.NewInt(int64(tr.QueueDuration)))
+		mr.sumTaskDuration.Add(&mr.sumTaskDuration, big.NewInt(int64(tr.TaskDuration)))
 		mr.numPass += int(tr.Passed)
 		mr.numFail += int(tr.Errored)
 		mr.numPanic += int(tr.Panicked)
@@ -76,8 +72,8 @@ func (lt *Loadtest) resultsHandler_percentile{{if .PercentileEnabled}}Enabled{{e
 		mr.numTasks++
 
 		{{if .PercentileEnabled -}}
-		mr.queuedDurations.add(tr.QueuedDuration)
-		mr.taskDurations.add(tr.TaskDuration)
+		lt.latencies.queue.add(tr.QueueDuration)
+		lt.latencies.task.add(tr.TaskDuration)
 		{{end}}
 
 		if mr.numTasks >= mr.numIntervalTasks {
@@ -86,8 +82,8 @@ func (lt *Loadtest) resultsHandler_percentile{{if .PercentileEnabled}}Enabled{{e
 			mr.reset()
 
 			{{if .PercentileEnabled}}
-			mr.queuedDurations.reset()
-			mr.taskDurations.reset()
+			lt.latencies.queue.reset()
+			lt.latencies.task.reset()
 			{{end}}
 
 			if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
