@@ -137,15 +137,20 @@ func main() {
 		type cfg struct {
 			MaxTasksGTZero    bool
 			PercentileEnabled bool
+			VarianceEnabled   bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{MaxTasksGTZero: true, PercentileEnabled: true},
-			{MaxTasksGTZero: true, PercentileEnabled: false},
-			{MaxTasksGTZero: false, PercentileEnabled: true},
-			{MaxTasksGTZero: false, PercentileEnabled: false},
+			{MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: true},
+			{MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: false},
+			{MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: true},
+			{MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: false},
+			{MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: true},
+			{MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: false},
+			{MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: true},
+			{MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: false},
 		})
 	}
 
@@ -155,13 +160,16 @@ func main() {
 
 		type cfg struct {
 			PercentileEnabled bool
+			VarianceEnabled   bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{PercentileEnabled: true},
-			{PercentileEnabled: false},
+			{PercentileEnabled: true, VarianceEnabled: true},
+			{PercentileEnabled: true, VarianceEnabled: false},
+			{PercentileEnabled: false, VarianceEnabled: true},
+			{PercentileEnabled: false, VarianceEnabled: false},
 		})
 	}
 

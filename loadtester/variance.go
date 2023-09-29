@@ -2,43 +2,55 @@ package loadtester
 
 import (
 	"math"
+	"strconv"
 )
 
 // https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
 
-type welfordVarianceAlg struct {
-	count    int
+type welfordVariance struct {
 	mean, m2 float64
 }
 
-func (wva *welfordVarianceAlg) Update(v float64) {
-	wva.count++
-	delta := v - wva.mean
-	wva.mean += delta / float64(wva.count)
-	delta2 := v - wva.mean
-	wva.m2 += delta * delta2
+func (wv *welfordVariance) Update(count int, v float64) {
+	delta := v - wv.mean
+	wv.mean += delta / float64(count)
+	delta2 := v - wv.mean
+	wv.m2 += delta * delta2
 }
 
-func (wva *welfordVarianceAlg) Variance() float64 {
-	if wva.count < 2 {
+func (wv *welfordVariance) Variance(count int) float64 {
+	if count < 2 {
 		return math.NaN()
 	}
 
-	return wva.m2 / float64(wva.count)
+	return wv.m2 / float64(count)
 }
 
-// func (wva *welfordVarianceAlg) Mean() float64 {
-// 	if wva.count < 2 {
+// func (wv *welfordVariance) Mean(count int) float64 {
+// 	if count < 2 {
 // 		return math.NaN()
 // 	}
 
-// 	return wva.mean
+// 	return wv.mean
 // }
 
-// func (wva *welfordVarianceAlg) SampleVariance() float64 {
-// 	if wva.count < 2 {
+// func (wv *welfordVariance) SampleVariance(count int) float64 {
+// 	if count < 2 {
 // 		return math.NaN()
 // 	}
 
-// 	return wva.m2 / (float64(wva.count) - float64(1.0))
+// 	return wv.m2 / (float64(count) - float64(1.0))
 // }
+
+func varianceFloatString(f float64) string {
+	if math.IsNaN(f) {
+		return ""
+	}
+
+	v := int64(math.MaxInt64)
+	if !math.IsInf(f, 1) {
+		v = int64(math.Round(f)) & math.MaxInt64
+	}
+
+	return strconv.FormatInt(v, 10) + "ns"
+}

@@ -1,7 +1,10 @@
-func (lt *Loadtest) resultsHandler_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}() {
+func (lt *Loadtest) resultsHandler_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}() {
 
 	cd := &lt.csvData
 	var mr metricRecord
+	{{if .PercentileEnabled}}
+	mr.latencies = lt.latencies
+	{{end}}
 	mr.reset()
 
 	var writeRow func()
@@ -71,9 +74,14 @@ func (lt *Loadtest) resultsHandler_percentile{{if .PercentileEnabled}}Enabled{{e
 
 		mr.numTasks++
 
+		{{if .VarianceEnabled}}
+		mr.welfords.queue.Update(mr.numTasks, float64(tr.QueueDuration))
+		mr.welfords.task.Update(mr.numTasks, float64(tr.TaskDuration))
+		{{end}}
+
 		{{if .PercentileEnabled -}}
-		lt.latencies.queue.add(tr.QueueDuration)
-		lt.latencies.task.add(tr.TaskDuration)
+		mr.latencies.queue.add(tr.QueueDuration)
+		mr.latencies.task.add(tr.TaskDuration)
 		{{end}}
 
 		if mr.numTasks >= mr.numIntervalTasks {
@@ -82,8 +90,8 @@ func (lt *Loadtest) resultsHandler_percentile{{if .PercentileEnabled}}Enabled{{e
 			mr.reset()
 
 			{{if .PercentileEnabled}}
-			lt.latencies.queue.reset()
-			lt.latencies.task.reset()
+			mr.latencies.queue.reset()
+			mr.latencies.task.reset()
 			{{end}}
 
 			if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {

@@ -75,7 +75,8 @@ func main() {
 		loadtester.NumWorkers(numWorkers),
 		loadtester.NumIntervalTasks(25),
 		loadtester.Interval(1*time.Second),
-		// loadtester.LatencyPercentilesEnabled(true), // default is false
+		// loadtester.CsvLatencyPercentilesEnabled(true), // default is false
+		// loadtester.CsvLatencyVarianceEnabled(true),    // default is false
 		// loadtester.FlushRetriesOnShutdown(true), // default is false
 	)
 	if err != nil {

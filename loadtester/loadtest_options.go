@@ -34,8 +34,9 @@ type loadtestConfig struct {
 	flushRetriesOnShutdown bool
 	retriesDisabled        bool
 	logger                 StructuredLogger
-	percentilesEnabled     bool
 	resultsChanSize        int
+	percentilesEnabled     bool
+	variancesEnabled       bool
 }
 
 func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
@@ -214,14 +215,21 @@ func MetricsCsvWriterDisabled(b bool) LoadtestOption {
 	}
 }
 
-// LatencyPercentilesEnabled can greatly increase the amount of memory used
+// CsvLatencyPercentilesEnabled can greatly increase the amount of memory used
 // and create additional delay while processing results.
 //
 // Make sure MaxIntervalTasks is either not set or if it must be set make
 // sure it is not too large for the hosts's ram availability.
-func LatencyPercentilesEnabled(b bool) LoadtestOption {
+func CsvLatencyPercentilesEnabled(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.percentilesEnabled = b
+	}
+}
+
+// CsvLatencyVarianceEnabled can create additional delay while processing results.
+func CsvLatencyVarianceEnabled(b bool) LoadtestOption {
+	return func(cfg *loadtestConfig) {
+		cfg.variancesEnabled = b
 	}
 }
 

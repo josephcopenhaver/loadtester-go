@@ -103,10 +103,12 @@ type Loadtest struct {
 	doTask                 func(context.Context, int, taskWithMeta)
 	writeOutputCsvRow      func(metricRecord)
 	resultsHandler         func()
-	latencies              *latencyLists
+	latencies              latencyLists
 	flushRetriesOnShutdown bool
 	retriesDisabled        bool
 	metricsEnabled         bool
+	percentilesEnabled     bool
+	variancesEnabled       bool
 }
 
 func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, error) {
@@ -143,7 +145,7 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		}
 	}
 
-	var latencies *latencyLists
+	var latencies latencyLists
 	if cfg.percentilesEnabled {
 		latencies = newLatencyLists(cfg.maxIntervalTasks)
 	}
@@ -177,20 +179,38 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		logger:                 cfg.logger,
 		intervalTasksSema:      sm,
 		metricsEnabled:         !cfg.csvOutputDisabled,
+		percentilesEnabled:     cfg.percentilesEnabled,
 		latencies:              latencies,
+		variancesEnabled:       cfg.variancesEnabled,
 	}
 
 	if cfg.maxTasks > 0 {
 		if cfg.percentilesEnabled {
-			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileEnabled()
+			if cfg.variancesEnabled {
+				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileEnabled_varianceEnabled()
+			} else {
+				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileEnabled_varianceDisabled()
+			}
 		} else {
-			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileDisabled()
+			if cfg.variancesEnabled {
+				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileDisabled_varianceEnabled()
+			} else {
+				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileDisabled_varianceDisabled()
+			}
 		}
 	} else {
 		if cfg.percentilesEnabled {
-			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled()
+			if cfg.variancesEnabled {
+				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled_varianceEnabled()
+			} else {
+				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled_varianceDisabled()
+			}
 		} else {
-			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled()
+			if cfg.variancesEnabled {
+				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled_varianceEnabled()
+			} else {
+				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled_varianceDisabled()
+			}
 		}
 	}
 
@@ -231,9 +251,17 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 	}
 
 	if cfg.percentilesEnabled {
-		lt.resultsHandler = lt.resultsHandler_percentileEnabled
+		if cfg.variancesEnabled {
+			lt.resultsHandler = lt.resultsHandler_percentileEnabled_varianceEnabled
+		} else {
+			lt.resultsHandler = lt.resultsHandler_percentileEnabled_varianceDisabled
+		}
 	} else {
-		lt.resultsHandler = lt.resultsHandler_percentileDisabled
+		if cfg.variancesEnabled {
+			lt.resultsHandler = lt.resultsHandler_percentileDisabled_varianceEnabled
+		} else {
+			lt.resultsHandler = lt.resultsHandler_percentileDisabled_varianceDisabled
+		}
 	}
 
 	return lt, nil
@@ -280,6 +308,7 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		FlushRetriesTimeout    string `json:"flush_retries_timeout"`
 		RetriesDisabled        bool   `json:"retries_disabled"`
 		PercentilesEnabled     bool   `json:"percentiles_enabled"`
+		VariancesEnabled       bool   `json:"variances_enabled"`
 	}
 
 	return Config{
@@ -295,7 +324,8 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		FlushRetriesOnShutdown: lt.flushRetriesOnShutdown,
 		FlushRetriesTimeout:    lt.flushRetriesTimeout.String(),
 		RetriesDisabled:        lt.retriesDisabled,
-		PercentilesEnabled:     lt.latencies != nil,
+		PercentilesEnabled:     lt.percentilesEnabled,
+		VariancesEnabled:       lt.variancesEnabled,
 	}
 }
 
@@ -382,8 +412,8 @@ type latencyLists struct {
 	task  latencyList
 }
 
-func newLatencyLists(size int) *latencyLists {
-	return &latencyLists{
+func newLatencyLists(size int) latencyLists {
+	return latencyLists{
 		latencyList{make([]time.Duration, 0, size)},
 		latencyList{make([]time.Duration, 0, size)},
 	}

@@ -144,7 +144,8 @@ func main() {
 		loadtester.NumWorkers(parallelism),
 		loadtester.NumIntervalTasks(parallelism),
 		loadtester.Interval(5*time.Second),
-		// loadtester.LatencyPercentilesEnabled(true), // default is false
+		// loadtester.CsvLatencyPercentilesEnabled(true), // default is false
+		// loadtester.CsvLatencyVarianceEnabled(true),    // default is false
 		// loadtester.FlushRetriesOnShutdown(true), // default is false
 	)
 	if err != nil {

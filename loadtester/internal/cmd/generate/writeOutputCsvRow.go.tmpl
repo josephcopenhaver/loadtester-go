@@ -1,4 +1,4 @@
-func (lt *Loadtest) writeOutputCsvRow_maxTasks{{if .MaxTasksGTZero}}GTZero{{else}}NotGTZero{{end}}_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}() func(metricRecord) {
+func (lt *Loadtest) writeOutputCsvRow_maxTasks{{if .MaxTasksGTZero}}GTZero{{else}}NotGTZero{{end}}_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}() func(metricRecord) {
 	{{if .PercentileEnabled}}
 	var queuePercentiles, taskPercentiles [numPercentiles]string
 	{{end}}
@@ -35,8 +35,8 @@ func (lt *Loadtest) writeOutputCsvRow_maxTasks{{if .MaxTasksGTZero}}GTZero{{else
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
 		{{if .PercentileEnabled}}
-		lt.latencies.queue.readPercentileStrings(&queuePercentiles)
-		lt.latencies.task.readPercentileStrings(&taskPercentiles)
+		mr.latencies.queue.readPercentileStrings(&queuePercentiles)
+		mr.latencies.task.readPercentileStrings(&taskPercentiles)
 		{{end}}
 
 		fields := []string{
@@ -75,7 +75,9 @@ func (lt *Loadtest) writeOutputCsvRow_maxTasks{{if .MaxTasksGTZero}}GTZero{{else
 			taskPercentiles[6],
 			taskPercentiles[7],
 			taskPercentiles[8],
-			taskPercentiles[9],{{end}}{{if .MaxTasksGTZero}}
+			taskPercentiles[9],{{end}}{{if .VarianceEnabled}}
+			varianceFloatString(mr.welfords.queue.Variance(mr.numTasks)),
+			varianceFloatString(mr.welfords.task.Variance(mr.numTasks)),{{end}}{{if .MaxTasksGTZero}}
 			percent,{{end}}
 		}
 

@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	maxCsvNumColumns = 37
+	maxCsvNumColumns = 39
 )
 
 type csvData struct {
@@ -76,6 +76,11 @@ type metricRecordResetables struct {
 	lag                                time.Duration
 	minTaskDuration, maxTaskDuration   time.Duration
 	minQueueDuration, maxQueueDuration time.Duration
+
+	welfords struct {
+		queue welfordVariance
+		task  welfordVariance
+	}
 }
 
 type metricRecord struct {
@@ -88,6 +93,8 @@ type metricRecord struct {
 	sumTaskDuration, sumQueueDuration big.Int
 
 	metricRecordResetables
+
+	latencies latencyLists
 }
 
 func (mr *metricRecord) reset() {
@@ -103,7 +110,7 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 
 	cd := &lt.csvData
 
-	fields := append(make([]string, 0, maxCsvNumColumns), []string{
+	fields := append(make([]string, 0, maxCsvNumColumns),
 		"sample_time",
 		"interval_id",        // gauge
 		"num_interval_tasks", // gauge
@@ -120,10 +127,10 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 		"min_task_latency",
 		"avg_task_latency",
 		"max_task_latency",
-	}...)
+	)
 
-	if lt.latencies != nil {
-		fields = append(fields, []string{
+	if lt.percentilesEnabled {
+		fields = append(fields,
 			"p25_queue_latency",
 			"p50_queue_latency",
 			"p75_queue_latency",
@@ -144,11 +151,20 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 			"p99_task_latency",
 			"p99p9_task_latency",
 			"p99p99_task_latency",
-		}...)
+		)
+	}
+
+	if lt.variancesEnabled {
+		fields = append(fields,
+			"queue_latency_variance",
+			"task_latency_variance",
+		)
 	}
 
 	if lt.maxTasks > 0 {
-		fields = append(fields, "percent_done")
+		fields = append(fields,
+			"percent_done",
+		)
 	}
 
 	err := cd.writer.Write(fields)
