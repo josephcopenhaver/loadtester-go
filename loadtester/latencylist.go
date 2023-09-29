@@ -1,6 +1,7 @@
 package loadtester
 
 import (
+	"errors"
 	"math"
 	"slices"
 	"time"
@@ -8,10 +9,6 @@ import (
 
 type latencyList struct {
 	data []time.Duration
-}
-
-func newLatencyList() *latencyList {
-	return &latencyList{}
 }
 
 func (ll *latencyList) add(d time.Duration) {
@@ -22,33 +19,101 @@ func (ll *latencyList) reset() {
 	ll.data = ll.data[:0]
 }
 
-func (ll *latencyList) stringPercentile(p uint8) string {
+type percentileTarget struct {
+	// percentile value multiplied by
+	percentileTimes100 int
+	n                  int // numerator
+	d                  int // denominator
+	rt                 int // integerRoundingTerm
+}
+
+func newPTarget(percentileTimes100, n, d int) percentileTarget {
+	if (10000%d != 0) || ((10000/d)*n != percentileTimes100) {
+		panic(errors.New("should never happen"))
+	}
+	return percentileTarget{percentileTimes100, n, d, d / 2}
+}
+
+const numPercentiles = 10
+
+var percentileTargets [numPercentiles]percentileTarget
+var percentileComputeOrder [numPercentiles]int
+
+func init() {
+	percentileTargets = [numPercentiles]percentileTarget{
+		newPTarget(2500, 1, 4), // 0
+		newPTarget(5000, 1, 2), // 1
+		newPTarget(7500, 3, 4), // 2
+		// next val's n & d are intentionally doubled so last argument (d) can be even for integer rounding term ( d/2 )
+		newPTarget(8000, 8, 10),       // 3
+		newPTarget(8500, 17, 20),      // 4
+		newPTarget(9000, 9, 10),       // 5
+		newPTarget(9500, 19, 20),      // 6
+		newPTarget(9900, 99, 100),     // 7
+		newPTarget(9990, 999, 1000),   // 8
+		newPTarget(9999, 9999, 10000), // 9
+	}
+	percentileComputeOrder = [numPercentiles]int{
+		0, // 1
+		1, // 1
+		2, // 3
+		3, // 8
+		5, // 9
+		4, // 17
+		6, // 19
+		7, // 99
+		8, // 999
+		9, // 9999
+	}
+}
+
+func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
 
 	maxIdx := len(ll.data) - 1
 	if maxIdx < 0 {
-		return ""
+		for i := range out {
+			out[i] = ""
+		}
+		return
+	}
+
+	if maxIdx == 0 {
+		s := ll.data[0].String()
+		for i := range out {
+			out[i] = s
+		}
+		return
 	}
 
 	slices.Sort(ll.data)
 
-	const (
-		denominator             = 100
-		integerMathRoundingTerm = denominator / 2
-	)
+	for pci, pcv := range percentileComputeOrder {
+		pt := percentileTargets[pcv]
 
-	// check for integer overflow
-	if maxIdx == 0 || int(p) <= ((math.MaxInt-integerMathRoundingTerm)/maxIdx) {
-		// integer math multiplication operation will not overflow
+		// check for integer overflow
+		if pt.n <= ((math.MaxInt - pt.rt) / maxIdx) {
+			// integer math multiplication operation will not overflow
 
-		v := ll.data[(maxIdx*int(p)+integerMathRoundingTerm)/denominator]
+			v := ll.data[((maxIdx*pt.n)+pt.rt)/pt.d]
 
-		return v.String()
+			out[pcv] = v.String()
+			continue
+		}
+
+		// would overflow, time to use expensive floats
+		for {
+			fidx := math.Round(float64(pt.n) / float64(pt.d) * float64(maxIdx))
+
+			idx := int(fidx)
+			v := ll.data[idx]
+			out[pcv] = v.String()
+
+			pci++
+			if pci >= numPercentiles {
+				return
+			}
+
+			pcv = percentileComputeOrder[pci]
+		}
 	}
-
-	// p * size would overflow, time to use expensive floats
-	fidx := math.Round(float64(p) / float64(denominator) * float64(maxIdx))
-	idx := int(fidx)
-	v := ll.data[idx]
-
-	return v.String()
 }

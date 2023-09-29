@@ -55,8 +55,8 @@ func (trf taskResultFlags) isZero() bool {
 
 type taskResult struct {
 	taskResultFlags
-	QueuedDuration, TaskDuration time.Duration
-	Meta                         taskMeta
+	QueueDuration, TaskDuration time.Duration
+	Meta                        taskMeta
 }
 
 type Loadtest struct {
@@ -103,7 +103,7 @@ type Loadtest struct {
 	doTask                 func(context.Context, int, taskWithMeta)
 	writeOutputCsvRow      func(metricRecord)
 	resultsHandler         func()
-	latencyPercentile      uint8
+	latencies              *latencyLists
 	flushRetriesOnShutdown bool
 	retriesDisabled        bool
 	metricsEnabled         bool
@@ -143,6 +143,11 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		}
 	}
 
+	var latencies *latencyLists
+	if cfg.percentilesEnabled {
+		latencies = newLatencyLists(cfg.maxIntervalTasks)
+	}
+
 	lt := &Loadtest{
 		taskReader:    taskReader,
 		maxTasks:      cfg.maxTasks,
@@ -172,20 +177,20 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		logger:                 cfg.logger,
 		intervalTasksSema:      sm,
 		metricsEnabled:         !cfg.csvOutputDisabled,
-		latencyPercentile:      cfg.latencyPercentile,
+		latencies:              latencies,
 	}
 
 	if cfg.maxTasks > 0 {
-		if cfg.latencyPercentile != 0 {
-			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileEnabled
+		if cfg.percentilesEnabled {
+			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileEnabled()
 		} else {
-			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileDisabled
+			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileDisabled()
 		}
 	} else {
-		if cfg.latencyPercentile != 0 {
-			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled
+		if cfg.percentilesEnabled {
+			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled()
 		} else {
-			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled
+			lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled()
 		}
 	}
 
@@ -225,7 +230,7 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		}
 	}
 
-	if cfg.latencyPercentile != 0 {
+	if cfg.percentilesEnabled {
 		lt.resultsHandler = lt.resultsHandler_percentileEnabled
 	} else {
 		lt.resultsHandler = lt.resultsHandler_percentileDisabled
@@ -274,7 +279,7 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		FlushRetriesOnShutdown bool   `json:"flush_retries_on_shutdown"`
 		FlushRetriesTimeout    string `json:"flush_retries_timeout"`
 		RetriesDisabled        bool   `json:"retries_disabled"`
-		LatencyPercentile      uint8  `json:"latency_percentile"`
+		PercentilesEnabled     bool   `json:"percentiles_enabled"`
 	}
 
 	return Config{
@@ -290,7 +295,7 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		FlushRetriesOnShutdown: lt.flushRetriesOnShutdown,
 		FlushRetriesTimeout:    lt.flushRetriesTimeout.String(),
 		RetriesDisabled:        lt.retriesDisabled,
-		LatencyPercentile:      lt.latencyPercentile,
+		PercentilesEnabled:     lt.latencies != nil,
 	}
 }
 
@@ -370,6 +375,18 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	}()
 
 	return lt.run(ctx, &shutdownErr)
+}
+
+type latencyLists struct {
+	queue latencyList
+	task  latencyList
+}
+
+func newLatencyLists(size int) *latencyLists {
+	return &latencyLists{
+		latencyList{make([]time.Duration, 0, size)},
+		latencyList{make([]time.Duration, 0, size)},
+	}
 }
 
 //

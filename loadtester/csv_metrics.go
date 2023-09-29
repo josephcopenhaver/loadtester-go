@@ -4,14 +4,15 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"io"
+	"math"
+	"math/big"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 )
 
 const (
-	maxDuration = time.Duration((^uint64(0)) >> 1)
+	maxCsvNumColumns = 37
 )
 
 type csvData struct {
@@ -66,15 +67,15 @@ func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
 }
 
 type metricRecordResetables struct {
-	numTasks                                                int
-	numPass                                                 int
-	numFail                                                 int
-	numRetry                                                int
-	numPanic                                                int
-	sumLag                                                  time.Duration
-	lag                                                     time.Duration
-	minTaskDuration, maxTaskDuration, sumTaskDuration       time.Duration
-	minQueuedDuration, maxQueuedDuration, sumQueuedDuration time.Duration
+	numTasks                           int
+	numPass                            int
+	numFail                            int
+	numRetry                           int
+	numPanic                           int
+	sumLag                             time.Duration
+	lag                                time.Duration
+	minTaskDuration, maxTaskDuration   time.Duration
+	minQueueDuration, maxQueueDuration time.Duration
 }
 
 type metricRecord struct {
@@ -84,15 +85,17 @@ type metricRecord struct {
 	// totalNumTasks is only modified if the loadtest's maxTasks setting is > 0
 	totalNumTasks int
 
-	queuedDurations *latencyList
-	taskDurations   *latencyList
+	sumTaskDuration, sumQueueDuration big.Int
+
 	metricRecordResetables
 }
 
 func (mr *metricRecord) reset() {
+	mr.sumTaskDuration.SetUint64(0)
+	mr.sumQueueDuration.SetUint64(0)
 	mr.metricRecordResetables = metricRecordResetables{
-		minTaskDuration:   maxDuration,
-		minQueuedDuration: maxDuration,
+		minTaskDuration:  math.MaxInt64,
+		minQueueDuration: math.MaxInt64,
 	}
 }
 
@@ -100,7 +103,7 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 
 	cd := &lt.csvData
 
-	fields := []string{
+	fields := append(make([]string, 0, maxCsvNumColumns), []string{
 		"sample_time",
 		"interval_id",        // gauge
 		"num_interval_tasks", // gauge
@@ -111,30 +114,41 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 		"num_fail",
 		"num_retry",
 		"num_panic",
-		"min_queued_duration",
-		"avg_queued_duration",
-		"max_queued_duration",
-		"sum_queued_duration",
-		"min_task_duration",
-		"avg_task_duration",
-		"max_task_duration",
-		"sum_task_duration",
-		"",
-		"",
-		"",
-	}
+		"min_queue_latency",
+		"avg_queue_latency",
+		"max_queue_latency",
+		"min_task_latency",
+		"avg_task_latency",
+		"max_task_latency",
+	}...)
 
-	if lt.latencyPercentile != 0 {
-		fields[len(fields)-3] = "p" + strconv.Itoa(int(lt.latencyPercentile)) + "_queued_duration"
-		fields[len(fields)-2] = "p" + strconv.Itoa(int(lt.latencyPercentile)) + "_task_duration"
-	} else {
-		fields = fields[:len(fields)-2]
+	if lt.latencies != nil {
+		fields = append(fields, []string{
+			"p25_queue_latency",
+			"p50_queue_latency",
+			"p75_queue_latency",
+			"p80_queue_latency",
+			"p85_queue_latency",
+			"p90_queue_latency",
+			"p95_queue_latency",
+			"p99_queue_latency",
+			"p99p9_queue_latency",
+			"p99p99_queue_latency",
+			"p25_task_latency",
+			"p50_task_latency",
+			"p75_task_latency",
+			"p80_task_latency",
+			"p85_task_latency",
+			"p90_task_latency",
+			"p95_task_latency",
+			"p99_task_latency",
+			"p99p9_task_latency",
+			"p99p99_task_latency",
+		}...)
 	}
 
 	if lt.maxTasks > 0 {
-		fields[len(fields)-1] = "percent_done"
-	} else {
-		fields = fields[:len(fields)-1]
+		fields = append(fields, "percent_done")
 	}
 
 	err := cd.writer.Write(fields)

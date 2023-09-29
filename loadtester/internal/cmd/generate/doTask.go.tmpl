@@ -8,7 +8,7 @@ func (lt *Loadtest) doTask_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{
 
 			lt.resultsChan <- taskResult{
 				taskResultFlags: respFlags,
-				QueuedDuration:  taskStart.Sub(twm.enqueueTime),
+				QueueDuration:  taskStart.Sub(twm.enqueueTime),
 				TaskDuration:    taskEnd.Sub(taskStart),
 				Meta:            twm.meta,
 			}
