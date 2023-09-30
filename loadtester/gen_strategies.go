@@ -6,12 +6,230 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"strconv"
 	"sync"
 	"time"
 )
+
+type metricRecordResetables_varianceEnabled struct {
+	numTasks                           int
+	numPass                            int
+	numFail                            int
+	numRetry                           int
+	numPanic                           int
+	sumLag                             time.Duration
+	lag                                time.Duration
+	minTaskDuration, maxTaskDuration   time.Duration
+	minQueueDuration, maxQueueDuration time.Duration
+
+	welfords struct {
+		queue welfordVariance
+		task  welfordVariance
+	}
+}
+
+type metricRecord_maxTasksGTZero_percentileEnabled_varianceEnabled struct {
+	// fields that are preserved
+	intervalID       time.Time
+	numIntervalTasks int
+
+	totalNumTasks int
+
+	sumTaskDuration, sumQueueDuration big.Int
+
+	metricRecordResetables_varianceEnabled
+
+	latencies latencyLists
+}
+
+func (mr *metricRecord_maxTasksGTZero_percentileEnabled_varianceEnabled) reset() {
+	mr.sumTaskDuration.SetUint64(0)
+	mr.sumQueueDuration.SetUint64(0)
+	mr.metricRecordResetables_varianceEnabled = metricRecordResetables_varianceEnabled{
+		minTaskDuration:  math.MaxInt64,
+		minQueueDuration: math.MaxInt64,
+	}
+
+	mr.latencies.queue.reset()
+	mr.latencies.task.reset()
+
+}
+
+type metricRecordResetables_varianceDisabled struct {
+	numTasks                           int
+	numPass                            int
+	numFail                            int
+	numRetry                           int
+	numPanic                           int
+	sumLag                             time.Duration
+	lag                                time.Duration
+	minTaskDuration, maxTaskDuration   time.Duration
+	minQueueDuration, maxQueueDuration time.Duration
+}
+
+type metricRecord_maxTasksGTZero_percentileEnabled_varianceDisabled struct {
+	// fields that are preserved
+	intervalID       time.Time
+	numIntervalTasks int
+
+	totalNumTasks int
+
+	sumTaskDuration, sumQueueDuration big.Int
+
+	metricRecordResetables_varianceDisabled
+
+	latencies latencyLists
+}
+
+func (mr *metricRecord_maxTasksGTZero_percentileEnabled_varianceDisabled) reset() {
+	mr.sumTaskDuration.SetUint64(0)
+	mr.sumQueueDuration.SetUint64(0)
+	mr.metricRecordResetables_varianceDisabled = metricRecordResetables_varianceDisabled{
+		minTaskDuration:  math.MaxInt64,
+		minQueueDuration: math.MaxInt64,
+	}
+
+	mr.latencies.queue.reset()
+	mr.latencies.task.reset()
+
+}
+
+type metricRecord_maxTasksGTZero_percentileDisabled_varianceEnabled struct {
+	// fields that are preserved
+	intervalID       time.Time
+	numIntervalTasks int
+
+	totalNumTasks int
+
+	sumTaskDuration, sumQueueDuration big.Int
+
+	metricRecordResetables_varianceEnabled
+}
+
+func (mr *metricRecord_maxTasksGTZero_percentileDisabled_varianceEnabled) reset() {
+	mr.sumTaskDuration.SetUint64(0)
+	mr.sumQueueDuration.SetUint64(0)
+	mr.metricRecordResetables_varianceEnabled = metricRecordResetables_varianceEnabled{
+		minTaskDuration:  math.MaxInt64,
+		minQueueDuration: math.MaxInt64,
+	}
+
+}
+
+type metricRecord_maxTasksGTZero_percentileDisabled_varianceDisabled struct {
+	// fields that are preserved
+	intervalID       time.Time
+	numIntervalTasks int
+
+	totalNumTasks int
+
+	sumTaskDuration, sumQueueDuration big.Int
+
+	metricRecordResetables_varianceDisabled
+}
+
+func (mr *metricRecord_maxTasksGTZero_percentileDisabled_varianceDisabled) reset() {
+	mr.sumTaskDuration.SetUint64(0)
+	mr.sumQueueDuration.SetUint64(0)
+	mr.metricRecordResetables_varianceDisabled = metricRecordResetables_varianceDisabled{
+		minTaskDuration:  math.MaxInt64,
+		minQueueDuration: math.MaxInt64,
+	}
+
+}
+
+type metricRecord_maxTasksNotGTZero_percentileEnabled_varianceEnabled struct {
+	// fields that are preserved
+	intervalID       time.Time
+	numIntervalTasks int
+
+	sumTaskDuration, sumQueueDuration big.Int
+
+	metricRecordResetables_varianceEnabled
+
+	latencies latencyLists
+}
+
+func (mr *metricRecord_maxTasksNotGTZero_percentileEnabled_varianceEnabled) reset() {
+	mr.sumTaskDuration.SetUint64(0)
+	mr.sumQueueDuration.SetUint64(0)
+	mr.metricRecordResetables_varianceEnabled = metricRecordResetables_varianceEnabled{
+		minTaskDuration:  math.MaxInt64,
+		minQueueDuration: math.MaxInt64,
+	}
+
+	mr.latencies.queue.reset()
+	mr.latencies.task.reset()
+
+}
+
+type metricRecord_maxTasksNotGTZero_percentileEnabled_varianceDisabled struct {
+	// fields that are preserved
+	intervalID       time.Time
+	numIntervalTasks int
+
+	sumTaskDuration, sumQueueDuration big.Int
+
+	metricRecordResetables_varianceDisabled
+
+	latencies latencyLists
+}
+
+func (mr *metricRecord_maxTasksNotGTZero_percentileEnabled_varianceDisabled) reset() {
+	mr.sumTaskDuration.SetUint64(0)
+	mr.sumQueueDuration.SetUint64(0)
+	mr.metricRecordResetables_varianceDisabled = metricRecordResetables_varianceDisabled{
+		minTaskDuration:  math.MaxInt64,
+		minQueueDuration: math.MaxInt64,
+	}
+
+	mr.latencies.queue.reset()
+	mr.latencies.task.reset()
+
+}
+
+type metricRecord_maxTasksNotGTZero_percentileDisabled_varianceEnabled struct {
+	// fields that are preserved
+	intervalID       time.Time
+	numIntervalTasks int
+
+	sumTaskDuration, sumQueueDuration big.Int
+
+	metricRecordResetables_varianceEnabled
+}
+
+func (mr *metricRecord_maxTasksNotGTZero_percentileDisabled_varianceEnabled) reset() {
+	mr.sumTaskDuration.SetUint64(0)
+	mr.sumQueueDuration.SetUint64(0)
+	mr.metricRecordResetables_varianceEnabled = metricRecordResetables_varianceEnabled{
+		minTaskDuration:  math.MaxInt64,
+		minQueueDuration: math.MaxInt64,
+	}
+
+}
+
+type metricRecord_maxTasksNotGTZero_percentileDisabled_varianceDisabled struct {
+	// fields that are preserved
+	intervalID       time.Time
+	numIntervalTasks int
+
+	sumTaskDuration, sumQueueDuration big.Int
+
+	metricRecordResetables_varianceDisabled
+}
+
+func (mr *metricRecord_maxTasksNotGTZero_percentileDisabled_varianceDisabled) reset() {
+	mr.sumTaskDuration.SetUint64(0)
+	mr.sumQueueDuration.SetUint64(0)
+	mr.metricRecordResetables_varianceDisabled = metricRecordResetables_varianceDisabled{
+		minTaskDuration:  math.MaxInt64,
+		minQueueDuration: math.MaxInt64,
+	}
+
+}
 
 func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
 
@@ -5138,13 +5356,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 	}
 }
 
-func (lt *Loadtest) writeOutputCsvRow_maxTasksGTZero_percentileEnabled_varianceEnabled() func(metricRecord) {
+func (lt *Loadtest) writeOutputCsvRow_maxTasksGTZero_percentileEnabled_varianceEnabled() func(metricRecord_maxTasksGTZero_percentileEnabled_varianceEnabled) {
 
 	var queuePercentiles, taskPercentiles [numPercentiles]string
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
-	return func(mr metricRecord) {
+	return func(mr metricRecord_maxTasksGTZero_percentileEnabled_varianceEnabled) {
 
 		cd := &lt.csvData
 		if cd.writeErr != nil {
@@ -5222,13 +5440,13 @@ func (lt *Loadtest) writeOutputCsvRow_maxTasksGTZero_percentileEnabled_varianceE
 	}
 }
 
-func (lt *Loadtest) writeOutputCsvRow_maxTasksGTZero_percentileEnabled_varianceDisabled() func(metricRecord) {
+func (lt *Loadtest) writeOutputCsvRow_maxTasksGTZero_percentileEnabled_varianceDisabled() func(metricRecord_maxTasksGTZero_percentileEnabled_varianceDisabled) {
 
 	var queuePercentiles, taskPercentiles [numPercentiles]string
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
-	return func(mr metricRecord) {
+	return func(mr metricRecord_maxTasksGTZero_percentileEnabled_varianceDisabled) {
 
 		cd := &lt.csvData
 		if cd.writeErr != nil {
@@ -5304,11 +5522,11 @@ func (lt *Loadtest) writeOutputCsvRow_maxTasksGTZero_percentileEnabled_varianceD
 	}
 }
 
-func (lt *Loadtest) writeOutputCsvRow_maxTasksGTZero_percentileDisabled_varianceEnabled() func(metricRecord) {
+func (lt *Loadtest) writeOutputCsvRow_maxTasksGTZero_percentileDisabled_varianceEnabled() func(metricRecord_maxTasksGTZero_percentileDisabled_varianceEnabled) {
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
-	return func(mr metricRecord) {
+	return func(mr metricRecord_maxTasksGTZero_percentileDisabled_varianceEnabled) {
 
 		cd := &lt.csvData
 		if cd.writeErr != nil {
@@ -5363,11 +5581,11 @@ func (lt *Loadtest) writeOutputCsvRow_maxTasksGTZero_percentileDisabled_variance
 	}
 }
 
-func (lt *Loadtest) writeOutputCsvRow_maxTasksGTZero_percentileDisabled_varianceDisabled() func(metricRecord) {
+func (lt *Loadtest) writeOutputCsvRow_maxTasksGTZero_percentileDisabled_varianceDisabled() func(metricRecord_maxTasksGTZero_percentileDisabled_varianceDisabled) {
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
-	return func(mr metricRecord) {
+	return func(mr metricRecord_maxTasksGTZero_percentileDisabled_varianceDisabled) {
 
 		cd := &lt.csvData
 		if cd.writeErr != nil {
@@ -5420,13 +5638,13 @@ func (lt *Loadtest) writeOutputCsvRow_maxTasksGTZero_percentileDisabled_variance
 	}
 }
 
-func (lt *Loadtest) writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled_varianceEnabled() func(metricRecord) {
+func (lt *Loadtest) writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled_varianceEnabled() func(metricRecord_maxTasksNotGTZero_percentileEnabled_varianceEnabled) {
 
 	var queuePercentiles, taskPercentiles [numPercentiles]string
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
-	return func(mr metricRecord) {
+	return func(mr metricRecord_maxTasksNotGTZero_percentileEnabled_varianceEnabled) {
 
 		cd := &lt.csvData
 		if cd.writeErr != nil {
@@ -5487,13 +5705,13 @@ func (lt *Loadtest) writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled_varian
 	}
 }
 
-func (lt *Loadtest) writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled_varianceDisabled() func(metricRecord) {
+func (lt *Loadtest) writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled_varianceDisabled() func(metricRecord_maxTasksNotGTZero_percentileEnabled_varianceDisabled) {
 
 	var queuePercentiles, taskPercentiles [numPercentiles]string
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
-	return func(mr metricRecord) {
+	return func(mr metricRecord_maxTasksNotGTZero_percentileEnabled_varianceDisabled) {
 
 		cd := &lt.csvData
 		if cd.writeErr != nil {
@@ -5552,11 +5770,11 @@ func (lt *Loadtest) writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled_varian
 	}
 }
 
-func (lt *Loadtest) writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled_varianceEnabled() func(metricRecord) {
+func (lt *Loadtest) writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled_varianceEnabled() func(metricRecord_maxTasksNotGTZero_percentileDisabled_varianceEnabled) {
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
-	return func(mr metricRecord) {
+	return func(mr metricRecord_maxTasksNotGTZero_percentileDisabled_varianceEnabled) {
 
 		cd := &lt.csvData
 		if cd.writeErr != nil {
@@ -5594,11 +5812,11 @@ func (lt *Loadtest) writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled_varia
 	}
 }
 
-func (lt *Loadtest) writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled_varianceDisabled() func(metricRecord) {
+func (lt *Loadtest) writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled_varianceDisabled() func(metricRecord_maxTasksNotGTZero_percentileDisabled_varianceDisabled) {
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
-	return func(mr metricRecord) {
+	return func(mr metricRecord_maxTasksNotGTZero_percentileDisabled_varianceDisabled) {
 
 		cd := &lt.csvData
 		if cd.writeErr != nil {
@@ -5634,24 +5852,23 @@ func (lt *Loadtest) writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled_varia
 	}
 }
 
-func (lt *Loadtest) resultsHandler_percentileEnabled_varianceEnabled() {
+func (lt *Loadtest) resultsHandler_maxTasksGTZero_percentileEnabled_varianceEnabled() {
 
 	cd := &lt.csvData
-	var mr metricRecord
+	var mr metricRecord_maxTasksGTZero_percentileEnabled_varianceEnabled
 
 	mr.latencies = lt.latencies
 
 	mr.reset()
 
 	var writeRow func()
-	if lt.maxTasks > 0 {
+	{
+		f := lt.writeOutputCsvRow_maxTasksGTZero_percentileEnabled_varianceEnabled()
 		writeRow = func() {
+
 			mr.totalNumTasks += mr.numTasks
-			lt.writeOutputCsvRow(mr)
-		}
-	} else {
-		writeRow = func() {
-			lt.writeOutputCsvRow(mr)
+
+			f(mr)
 		}
 	}
 
@@ -5721,9 +5938,6 @@ func (lt *Loadtest) resultsHandler_percentileEnabled_varianceEnabled() {
 			writeRow()
 			mr.reset()
 
-			mr.latencies.queue.reset()
-			mr.latencies.task.reset()
-
 			if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
 				cd.writer.Flush()
 				if err := cd.writer.Error(); err != nil {
@@ -5735,24 +5949,23 @@ func (lt *Loadtest) resultsHandler_percentileEnabled_varianceEnabled() {
 	}
 }
 
-func (lt *Loadtest) resultsHandler_percentileEnabled_varianceDisabled() {
+func (lt *Loadtest) resultsHandler_maxTasksGTZero_percentileEnabled_varianceDisabled() {
 
 	cd := &lt.csvData
-	var mr metricRecord
+	var mr metricRecord_maxTasksGTZero_percentileEnabled_varianceDisabled
 
 	mr.latencies = lt.latencies
 
 	mr.reset()
 
 	var writeRow func()
-	if lt.maxTasks > 0 {
+	{
+		f := lt.writeOutputCsvRow_maxTasksGTZero_percentileEnabled_varianceDisabled()
 		writeRow = func() {
+
 			mr.totalNumTasks += mr.numTasks
-			lt.writeOutputCsvRow(mr)
-		}
-	} else {
-		writeRow = func() {
-			lt.writeOutputCsvRow(mr)
+
+			f(mr)
 		}
 	}
 
@@ -5819,9 +6032,6 @@ func (lt *Loadtest) resultsHandler_percentileEnabled_varianceDisabled() {
 			writeRow()
 			mr.reset()
 
-			mr.latencies.queue.reset()
-			mr.latencies.task.reset()
-
 			if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
 				cd.writer.Flush()
 				if err := cd.writer.Error(); err != nil {
@@ -5833,22 +6043,21 @@ func (lt *Loadtest) resultsHandler_percentileEnabled_varianceDisabled() {
 	}
 }
 
-func (lt *Loadtest) resultsHandler_percentileDisabled_varianceEnabled() {
+func (lt *Loadtest) resultsHandler_maxTasksGTZero_percentileDisabled_varianceEnabled() {
 
 	cd := &lt.csvData
-	var mr metricRecord
+	var mr metricRecord_maxTasksGTZero_percentileDisabled_varianceEnabled
 
 	mr.reset()
 
 	var writeRow func()
-	if lt.maxTasks > 0 {
+	{
+		f := lt.writeOutputCsvRow_maxTasksGTZero_percentileDisabled_varianceEnabled()
 		writeRow = func() {
+
 			mr.totalNumTasks += mr.numTasks
-			lt.writeOutputCsvRow(mr)
-		}
-	} else {
-		writeRow = func() {
-			lt.writeOutputCsvRow(mr)
+
+			f(mr)
 		}
 	}
 
@@ -5926,22 +6135,385 @@ func (lt *Loadtest) resultsHandler_percentileDisabled_varianceEnabled() {
 	}
 }
 
-func (lt *Loadtest) resultsHandler_percentileDisabled_varianceDisabled() {
+func (lt *Loadtest) resultsHandler_maxTasksGTZero_percentileDisabled_varianceDisabled() {
 
 	cd := &lt.csvData
-	var mr metricRecord
+	var mr metricRecord_maxTasksGTZero_percentileDisabled_varianceDisabled
 
 	mr.reset()
 
 	var writeRow func()
-	if lt.maxTasks > 0 {
+	{
+		f := lt.writeOutputCsvRow_maxTasksGTZero_percentileDisabled_varianceDisabled()
 		writeRow = func() {
+
 			mr.totalNumTasks += mr.numTasks
-			lt.writeOutputCsvRow(mr)
+
+			f(mr)
 		}
-	} else {
+	}
+
+	cd.flushDeadline = time.Now().Add(cd.flushInterval)
+
+	for {
+		tr, ok := <-lt.resultsChan
+		if !ok {
+			if cd.writeErr == nil && mr.numTasks > 0 {
+				writeRow()
+			}
+			return
+		}
+
+		lt.resultWaitGroup.Done()
+
+		if cd.writeErr != nil {
+			continue
+		}
+
+		if tr.taskResultFlags.isZero() {
+
+			mr.sumLag += tr.Meta.Lag
+
+			continue
+		}
+
+		if mr.intervalID.Before(tr.Meta.IntervalID) {
+			mr.intervalID = tr.Meta.IntervalID
+			mr.numIntervalTasks = tr.Meta.NumIntervalTasks
+			mr.lag = tr.Meta.Lag
+		}
+
+		if mr.minQueueDuration > tr.QueueDuration {
+			mr.minQueueDuration = tr.QueueDuration
+		}
+
+		if mr.minTaskDuration > tr.TaskDuration {
+			mr.minTaskDuration = tr.TaskDuration
+		}
+
+		if mr.maxTaskDuration < tr.TaskDuration {
+			mr.maxTaskDuration = tr.TaskDuration
+		}
+
+		if mr.maxQueueDuration < tr.QueueDuration {
+			mr.maxQueueDuration = tr.QueueDuration
+		}
+
+		mr.sumQueueDuration.Add(&mr.sumQueueDuration, big.NewInt(int64(tr.QueueDuration)))
+		mr.sumTaskDuration.Add(&mr.sumTaskDuration, big.NewInt(int64(tr.TaskDuration)))
+		mr.numPass += int(tr.Passed)
+		mr.numFail += int(tr.Errored)
+		mr.numPanic += int(tr.Panicked)
+		mr.numRetry += int(tr.RetryQueued)
+
+		mr.numTasks++
+
+		if mr.numTasks >= mr.numIntervalTasks {
+
+			writeRow()
+			mr.reset()
+
+			if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
+				cd.writer.Flush()
+				if err := cd.writer.Error(); err != nil {
+					cd.setErr(err) // sets error state in multiple goroutine safe way
+				}
+				cd.flushDeadline = time.Now().Add(cd.flushInterval)
+			}
+		}
+	}
+}
+
+func (lt *Loadtest) resultsHandler_maxTasksNotGTZero_percentileEnabled_varianceEnabled() {
+
+	cd := &lt.csvData
+	var mr metricRecord_maxTasksNotGTZero_percentileEnabled_varianceEnabled
+
+	mr.latencies = lt.latencies
+
+	mr.reset()
+
+	var writeRow func()
+	{
+		f := lt.writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled_varianceEnabled()
 		writeRow = func() {
-			lt.writeOutputCsvRow(mr)
+
+			f(mr)
+		}
+	}
+
+	cd.flushDeadline = time.Now().Add(cd.flushInterval)
+
+	for {
+		tr, ok := <-lt.resultsChan
+		if !ok {
+			if cd.writeErr == nil && mr.numTasks > 0 {
+				writeRow()
+			}
+			return
+		}
+
+		lt.resultWaitGroup.Done()
+
+		if cd.writeErr != nil {
+			continue
+		}
+
+		if tr.taskResultFlags.isZero() {
+
+			mr.sumLag += tr.Meta.Lag
+
+			continue
+		}
+
+		if mr.intervalID.Before(tr.Meta.IntervalID) {
+			mr.intervalID = tr.Meta.IntervalID
+			mr.numIntervalTasks = tr.Meta.NumIntervalTasks
+			mr.lag = tr.Meta.Lag
+		}
+
+		if mr.minQueueDuration > tr.QueueDuration {
+			mr.minQueueDuration = tr.QueueDuration
+		}
+
+		if mr.minTaskDuration > tr.TaskDuration {
+			mr.minTaskDuration = tr.TaskDuration
+		}
+
+		if mr.maxTaskDuration < tr.TaskDuration {
+			mr.maxTaskDuration = tr.TaskDuration
+		}
+
+		if mr.maxQueueDuration < tr.QueueDuration {
+			mr.maxQueueDuration = tr.QueueDuration
+		}
+
+		mr.sumQueueDuration.Add(&mr.sumQueueDuration, big.NewInt(int64(tr.QueueDuration)))
+		mr.sumTaskDuration.Add(&mr.sumTaskDuration, big.NewInt(int64(tr.TaskDuration)))
+		mr.numPass += int(tr.Passed)
+		mr.numFail += int(tr.Errored)
+		mr.numPanic += int(tr.Panicked)
+		mr.numRetry += int(tr.RetryQueued)
+
+		mr.numTasks++
+
+		mr.welfords.queue.Update(mr.numTasks, float64(tr.QueueDuration))
+		mr.welfords.task.Update(mr.numTasks, float64(tr.TaskDuration))
+
+		mr.latencies.queue.add(tr.QueueDuration)
+		mr.latencies.task.add(tr.TaskDuration)
+
+		if mr.numTasks >= mr.numIntervalTasks {
+
+			writeRow()
+			mr.reset()
+
+			if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
+				cd.writer.Flush()
+				if err := cd.writer.Error(); err != nil {
+					cd.setErr(err) // sets error state in multiple goroutine safe way
+				}
+				cd.flushDeadline = time.Now().Add(cd.flushInterval)
+			}
+		}
+	}
+}
+
+func (lt *Loadtest) resultsHandler_maxTasksNotGTZero_percentileEnabled_varianceDisabled() {
+
+	cd := &lt.csvData
+	var mr metricRecord_maxTasksNotGTZero_percentileEnabled_varianceDisabled
+
+	mr.latencies = lt.latencies
+
+	mr.reset()
+
+	var writeRow func()
+	{
+		f := lt.writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled_varianceDisabled()
+		writeRow = func() {
+
+			f(mr)
+		}
+	}
+
+	cd.flushDeadline = time.Now().Add(cd.flushInterval)
+
+	for {
+		tr, ok := <-lt.resultsChan
+		if !ok {
+			if cd.writeErr == nil && mr.numTasks > 0 {
+				writeRow()
+			}
+			return
+		}
+
+		lt.resultWaitGroup.Done()
+
+		if cd.writeErr != nil {
+			continue
+		}
+
+		if tr.taskResultFlags.isZero() {
+
+			mr.sumLag += tr.Meta.Lag
+
+			continue
+		}
+
+		if mr.intervalID.Before(tr.Meta.IntervalID) {
+			mr.intervalID = tr.Meta.IntervalID
+			mr.numIntervalTasks = tr.Meta.NumIntervalTasks
+			mr.lag = tr.Meta.Lag
+		}
+
+		if mr.minQueueDuration > tr.QueueDuration {
+			mr.minQueueDuration = tr.QueueDuration
+		}
+
+		if mr.minTaskDuration > tr.TaskDuration {
+			mr.minTaskDuration = tr.TaskDuration
+		}
+
+		if mr.maxTaskDuration < tr.TaskDuration {
+			mr.maxTaskDuration = tr.TaskDuration
+		}
+
+		if mr.maxQueueDuration < tr.QueueDuration {
+			mr.maxQueueDuration = tr.QueueDuration
+		}
+
+		mr.sumQueueDuration.Add(&mr.sumQueueDuration, big.NewInt(int64(tr.QueueDuration)))
+		mr.sumTaskDuration.Add(&mr.sumTaskDuration, big.NewInt(int64(tr.TaskDuration)))
+		mr.numPass += int(tr.Passed)
+		mr.numFail += int(tr.Errored)
+		mr.numPanic += int(tr.Panicked)
+		mr.numRetry += int(tr.RetryQueued)
+
+		mr.numTasks++
+
+		mr.latencies.queue.add(tr.QueueDuration)
+		mr.latencies.task.add(tr.TaskDuration)
+
+		if mr.numTasks >= mr.numIntervalTasks {
+
+			writeRow()
+			mr.reset()
+
+			if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
+				cd.writer.Flush()
+				if err := cd.writer.Error(); err != nil {
+					cd.setErr(err) // sets error state in multiple goroutine safe way
+				}
+				cd.flushDeadline = time.Now().Add(cd.flushInterval)
+			}
+		}
+	}
+}
+
+func (lt *Loadtest) resultsHandler_maxTasksNotGTZero_percentileDisabled_varianceEnabled() {
+
+	cd := &lt.csvData
+	var mr metricRecord_maxTasksNotGTZero_percentileDisabled_varianceEnabled
+
+	mr.reset()
+
+	var writeRow func()
+	{
+		f := lt.writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled_varianceEnabled()
+		writeRow = func() {
+
+			f(mr)
+		}
+	}
+
+	cd.flushDeadline = time.Now().Add(cd.flushInterval)
+
+	for {
+		tr, ok := <-lt.resultsChan
+		if !ok {
+			if cd.writeErr == nil && mr.numTasks > 0 {
+				writeRow()
+			}
+			return
+		}
+
+		lt.resultWaitGroup.Done()
+
+		if cd.writeErr != nil {
+			continue
+		}
+
+		if tr.taskResultFlags.isZero() {
+
+			mr.sumLag += tr.Meta.Lag
+
+			continue
+		}
+
+		if mr.intervalID.Before(tr.Meta.IntervalID) {
+			mr.intervalID = tr.Meta.IntervalID
+			mr.numIntervalTasks = tr.Meta.NumIntervalTasks
+			mr.lag = tr.Meta.Lag
+		}
+
+		if mr.minQueueDuration > tr.QueueDuration {
+			mr.minQueueDuration = tr.QueueDuration
+		}
+
+		if mr.minTaskDuration > tr.TaskDuration {
+			mr.minTaskDuration = tr.TaskDuration
+		}
+
+		if mr.maxTaskDuration < tr.TaskDuration {
+			mr.maxTaskDuration = tr.TaskDuration
+		}
+
+		if mr.maxQueueDuration < tr.QueueDuration {
+			mr.maxQueueDuration = tr.QueueDuration
+		}
+
+		mr.sumQueueDuration.Add(&mr.sumQueueDuration, big.NewInt(int64(tr.QueueDuration)))
+		mr.sumTaskDuration.Add(&mr.sumTaskDuration, big.NewInt(int64(tr.TaskDuration)))
+		mr.numPass += int(tr.Passed)
+		mr.numFail += int(tr.Errored)
+		mr.numPanic += int(tr.Panicked)
+		mr.numRetry += int(tr.RetryQueued)
+
+		mr.numTasks++
+
+		mr.welfords.queue.Update(mr.numTasks, float64(tr.QueueDuration))
+		mr.welfords.task.Update(mr.numTasks, float64(tr.TaskDuration))
+
+		if mr.numTasks >= mr.numIntervalTasks {
+
+			writeRow()
+			mr.reset()
+
+			if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
+				cd.writer.Flush()
+				if err := cd.writer.Error(); err != nil {
+					cd.setErr(err) // sets error state in multiple goroutine safe way
+				}
+				cd.flushDeadline = time.Now().Add(cd.flushInterval)
+			}
+		}
+	}
+}
+
+func (lt *Loadtest) resultsHandler_maxTasksNotGTZero_percentileDisabled_varianceDisabled() {
+
+	cd := &lt.csvData
+	var mr metricRecord_maxTasksNotGTZero_percentileDisabled_varianceDisabled
+
+	mr.reset()
+
+	var writeRow func()
+	{
+		f := lt.writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled_varianceDisabled()
+		writeRow = func() {
+
+			f(mr)
 		}
 	}
 

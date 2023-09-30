@@ -1,11 +1,11 @@
-func (lt *Loadtest) writeOutputCsvRow_maxTasks{{if .MaxTasksGTZero}}GTZero{{else}}NotGTZero{{end}}_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}() func(metricRecord) {
+func (lt *Loadtest) writeOutputCsvRow_maxTasks{{if .MaxTasksGTZero}}GTZero{{else}}NotGTZero{{end}}_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}() func(metricRecord_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}) {
 	{{if .PercentileEnabled}}
 	var queuePercentiles, taskPercentiles [numPercentiles]string
 	{{end}}
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
-	return func(mr metricRecord) {
+	return func(mr metricRecord_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}) {
 
 		cd := &lt.csvData
 		if cd.writeErr != nil {

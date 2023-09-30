@@ -1,0 +1,48 @@
+{{if and .PercentileEnabled .MaxTasksGTZero}}
+type metricRecordResetables_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}} struct {
+	numTasks                           int
+	numPass                            int
+	numFail                            int
+	numRetry                           int
+	numPanic                           int
+	sumLag                             time.Duration
+	lag                                time.Duration
+	minTaskDuration, maxTaskDuration   time.Duration
+	minQueueDuration, maxQueueDuration time.Duration
+	{{if .VarianceEnabled}}
+	welfords struct {
+		queue welfordVariance
+		task  welfordVariance
+	}
+	{{end}}
+}
+{{end}}
+type metricRecord_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}} struct {
+	// fields that are preserved
+	intervalID       time.Time
+	numIntervalTasks int
+	{{if .MaxTasksGTZero}}
+	totalNumTasks int
+	{{end}}
+
+	sumTaskDuration, sumQueueDuration big.Int
+
+	metricRecordResetables_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}
+
+	{{if .PercentileEnabled}}
+	latencies latencyLists
+	{{end}}
+}
+
+func (mr *metricRecord_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}) reset() {
+	mr.sumTaskDuration.SetUint64(0)
+	mr.sumQueueDuration.SetUint64(0)
+	mr.metricRecordResetables_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}} = metricRecordResetables_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}{
+		minTaskDuration:  math.MaxInt64,
+		minQueueDuration: math.MaxInt64,
+	}
+	{{if .PercentileEnabled}}
+	mr.latencies.queue.reset()
+	mr.latencies.task.reset()
+	{{end}}
+}

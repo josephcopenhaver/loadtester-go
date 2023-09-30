@@ -101,7 +101,6 @@ type Loadtest struct {
 	logger                 StructuredLogger
 	run                    func(context.Context, *error) error
 	doTask                 func(context.Context, int, taskWithMeta)
-	writeOutputCsvRow      func(metricRecord)
 	resultsHandler         func()
 	latencies              latencyLists
 	flushRetriesOnShutdown bool
@@ -184,36 +183,6 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		variancesEnabled:       cfg.variancesEnabled,
 	}
 
-	if cfg.maxTasks > 0 {
-		if cfg.percentilesEnabled {
-			if cfg.variancesEnabled {
-				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileEnabled_varianceEnabled()
-			} else {
-				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileEnabled_varianceDisabled()
-			}
-		} else {
-			if cfg.variancesEnabled {
-				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileDisabled_varianceEnabled()
-			} else {
-				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero_percentileDisabled_varianceDisabled()
-			}
-		}
-	} else {
-		if cfg.percentilesEnabled {
-			if cfg.variancesEnabled {
-				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled_varianceEnabled()
-			} else {
-				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileEnabled_varianceDisabled()
-			}
-		} else {
-			if cfg.variancesEnabled {
-				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled_varianceEnabled()
-			} else {
-				lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero_percentileDisabled_varianceDisabled()
-			}
-		}
-	}
-
 	if !cfg.retriesDisabled {
 		if !cfg.csvOutputDisabled {
 			lt.doTask = lt.doTask_retriesEnabled_metricsEnabled
@@ -250,17 +219,33 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		}
 	}
 
-	if cfg.percentilesEnabled {
-		if cfg.variancesEnabled {
-			lt.resultsHandler = lt.resultsHandler_percentileEnabled_varianceEnabled
+	if cfg.maxTasks > 0 {
+		if cfg.percentilesEnabled {
+			if cfg.variancesEnabled {
+				lt.resultsHandler = lt.resultsHandler_maxTasksGTZero_percentileEnabled_varianceEnabled
+			} else {
+				lt.resultsHandler = lt.resultsHandler_maxTasksGTZero_percentileEnabled_varianceDisabled
+			}
 		} else {
-			lt.resultsHandler = lt.resultsHandler_percentileEnabled_varianceDisabled
+			if cfg.variancesEnabled {
+				lt.resultsHandler = lt.resultsHandler_maxTasksGTZero_percentileDisabled_varianceEnabled
+			} else {
+				lt.resultsHandler = lt.resultsHandler_maxTasksGTZero_percentileDisabled_varianceDisabled
+			}
 		}
 	} else {
-		if cfg.variancesEnabled {
-			lt.resultsHandler = lt.resultsHandler_percentileDisabled_varianceEnabled
+		if cfg.percentilesEnabled {
+			if cfg.variancesEnabled {
+				lt.resultsHandler = lt.resultsHandler_maxTasksNotGTZero_percentileEnabled_varianceEnabled
+			} else {
+				lt.resultsHandler = lt.resultsHandler_maxTasksNotGTZero_percentileEnabled_varianceDisabled
+			}
 		} else {
-			lt.resultsHandler = lt.resultsHandler_percentileDisabled_varianceDisabled
+			if cfg.variancesEnabled {
+				lt.resultsHandler = lt.resultsHandler_maxTasksNotGTZero_percentileDisabled_varianceEnabled
+			} else {
+				lt.resultsHandler = lt.resultsHandler_maxTasksNotGTZero_percentileDisabled_varianceDisabled
+			}
 		}
 	}
 

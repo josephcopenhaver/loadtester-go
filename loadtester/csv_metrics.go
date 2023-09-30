@@ -4,8 +4,6 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"io"
-	"math"
-	"math/big"
 	"os"
 	"sync"
 	"time"
@@ -64,46 +62,6 @@ func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
 	}
 
 	return nil
-}
-
-type metricRecordResetables struct {
-	numTasks                           int
-	numPass                            int
-	numFail                            int
-	numRetry                           int
-	numPanic                           int
-	sumLag                             time.Duration
-	lag                                time.Duration
-	minTaskDuration, maxTaskDuration   time.Duration
-	minQueueDuration, maxQueueDuration time.Duration
-
-	welfords struct {
-		queue welfordVariance
-		task  welfordVariance
-	}
-}
-
-type metricRecord struct {
-	// fields that are preserved
-	intervalID       time.Time
-	numIntervalTasks int
-	// totalNumTasks is only modified if the loadtest's maxTasks setting is > 0
-	totalNumTasks int
-
-	sumTaskDuration, sumQueueDuration big.Int
-
-	metricRecordResetables
-
-	latencies latencyLists
-}
-
-func (mr *metricRecord) reset() {
-	mr.sumTaskDuration.SetUint64(0)
-	mr.sumQueueDuration.SetUint64(0)
-	mr.metricRecordResetables = metricRecordResetables{
-		minTaskDuration:  math.MaxInt64,
-		minQueueDuration: math.MaxInt64,
-	}
 }
 
 func (lt *Loadtest) writeOutputCsvHeaders() error {

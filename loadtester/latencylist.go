@@ -20,24 +20,23 @@ func (ll *latencyList) reset() {
 }
 
 type percentileTarget struct {
-	// percentile value multiplied by
-	percentileTimes100 int
-	n                  int // numerator
-	d                  int // denominator
-	rt                 int // integerRoundingTerm
+	n  int // numerator
+	d  int // denominator
+	rt int // integerRoundingTerm
 }
 
+// newPTarget constructs a new integer rational multiplication lookup table record and validates the input elements
 func newPTarget(percentileTimes100, n, d int) percentileTarget {
-	if (10000%d != 0) || ((10000/d)*n != percentileTimes100) {
+	if percentileTimes100 <= 0 || n <= 0 || d <= 0 || n >= d || d%2 != 0 || (10000%d != 0) || ((10000/d)*n != percentileTimes100) {
 		panic(errors.New("should never happen"))
 	}
-	return percentileTarget{percentileTimes100, n, d, d / 2}
+	return percentileTarget{n, d, d >> 1}
 }
 
 const numPercentiles = 10
 
 var percentileTargets [numPercentiles]percentileTarget
-var percentileComputeOrder [numPercentiles]int
+var percentileComputeOrder [numPercentiles]uint8
 
 func init() {
 	percentileTargets = [numPercentiles]percentileTarget{
@@ -53,7 +52,7 @@ func init() {
 		newPTarget(9990, 999, 1000),   // 8
 		newPTarget(9999, 9999, 10000), // 9
 	}
-	percentileComputeOrder = [numPercentiles]int{
+	percentileComputeOrder = [numPercentiles]uint8{
 		0, // 1
 		1, // 1
 		2, // 3

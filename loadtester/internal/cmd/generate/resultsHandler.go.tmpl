@@ -1,21 +1,20 @@
-func (lt *Loadtest) resultsHandler_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}() {
+func (lt *Loadtest) resultsHandler_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}() {
 
 	cd := &lt.csvData
-	var mr metricRecord
+	var mr metricRecord_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}
 	{{if .PercentileEnabled}}
 	mr.latencies = lt.latencies
 	{{end}}
 	mr.reset()
 
 	var writeRow func()
-	if lt.maxTasks > 0 {
+	{
+		f := lt.writeOutputCsvRow_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}()
 		writeRow = func() {
+			{{if .MaxTasksGTZero}}
 			mr.totalNumTasks += mr.numTasks
-			lt.writeOutputCsvRow(mr)
-		}
-	} else {
-		writeRow = func() {
-			lt.writeOutputCsvRow(mr)
+			{{end}}
+			f(mr)
 		}
 	}
 
@@ -88,11 +87,6 @@ func (lt *Loadtest) resultsHandler_percentile{{if .PercentileEnabled}}Enabled{{e
 
 			writeRow()
 			mr.reset()
-
-			{{if .PercentileEnabled}}
-			mr.latencies.queue.reset()
-			mr.latencies.task.reset()
-			{{end}}
 
 			if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
 				cd.writer.Flush()

@@ -25,6 +25,9 @@ var tsWriteOutputCsvRow string
 //go:embed resultsHandler.go.tmpl
 var tsResultsHandler string
 
+//go:embed metricRecord.go.tmpl
+var tsMetricRecord string
+
 func parse(s string) *template.Template {
 	t, err := template.New("").Parse(s)
 	if err != nil {
@@ -85,6 +88,30 @@ func main() {
 		render := renderer[any](&buf)
 
 		render(parse(tsImports), nil)
+	}
+
+	// render metricRecord strategies
+	{
+		t := parse(tsMetricRecord)
+
+		type cfg struct {
+			PercentileEnabled bool
+			MaxTasksGTZero    bool
+			VarianceEnabled   bool
+		}
+
+		render := renderer[cfg](&buf)
+
+		render(t, []cfg{
+			{MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: true},
+			{MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: false},
+			{MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: true},
+			{MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: false},
+			{MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: true},
+			{MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: false},
+			{MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: true},
+			{MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: false},
+		})
 	}
 
 	// render doTask strategies
@@ -159,6 +186,7 @@ func main() {
 		t := parse(tsResultsHandler)
 
 		type cfg struct {
+			MaxTasksGTZero    bool
 			PercentileEnabled bool
 			VarianceEnabled   bool
 		}
@@ -166,10 +194,14 @@ func main() {
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{PercentileEnabled: true, VarianceEnabled: true},
-			{PercentileEnabled: true, VarianceEnabled: false},
-			{PercentileEnabled: false, VarianceEnabled: true},
-			{PercentileEnabled: false, VarianceEnabled: false},
+			{MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: true},
+			{MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: false},
+			{MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: true},
+			{MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: false},
+			{MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: true},
+			{MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: false},
+			{MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: true},
+			{MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: false},
 		})
 	}
 

@@ -227,7 +227,7 @@ func CsvLatencyPercentilesEnabled(b bool) LoadtestOption {
 }
 
 // CsvLatencyVarianceEnabled can create additional delay while processing results.
-func CsvLatencyVarianceEnabled(b bool) LoadtestOption {
+func CsvLatencyVariancesEnabled(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.variancesEnabled = b
 	}
