@@ -138,15 +138,16 @@ func main() {
 
 	const parallelism = 1
 
+	op := loadtester.NewOpts()
 	lt, err := loadtester.NewLoadtest(
-		tr,
-		loadtester.Logger(logger),
-		loadtester.NumWorkers(parallelism),
-		loadtester.NumIntervalTasks(parallelism),
-		loadtester.Interval(5*time.Second),
-		// loadtester.CsvLatencyPercentilesEnabled(true), // default is false
-		// loadtester.CsvLatencyVarianceEnabled(true),    // default is false
-		// loadtester.FlushRetriesOnShutdown(true), // default is false
+		op.TaskReader(tr),
+		op.Logger(logger),
+		op.NumWorkers(parallelism),
+		op.NumIntervalTasks(parallelism),
+		op.Interval(5*time.Second),
+		// op.MetricsLatencyPercentilesEnabled(true), // default is false
+		// op.MetricsLatencyVarianceEnabled(true),    // default is false
+		// op.FlushRetriesOnShutdown(true), // default is false
 	)
 	if err != nil {
 		panic(err)

@@ -110,7 +110,7 @@ type Loadtest struct {
 	variancesEnabled       bool
 }
 
-func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, error) {
+func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 
 	cfg, err := newLoadtestConfig(options...)
 	if err != nil {
@@ -150,7 +150,7 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 	}
 
 	lt := &Loadtest{
-		taskReader:    taskReader,
+		taskReader:    cfg.taskReader,
 		maxTasks:      cfg.maxTasks,
 		maxWorkers:    cfg.maxWorkers,
 		numWorkers:    cfg.numWorkers,

@@ -16,6 +16,7 @@ const (
 )
 
 type loadtestConfig struct {
+	taskReader             TaskReader
 	outputBufferingFactor  int
 	maxTasks               int
 	maxWorkers             int
@@ -144,90 +145,106 @@ func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
 		return result, errors.New("MaxWorkers value is too large")
 	}
 
+	if cfg.taskReader == nil {
+		return result, errors.New("config value must not be nil: TaskReader")
+	}
+
 	result = cfg
 	return result, nil
 }
 
 type LoadtestOption func(*loadtestConfig)
 
+type newOpts struct{}
+
+func NewOpts() newOpts {
+	return newOpts{}
+}
+
+func (newOpts) TaskReader(taskReader TaskReader) LoadtestOption {
+	return func(cfg *loadtestConfig) {
+		cfg.taskReader = taskReader
+	}
+}
+
 // MaxTasks sets an upper bound on the number of tasks the loadtest could perform
-func MaxTasks(max int) LoadtestOption {
+func (newOpts) MaxTasks(max int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.maxTasks = max
 	}
 }
 
-func MaxWorkers(max int) LoadtestOption {
+func (newOpts) MaxWorkers(max int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.maxWorkers = max
 		cfg.maxWorkersSet = true
 	}
 }
 
-func NumWorkers(n int) LoadtestOption {
+func (newOpts) NumWorkers(n int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.numWorkers = n
 		cfg.numWorkersSet = true
 	}
 }
 
-func OutputBufferingFactor(factor int) LoadtestOption {
+func (newOpts) OutputBufferingFactor(factor int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.outputBufferingFactor = factor
 	}
 }
 
-func MaxIntervalTasks(n int) LoadtestOption {
+func (newOpts) MaxIntervalTasks(n int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.maxIntervalTasks = n
 		cfg.maxIntervalTasksSet = true
 	}
 }
 
-func NumIntervalTasks(n int) LoadtestOption {
+func (newOpts) NumIntervalTasks(n int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.numIntervalTasks = n
 		cfg.numIntervalTasksSet = true
 	}
 }
 
-func Interval(d time.Duration) LoadtestOption {
+func (newOpts) Interval(d time.Duration) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.interval = d
 	}
 }
 
-func MetricsCsvFilename(s string) LoadtestOption {
+func (newOpts) MetricsCsvFilename(s string) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.csvOutputFilename = s
 	}
 }
 
-func MetricsCsvFlushInterval(d time.Duration) LoadtestOption {
+func (newOpts) MetricsCsvFlushInterval(d time.Duration) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.csvOutputFlushInterval = d
 	}
 }
 
-func MetricsCsvWriterDisabled(b bool) LoadtestOption {
+func (newOpts) MetricsCsvWriterDisabled(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.csvOutputDisabled = b
 	}
 }
 
-// CsvLatencyPercentilesEnabled can greatly increase the amount of memory used
+// MetricsLatencyPercentilesEnabled can greatly increase the amount of memory used
 // and create additional delay while processing results.
 //
 // Make sure MaxIntervalTasks is either not set or if it must be set make
 // sure it is not too large for the hosts's ram availability.
-func CsvLatencyPercentilesEnabled(b bool) LoadtestOption {
+func (newOpts) MetricsLatencyPercentilesEnabled(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.percentilesEnabled = b
 	}
 }
 
-// CsvLatencyVarianceEnabled can create additional delay while processing results.
-func CsvLatencyVariancesEnabled(b bool) LoadtestOption {
+// MetricsLatencyVariancesEnabled can create additional delay while processing results.
+func (newOpts) MetricsLatencyVariancesEnabled(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.variancesEnabled = b
 	}
@@ -235,27 +252,27 @@ func CsvLatencyVariancesEnabled(b bool) LoadtestOption {
 
 // FlushRetriesOnShutdown is useful when your loadtest is more like a smoke test
 // that must have all tasks flush and be successful
-func FlushRetriesOnShutdown(b bool) LoadtestOption {
+func (newOpts) FlushRetriesOnShutdown(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.flushRetriesOnShutdown = b
 	}
 }
 
 // FlushRetriesTimeout is only relevant when FlushRetriesOnShutdown(true) is used
-func FlushRetriesTimeout(d time.Duration) LoadtestOption {
+func (newOpts) FlushRetriesTimeout(d time.Duration) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.flushRetriesTimeout = d
 	}
 }
 
 // RetriesDisabled causes loadtester to ignore retry logic present on tasks
-func RetriesDisabled(b bool) LoadtestOption {
+func (newOpts) RetriesDisabled(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.retriesDisabled = b
 	}
 }
 
-func Logger(logger StructuredLogger) LoadtestOption {
+func (newOpts) Logger(logger StructuredLogger) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.logger = logger
 	}
