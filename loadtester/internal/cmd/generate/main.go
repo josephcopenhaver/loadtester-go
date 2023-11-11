@@ -95,22 +95,31 @@ func main() {
 		t := parse(tsMetricRecord)
 
 		type cfg struct {
-			PercentileEnabled bool
+			RetriesEnabled    bool
 			MaxTasksGTZero    bool
+			PercentileEnabled bool
 			VarianceEnabled   bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: true},
-			{MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: false},
-			{MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: true},
-			{MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: false},
-			{MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: true},
-			{MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: false},
-			{MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: true},
-			{MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: false},
+			{RetriesEnabled: true, MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: true},
+			{RetriesEnabled: true, MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: false},
+			{RetriesEnabled: true, MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: true},
+			{RetriesEnabled: true, MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: false},
+			{RetriesEnabled: true, MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: true},
+			{RetriesEnabled: true, MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: false},
+			{RetriesEnabled: true, MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: true},
+			{RetriesEnabled: true, MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: false},
+			{RetriesEnabled: false, MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: true},
+			{RetriesEnabled: false, MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: false},
+			{RetriesEnabled: false, MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: true},
+			{RetriesEnabled: false, MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: false},
+			{RetriesEnabled: false, MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: true},
+			{RetriesEnabled: false, MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: false},
+			{RetriesEnabled: false, MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: true},
+			{RetriesEnabled: false, MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: false},
 		})
 	}
 
@@ -162,6 +171,7 @@ func main() {
 		t := parse(tsWriteOutputCsvRow)
 
 		type cfg struct {
+			RetriesEnabled    bool
 			MaxTasksGTZero    bool
 			PercentileEnabled bool
 			VarianceEnabled   bool
@@ -170,14 +180,22 @@ func main() {
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: true},
-			{MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: false},
-			{MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: true},
-			{MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: false},
-			{MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: true},
-			{MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: false},
-			{MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: true},
-			{MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: false},
+			{RetriesEnabled: true, MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: true},
+			{RetriesEnabled: true, MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: false},
+			{RetriesEnabled: true, MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: true},
+			{RetriesEnabled: true, MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: false},
+			{RetriesEnabled: true, MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: true},
+			{RetriesEnabled: true, MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: false},
+			{RetriesEnabled: true, MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: true},
+			{RetriesEnabled: true, MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: false},
+			{RetriesEnabled: false, MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: true},
+			{RetriesEnabled: false, MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: false},
+			{RetriesEnabled: false, MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: true},
+			{RetriesEnabled: false, MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: false},
+			{RetriesEnabled: false, MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: true},
+			{RetriesEnabled: false, MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: false},
+			{RetriesEnabled: false, MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: true},
+			{RetriesEnabled: false, MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: false},
 		})
 	}
 
@@ -186,6 +204,7 @@ func main() {
 		t := parse(tsResultsHandler)
 
 		type cfg struct {
+			RetriesEnabled    bool
 			MaxTasksGTZero    bool
 			PercentileEnabled bool
 			VarianceEnabled   bool
@@ -194,14 +213,22 @@ func main() {
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: true},
-			{MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: false},
-			{MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: true},
-			{MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: false},
-			{MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: true},
-			{MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: false},
-			{MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: true},
-			{MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: false},
+			{RetriesEnabled: true, MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: true},
+			{RetriesEnabled: true, MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: false},
+			{RetriesEnabled: true, MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: true},
+			{RetriesEnabled: true, MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: false},
+			{RetriesEnabled: true, MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: true},
+			{RetriesEnabled: true, MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: false},
+			{RetriesEnabled: true, MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: true},
+			{RetriesEnabled: true, MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: false},
+			{RetriesEnabled: false, MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: true},
+			{RetriesEnabled: false, MaxTasksGTZero: true, PercentileEnabled: true, VarianceEnabled: false},
+			{RetriesEnabled: false, MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: true},
+			{RetriesEnabled: false, MaxTasksGTZero: true, PercentileEnabled: false, VarianceEnabled: false},
+			{RetriesEnabled: false, MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: true},
+			{RetriesEnabled: false, MaxTasksGTZero: false, PercentileEnabled: true, VarianceEnabled: false},
+			{RetriesEnabled: false, MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: true},
+			{RetriesEnabled: false, MaxTasksGTZero: false, PercentileEnabled: false, VarianceEnabled: false},
 		})
 	}
 

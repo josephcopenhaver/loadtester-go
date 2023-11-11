@@ -1,10 +1,10 @@
 {{if and .PercentileEnabled .MaxTasksGTZero}}
-type metricRecordResetables_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}} struct {
+type metricRecordResetables_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}} struct {
 	numTasks                           int
 	numPass                            int
 	numFail                            int
-	numRetry                           int
-	numPanic                           int
+	{{if .RetriesEnabled}}numRetry                           int
+	{{end}}numPanic                           int
 	sumLag                             time.Duration
 	lag                                time.Duration
 	minTaskDuration, maxTaskDuration   time.Duration
@@ -17,7 +17,7 @@ type metricRecordResetables_variance{{if .VarianceEnabled}}Enabled{{else}}Disabl
 	{{end}}
 }
 {{end}}
-type metricRecord_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}} struct {
+type metricRecord_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}} struct {
 	// fields that are preserved
 	intervalID       time.Time
 	numIntervalTasks int
@@ -27,17 +27,17 @@ type metricRecord_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{
 
 	sumTaskDuration, sumQueueDuration big.Int
 
-	metricRecordResetables_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}
+	metricRecordResetables_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}
 
 	{{if .PercentileEnabled}}
 	latencies latencyLists
 	{{end}}
 }
 
-func (mr *metricRecord_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}) reset() {
+func (mr *metricRecord_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}) reset() {
 	mr.sumTaskDuration.SetUint64(0)
 	mr.sumQueueDuration.SetUint64(0)
-	mr.metricRecordResetables_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}} = metricRecordResetables_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}{
+	mr.metricRecordResetables_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}} = metricRecordResetables_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}{
 		minTaskDuration:  math.MaxInt64,
 		minQueueDuration: math.MaxInt64,
 	}

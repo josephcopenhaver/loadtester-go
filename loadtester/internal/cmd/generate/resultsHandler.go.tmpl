@@ -1,15 +1,13 @@
-func (lt *Loadtest) resultsHandler_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}() {
+func (lt *Loadtest) resultsHandler_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}() {
 
 	cd := &lt.csvData
-	var mr metricRecord_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}
-	{{if .PercentileEnabled}}
-	mr.latencies = lt.latencies
-	{{end}}
-	mr.reset()
+	var mr metricRecord_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}
+	{{if .PercentileEnabled}}mr.latencies = lt.latencies
+	{{end}}mr.reset()
 
 	var writeRow func()
 	{
-		f := lt.writeOutputCsvRow_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}()
+		f := lt.writeOutputCsvRow_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}()
 		writeRow = func() {
 			{{if .MaxTasksGTZero}}
 			mr.totalNumTasks += mr.numTasks
@@ -68,8 +66,8 @@ func (lt *Loadtest) resultsHandler_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}G
 		mr.sumTaskDuration.Add(&mr.sumTaskDuration, big.NewInt(int64(tr.TaskDuration)))
 		mr.numPass += int(tr.Passed)
 		mr.numFail += int(tr.Errored)
-		mr.numPanic += int(tr.Panicked)
-		mr.numRetry += int(tr.RetryQueued)
+		mr.numPanic += int(tr.Panicked){{if .RetriesEnabled}}
+		mr.numRetry += int(tr.RetryQueued){{end}}
 
 		mr.numTasks++
 

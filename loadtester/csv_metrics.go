@@ -77,7 +77,15 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 		"num_tasks",
 		"num_pass",
 		"num_fail",
-		"num_retry",
+	)
+
+	if !lt.retriesDisabled {
+		fields = append(fields,
+			"num_retry",
+		)
+	}
+
+	fields = append(fields,
 		"num_panic",
 		"min_queue_latency",
 		"avg_queue_latency",

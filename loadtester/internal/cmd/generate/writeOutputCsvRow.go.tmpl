@@ -1,11 +1,11 @@
-func (lt *Loadtest) writeOutputCsvRow_maxTasks{{if .MaxTasksGTZero}}GTZero{{else}}NotGTZero{{end}}_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}() func(metricRecord_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}) {
+func (lt *Loadtest) writeOutputCsvRow_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if .MaxTasksGTZero}}GTZero{{else}}NotGTZero{{end}}_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}() func(metricRecord_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}) {
 	{{if .PercentileEnabled}}
 	var queuePercentiles, taskPercentiles [numPercentiles]string
 	{{end}}
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
-	return func(mr metricRecord_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}) {
+	return func(mr metricRecord_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}) {
 
 		cd := &lt.csvData
 		if cd.writeErr != nil {
@@ -48,8 +48,8 @@ func (lt *Loadtest) writeOutputCsvRow_maxTasks{{if .MaxTasksGTZero}}GTZero{{else
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numRetry),
-			strconv.Itoa(mr.numPanic),
+			{{if .RetriesEnabled}}strconv.Itoa(mr.numRetry),
+			{{end}}strconv.Itoa(mr.numPanic),
 			mr.minQueueDuration.String(),
 			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
 			mr.maxQueueDuration.String(),

@@ -222,29 +222,61 @@ func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 	if cfg.maxTasks > 0 {
 		if cfg.percentilesEnabled {
 			if cfg.variancesEnabled {
-				lt.resultsHandler = lt.resultsHandler_maxTasksGTZero_percentileEnabled_varianceEnabled
+				if cfg.retriesDisabled {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileEnabled_varianceEnabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksGTZero_percentileEnabled_varianceEnabled
+				}
 			} else {
-				lt.resultsHandler = lt.resultsHandler_maxTasksGTZero_percentileEnabled_varianceDisabled
+				if cfg.retriesDisabled {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileEnabled_varianceDisabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksGTZero_percentileEnabled_varianceDisabled
+				}
 			}
 		} else {
 			if cfg.variancesEnabled {
-				lt.resultsHandler = lt.resultsHandler_maxTasksGTZero_percentileDisabled_varianceEnabled
+				if cfg.retriesDisabled {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileDisabled_varianceEnabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksGTZero_percentileDisabled_varianceEnabled
+				}
 			} else {
-				lt.resultsHandler = lt.resultsHandler_maxTasksGTZero_percentileDisabled_varianceDisabled
+				if cfg.retriesDisabled {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileDisabled_varianceDisabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksGTZero_percentileDisabled_varianceDisabled
+				}
 			}
 		}
 	} else {
 		if cfg.percentilesEnabled {
 			if cfg.variancesEnabled {
-				lt.resultsHandler = lt.resultsHandler_maxTasksNotGTZero_percentileEnabled_varianceEnabled
+				if cfg.retriesDisabled {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileEnabled_varianceEnabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksNotGTZero_percentileEnabled_varianceEnabled
+				}
 			} else {
-				lt.resultsHandler = lt.resultsHandler_maxTasksNotGTZero_percentileEnabled_varianceDisabled
+				if cfg.retriesDisabled {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileEnabled_varianceDisabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksNotGTZero_percentileEnabled_varianceDisabled
+				}
 			}
 		} else {
 			if cfg.variancesEnabled {
-				lt.resultsHandler = lt.resultsHandler_maxTasksNotGTZero_percentileDisabled_varianceEnabled
+				if cfg.retriesDisabled {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileDisabled_varianceEnabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksNotGTZero_percentileDisabled_varianceEnabled
+				}
 			} else {
-				lt.resultsHandler = lt.resultsHandler_maxTasksNotGTZero_percentileDisabled_varianceDisabled
+				if cfg.retriesDisabled {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileDisabled_varianceDisabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksNotGTZero_percentileDisabled_varianceDisabled
+				}
 			}
 		}
 	}
