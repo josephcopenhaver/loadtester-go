@@ -122,7 +122,7 @@ func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 	// config buffers
 
 	var resultsChan chan taskResult
-	if !cfg.csvOutputDisabled {
+	if cfg.csvOutputEnabled {
 		resultsChan = make(chan taskResult, cfg.resultsChanSize)
 	}
 
@@ -177,42 +177,42 @@ func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 		retry:                  cfg.retry,
 		logger:                 cfg.logger,
 		intervalTasksSema:      sm,
-		metricsEnabled:         !cfg.csvOutputDisabled,
+		metricsEnabled:         cfg.csvOutputEnabled,
 		percentilesEnabled:     cfg.percentilesEnabled,
 		latencies:              latencies,
 		variancesEnabled:       cfg.variancesEnabled,
 	}
 
 	if cfg.retry {
-		if !cfg.csvOutputDisabled {
+		if cfg.csvOutputEnabled {
 			lt.doTask = lt.doTask_retriesEnabled_metricsEnabled
 		} else {
 			lt.doTask = lt.doTask_retriesEnabled_metricsDisabled
 		}
 		if cfg.maxTasks > 0 {
-			if !cfg.csvOutputDisabled {
+			if cfg.csvOutputEnabled {
 				lt.run = lt.run_retriesEnabled_maxTasksGTZero_metricsEnabled
 			} else {
 				lt.run = lt.run_retriesEnabled_maxTasksGTZero_metricsDisabled
 			}
-		} else if !cfg.csvOutputDisabled {
+		} else if cfg.csvOutputEnabled {
 			lt.run = lt.run_retriesEnabled_maxTasksNotGTZero_metricsEnabled
 		} else {
 			lt.run = lt.run_retriesEnabled_maxTasksNotGTZero_metricsDisabled
 		}
 	} else {
-		if !cfg.csvOutputDisabled {
+		if cfg.csvOutputEnabled {
 			lt.doTask = lt.doTask_retriesDisabled_metricsEnabled
 		} else {
 			lt.doTask = lt.doTask_retriesDisabled_metricsDisabled
 		}
 		if cfg.maxTasks > 0 {
-			if !cfg.csvOutputDisabled {
+			if cfg.csvOutputEnabled {
 				lt.run = lt.run_retriesDisabled_maxTasksGTZero_metricsEnabled
 			} else {
 				lt.run = lt.run_retriesDisabled_maxTasksGTZero_metricsDisabled
 			}
-		} else if !cfg.csvOutputDisabled {
+		} else if cfg.csvOutputEnabled {
 			lt.run = lt.run_retriesDisabled_maxTasksNotGTZero_metricsEnabled
 		} else {
 			lt.run = lt.run_retriesDisabled_maxTasksNotGTZero_metricsDisabled

@@ -30,7 +30,7 @@ type loadtestConfig struct {
 	interval               time.Duration
 	csvOutputFilename      string
 	csvOutputFlushInterval time.Duration
-	csvOutputDisabled      bool
+	csvOutputEnabled       bool
 	flushRetriesTimeout    time.Duration
 	flushRetriesOnShutdown bool
 	retry                  bool
@@ -50,6 +50,7 @@ func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
 		maxIntervalTasks:       1,
 		numIntervalTasks:       1,
 		interval:               time.Second,
+		csvOutputEnabled:       true,
 		csvOutputFilename:      "metrics.csv",
 		csvOutputFlushInterval: 5 * time.Second,
 		retry:                  true,
@@ -117,7 +118,7 @@ func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
 	}
 
 	// check for integer overflows from user input when computing metrics
-	if !cfg.csvOutputDisabled {
+	if cfg.csvOutputEnabled {
 		const intervalPossibleLagResultCount = 1
 		// note: if intervalPossibleLagResultCount is ever adjusted, then the bellow if statement needs to change
 		if cfg.maxIntervalTasks == math.MaxInt {
@@ -227,25 +228,25 @@ func (newOpts) MetricsCsvFlushInterval(d time.Duration) LoadtestOption {
 	}
 }
 
-func (newOpts) MetricsCsvWriterDisabled(b bool) LoadtestOption {
+func (newOpts) MetricsCsv(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
-		cfg.csvOutputDisabled = b
+		cfg.csvOutputEnabled = b
 	}
 }
 
-// MetricsLatencyPercentilesEnabled can greatly increase the amount of memory used
+// MetricsLatencyPercentile can greatly increase the amount of memory used
 // and create additional delay while processing results.
 //
 // Make sure MaxIntervalTasks is either not set or if it must be set make
 // sure it is not too large for the hosts's ram availability.
-func (newOpts) MetricsLatencyPercentilesEnabled(b bool) LoadtestOption {
+func (newOpts) MetricsLatencyPercentile(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.percentilesEnabled = b
 	}
 }
 
-// MetricsLatencyVariancesEnabled can create additional delay while processing results.
-func (newOpts) MetricsLatencyVariancesEnabled(b bool) LoadtestOption {
+// MetricsLatencyVariance can create additional delay while processing results.
+func (newOpts) MetricsLatencyVariance(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.variancesEnabled = b
 	}

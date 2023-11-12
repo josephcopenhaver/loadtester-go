@@ -6,7 +6,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 	lt.startTime = time.Now()
 
 	{{if .MetricsEnabled}}
-	// if lt.csvData.writeErr == nil // a.k.a. !cfg.csvOutputDisabled // (a.k.a. metrics enabled)
+	// if lt.csvData.writeErr == nil // a.k.a. cfg.csvOutputEnabled // (a.k.a. metrics enabled)
 	{
 
 		csvFile, err := os.Create(lt.csvData.outputFilename)

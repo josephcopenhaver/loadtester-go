@@ -802,7 +802,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 
 	lt.startTime = time.Now()
 
-	// if lt.csvData.writeErr == nil // a.k.a. !cfg.csvOutputDisabled // (a.k.a. metrics enabled)
+	// if lt.csvData.writeErr == nil // a.k.a. cfg.csvOutputEnabled // (a.k.a. metrics enabled)
 	{
 
 		csvFile, err := os.Create(lt.csvData.outputFilename)
@@ -2314,7 +2314,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 
 	lt.startTime = time.Now()
 
-	// if lt.csvData.writeErr == nil // a.k.a. !cfg.csvOutputDisabled // (a.k.a. metrics enabled)
+	// if lt.csvData.writeErr == nil // a.k.a. cfg.csvOutputEnabled // (a.k.a. metrics enabled)
 	{
 
 		csvFile, err := os.Create(lt.csvData.outputFilename)
@@ -3720,7 +3720,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 
 	lt.startTime = time.Now()
 
-	// if lt.csvData.writeErr == nil // a.k.a. !cfg.csvOutputDisabled // (a.k.a. metrics enabled)
+	// if lt.csvData.writeErr == nil // a.k.a. cfg.csvOutputEnabled // (a.k.a. metrics enabled)
 	{
 
 		csvFile, err := os.Create(lt.csvData.outputFilename)
@@ -4666,7 +4666,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 
 	lt.startTime = time.Now()
 
-	// if lt.csvData.writeErr == nil // a.k.a. !cfg.csvOutputDisabled // (a.k.a. metrics enabled)
+	// if lt.csvData.writeErr == nil // a.k.a. cfg.csvOutputEnabled // (a.k.a. metrics enabled)
 	{
 
 		csvFile, err := os.Create(lt.csvData.outputFilename)
