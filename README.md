@@ -23,3 +23,5 @@ Features:
 1. Prevents overrunning the upstream with extreme bursts if it experiences some kind of saturation and latency increases creating back pressure in the loadtester. Such issues are clearly present in the output metrics as lag for the current loadtest config/plan.
 1. This is trivial to control via some thin control plane wrapper and coordinate multiple nodes and configs together.
 1. All load spaced greater than 20 milliseconds apart is evenly created. ( 20ms was chosen due to that being the average time for GC to interrupt processes ) All load that would be spaced less than 20 milliseconds apart is created as quickly as possible but each interval is still spaced before the next batch of load is created.
+
+For information on what metrics are included by this "framework" without bringing your own in the task implementations please see [METRICS](./docs/metrics.md)

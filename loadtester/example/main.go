@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/josephcopenhaver/loadtester-go/v2/loadtester"
+	"github.com/josephcopenhaver/loadtester-go/v3/loadtester"
 )
 
 type task struct{}

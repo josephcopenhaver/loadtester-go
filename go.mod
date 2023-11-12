@@ -1,4 +1,4 @@
-module github.com/josephcopenhaver/loadtester-go/v2
+module github.com/josephcopenhaver/loadtester-go/v3
 
 go 1.21
 
