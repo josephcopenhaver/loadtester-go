@@ -33,7 +33,7 @@ type loadtestConfig struct {
 	csvOutputDisabled      bool
 	flushRetriesTimeout    time.Duration
 	flushRetriesOnShutdown bool
-	retriesDisabled        bool
+	retry                  bool
 	logger                 StructuredLogger
 	resultsChanSize        int
 	percentilesEnabled     bool
@@ -52,6 +52,7 @@ func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
 		interval:               time.Second,
 		csvOutputFilename:      "metrics.csv",
 		csvOutputFlushInterval: 5 * time.Second,
+		retry:                  true,
 		flushRetriesTimeout:    2 * time.Minute,
 	}
 
@@ -265,10 +266,12 @@ func (newOpts) FlushRetriesTimeout(d time.Duration) LoadtestOption {
 	}
 }
 
-// RetriesDisabled causes loadtester to ignore retry logic present on tasks
-func (newOpts) RetriesDisabled(b bool) LoadtestOption {
+// Retry sets wether the loadtester has retry support on or off.
+//
+// on == true (default)
+func (newOpts) Retry(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
-		cfg.retriesDisabled = b
+		cfg.retry = b
 	}
 }
 

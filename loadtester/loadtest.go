@@ -104,7 +104,7 @@ type Loadtest struct {
 	resultsHandler         func()
 	latencies              latencyLists
 	flushRetriesOnShutdown bool
-	retriesDisabled        bool
+	retry                  bool
 	metricsEnabled         bool
 	percentilesEnabled     bool
 	variancesEnabled       bool
@@ -136,7 +136,7 @@ func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 			return nil, errors.New("failed to initialize load generation semaphore")
 		}
 
-		if !cfg.retriesDisabled {
+		if cfg.retry {
 			retryTaskChan = make(chan *retryTask, maxNumInProgressOrQueuedTasks)
 			newRetryTask = func() any {
 				return &retryTask{}
@@ -174,7 +174,7 @@ func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 
 		flushRetriesTimeout:    cfg.flushRetriesTimeout,
 		flushRetriesOnShutdown: cfg.flushRetriesOnShutdown,
-		retriesDisabled:        cfg.retriesDisabled,
+		retry:                  cfg.retry,
 		logger:                 cfg.logger,
 		intervalTasksSema:      sm,
 		metricsEnabled:         !cfg.csvOutputDisabled,
@@ -183,7 +183,7 @@ func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 		variancesEnabled:       cfg.variancesEnabled,
 	}
 
-	if !cfg.retriesDisabled {
+	if cfg.retry {
 		if !cfg.csvOutputDisabled {
 			lt.doTask = lt.doTask_retriesEnabled_metricsEnabled
 		} else {
@@ -222,60 +222,60 @@ func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 	if cfg.maxTasks > 0 {
 		if cfg.percentilesEnabled {
 			if cfg.variancesEnabled {
-				if cfg.retriesDisabled {
-					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileEnabled_varianceEnabled
-				} else {
+				if cfg.retry {
 					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksGTZero_percentileEnabled_varianceEnabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileEnabled_varianceEnabled
 				}
 			} else {
-				if cfg.retriesDisabled {
-					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileEnabled_varianceDisabled
-				} else {
+				if cfg.retry {
 					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksGTZero_percentileEnabled_varianceDisabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileEnabled_varianceDisabled
 				}
 			}
 		} else {
 			if cfg.variancesEnabled {
-				if cfg.retriesDisabled {
-					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileDisabled_varianceEnabled
-				} else {
+				if cfg.retry {
 					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksGTZero_percentileDisabled_varianceEnabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileDisabled_varianceEnabled
 				}
 			} else {
-				if cfg.retriesDisabled {
-					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileDisabled_varianceDisabled
-				} else {
+				if cfg.retry {
 					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksGTZero_percentileDisabled_varianceDisabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileDisabled_varianceDisabled
 				}
 			}
 		}
 	} else {
 		if cfg.percentilesEnabled {
 			if cfg.variancesEnabled {
-				if cfg.retriesDisabled {
-					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileEnabled_varianceEnabled
-				} else {
+				if cfg.retry {
 					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksNotGTZero_percentileEnabled_varianceEnabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileEnabled_varianceEnabled
 				}
 			} else {
-				if cfg.retriesDisabled {
-					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileEnabled_varianceDisabled
-				} else {
+				if cfg.retry {
 					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksNotGTZero_percentileEnabled_varianceDisabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileEnabled_varianceDisabled
 				}
 			}
 		} else {
 			if cfg.variancesEnabled {
-				if cfg.retriesDisabled {
-					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileDisabled_varianceEnabled
-				} else {
+				if cfg.retry {
 					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksNotGTZero_percentileDisabled_varianceEnabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileDisabled_varianceEnabled
 				}
 			} else {
-				if cfg.retriesDisabled {
-					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileDisabled_varianceDisabled
-				} else {
+				if cfg.retry {
 					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksNotGTZero_percentileDisabled_varianceDisabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileDisabled_varianceDisabled
 				}
 			}
 		}
@@ -323,7 +323,7 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		MetricsFlushInterval   string `json:"metrics_flush_interval"`
 		FlushRetriesOnShutdown bool   `json:"flush_retries_on_shutdown"`
 		FlushRetriesTimeout    string `json:"flush_retries_timeout"`
-		RetriesDisabled        bool   `json:"retries_disabled"`
+		Retry                  bool   `json:"retry_enabled"`
 		PercentilesEnabled     bool   `json:"percentiles_enabled"`
 		VariancesEnabled       bool   `json:"variances_enabled"`
 	}
@@ -340,7 +340,7 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		MetricsFlushInterval:   lt.csvData.flushInterval.String(),
 		FlushRetriesOnShutdown: lt.flushRetriesOnShutdown,
 		FlushRetriesTimeout:    lt.flushRetriesTimeout.String(),
-		RetriesDisabled:        lt.retriesDisabled,
+		Retry:                  lt.retry,
 		PercentilesEnabled:     lt.percentilesEnabled,
 		VariancesEnabled:       lt.variancesEnabled,
 	}

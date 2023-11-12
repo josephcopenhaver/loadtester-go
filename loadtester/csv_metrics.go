@@ -79,7 +79,7 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 		"num_fail",
 	)
 
-	if !lt.retriesDisabled {
+	if lt.retry {
 		fields = append(fields,
 			"num_retry",
 		)

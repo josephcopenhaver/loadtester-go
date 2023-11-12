@@ -145,6 +145,7 @@ func main() {
 		op.NumWorkers(parallelism),
 		op.NumIntervalTasks(parallelism),
 		op.Interval(5*time.Second),
+		op.Retry(false), // default is true; not required for this example since no tasks can be retried, plus saves some minor compute and disk io
 		// op.MetricsLatencyPercentilesEnabled(true), // default is false
 		// op.MetricsLatencyVarianceEnabled(true),    // default is false
 		// op.FlushRetriesOnShutdown(true), // default is false

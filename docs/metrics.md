@@ -11,7 +11,7 @@ The output CSV file has the following metric possibilities:
 | num_tasks | Integer | The sampled number of tasks this interval. |
 | num_pass | Integer | The sampled number of tasks that completed without any issue this interval. |
 | num_fail | Integer | The sampled number of tasks that failed to complete in some fashion this interval. Could be because of a gracefully returned error or due to a panic in the task. |
-| num_retry | Integer | The sampled number of tasks that failed this interval because they returned a non-nil error, could be retried, and as such were queued to be tried again. Only present in output file when the RetriesDisabled() option is set to true ( default value: false) |
+| num_retry | Integer | The sampled number of tasks that failed this interval because they returned a non-nil error, could be retried, and as such were queued to be tried again. Only present in output file when the Retry() option is set to true ( default value: true) |
 | num_panic | Integer | The sampled number of tasks that failed this interval because they panicked. Tasks that increase this metric cannot be retried. Avoid panicking in your tasks! |
 | min_queue_latency | Duration String | The smallest duration a task spent in the queue phase for tasks completed in the sample interval. |
 | avg_queue_latency | Duration String | The average duration a task spent in the queue phase for tasks completed in the sample interval. |
