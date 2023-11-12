@@ -55,8 +55,8 @@ func (trf taskResultFlags) isZero() bool {
 
 type taskResult struct {
 	taskResultFlags
-	QueuedDuration, TaskDuration time.Duration
-	Meta                         taskMeta
+	QueueDuration, TaskDuration time.Duration
+	Meta                        taskMeta
 }
 
 type Loadtest struct {
@@ -101,13 +101,16 @@ type Loadtest struct {
 	logger                 StructuredLogger
 	run                    func(context.Context, *error) error
 	doTask                 func(context.Context, int, taskWithMeta)
-	writeOutputCsvRow      func(metricRecord)
+	resultsHandler         func()
+	latencies              latencyLists
 	flushRetriesOnShutdown bool
-	retriesDisabled        bool
+	retry                  bool
 	metricsEnabled         bool
+	percentilesEnabled     bool
+	variancesEnabled       bool
 }
 
-func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, error) {
+func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 
 	cfg, err := newLoadtestConfig(options...)
 	if err != nil {
@@ -118,12 +121,9 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 	// so it's important to account for them per interval when constructing max
 	// config buffers
 
-	const intervalPossibleLagResultCount = 1
-	resultsChanSize := (cfg.maxIntervalTasks + intervalPossibleLagResultCount) * cfg.outputBufferingFactor
-
 	var resultsChan chan taskResult
-	if !cfg.csvOutputDisabled {
-		resultsChan = make(chan taskResult, resultsChanSize)
+	if cfg.csvOutputEnabled {
+		resultsChan = make(chan taskResult, cfg.resultsChanSize)
 	}
 
 	var retryTaskChan chan *retryTask
@@ -136,7 +136,7 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 			return nil, errors.New("failed to initialize load generation semaphore")
 		}
 
-		if !cfg.retriesDisabled {
+		if cfg.retry {
 			retryTaskChan = make(chan *retryTask, maxNumInProgressOrQueuedTasks)
 			newRetryTask = func() any {
 				return &retryTask{}
@@ -144,8 +144,13 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 		}
 	}
 
+	var latencies latencyLists
+	if cfg.percentilesEnabled {
+		latencies = newLatencyLists(cfg.maxIntervalTasks)
+	}
+
 	lt := &Loadtest{
-		taskReader:    taskReader,
+		taskReader:    cfg.taskReader,
 		maxTasks:      cfg.maxTasks,
 		maxWorkers:    cfg.maxWorkers,
 		numWorkers:    cfg.numWorkers,
@@ -169,51 +174,110 @@ func NewLoadtest(taskReader TaskReader, options ...LoadtestOption) (*Loadtest, e
 
 		flushRetriesTimeout:    cfg.flushRetriesTimeout,
 		flushRetriesOnShutdown: cfg.flushRetriesOnShutdown,
-		retriesDisabled:        cfg.retriesDisabled,
+		retry:                  cfg.retry,
 		logger:                 cfg.logger,
 		intervalTasksSema:      sm,
-		metricsEnabled:         !cfg.csvOutputDisabled,
+		metricsEnabled:         cfg.csvOutputEnabled,
+		percentilesEnabled:     cfg.percentilesEnabled,
+		latencies:              latencies,
+		variancesEnabled:       cfg.variancesEnabled,
 	}
 
-	if cfg.maxTasks > 0 {
-		lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksGTZero
-	} else {
-		lt.writeOutputCsvRow = lt.writeOutputCsvRow_maxTasksNotGTZero
-	}
-
-	if !cfg.retriesDisabled {
-		if !cfg.csvOutputDisabled {
+	if cfg.retry {
+		if cfg.csvOutputEnabled {
 			lt.doTask = lt.doTask_retriesEnabled_metricsEnabled
 		} else {
 			lt.doTask = lt.doTask_retriesEnabled_metricsDisabled
 		}
 		if cfg.maxTasks > 0 {
-			if !cfg.csvOutputDisabled {
+			if cfg.csvOutputEnabled {
 				lt.run = lt.run_retriesEnabled_maxTasksGTZero_metricsEnabled
 			} else {
 				lt.run = lt.run_retriesEnabled_maxTasksGTZero_metricsDisabled
 			}
-		} else if !cfg.csvOutputDisabled {
+		} else if cfg.csvOutputEnabled {
 			lt.run = lt.run_retriesEnabled_maxTasksNotGTZero_metricsEnabled
 		} else {
 			lt.run = lt.run_retriesEnabled_maxTasksNotGTZero_metricsDisabled
 		}
 	} else {
-		if !cfg.csvOutputDisabled {
+		if cfg.csvOutputEnabled {
 			lt.doTask = lt.doTask_retriesDisabled_metricsEnabled
 		} else {
 			lt.doTask = lt.doTask_retriesDisabled_metricsDisabled
 		}
 		if cfg.maxTasks > 0 {
-			if !cfg.csvOutputDisabled {
+			if cfg.csvOutputEnabled {
 				lt.run = lt.run_retriesDisabled_maxTasksGTZero_metricsEnabled
 			} else {
 				lt.run = lt.run_retriesDisabled_maxTasksGTZero_metricsDisabled
 			}
-		} else if !cfg.csvOutputDisabled {
+		} else if cfg.csvOutputEnabled {
 			lt.run = lt.run_retriesDisabled_maxTasksNotGTZero_metricsEnabled
 		} else {
 			lt.run = lt.run_retriesDisabled_maxTasksNotGTZero_metricsDisabled
+		}
+	}
+
+	if cfg.maxTasks > 0 {
+		if cfg.percentilesEnabled {
+			if cfg.variancesEnabled {
+				if cfg.retry {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksGTZero_percentileEnabled_varianceEnabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileEnabled_varianceEnabled
+				}
+			} else {
+				if cfg.retry {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksGTZero_percentileEnabled_varianceDisabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileEnabled_varianceDisabled
+				}
+			}
+		} else {
+			if cfg.variancesEnabled {
+				if cfg.retry {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksGTZero_percentileDisabled_varianceEnabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileDisabled_varianceEnabled
+				}
+			} else {
+				if cfg.retry {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksGTZero_percentileDisabled_varianceDisabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksGTZero_percentileDisabled_varianceDisabled
+				}
+			}
+		}
+	} else {
+		if cfg.percentilesEnabled {
+			if cfg.variancesEnabled {
+				if cfg.retry {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksNotGTZero_percentileEnabled_varianceEnabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileEnabled_varianceEnabled
+				}
+			} else {
+				if cfg.retry {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksNotGTZero_percentileEnabled_varianceDisabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileEnabled_varianceDisabled
+				}
+			}
+		} else {
+			if cfg.variancesEnabled {
+				if cfg.retry {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksNotGTZero_percentileDisabled_varianceEnabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileDisabled_varianceEnabled
+				}
+			} else {
+				if cfg.retry {
+					lt.resultsHandler = lt.resultsHandler_retryEnabled_maxTasksNotGTZero_percentileDisabled_varianceDisabled
+				} else {
+					lt.resultsHandler = lt.resultsHandler_retryDisabled_maxTasksNotGTZero_percentileDisabled_varianceDisabled
+				}
+			}
 		}
 	}
 
@@ -259,7 +323,9 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		MetricsFlushInterval   string `json:"metrics_flush_interval"`
 		FlushRetriesOnShutdown bool   `json:"flush_retries_on_shutdown"`
 		FlushRetriesTimeout    string `json:"flush_retries_timeout"`
-		RetriesDisabled        bool   `json:"retries_disabled"`
+		Retry                  bool   `json:"retry_enabled"`
+		PercentilesEnabled     bool   `json:"percentiles_enabled"`
+		VariancesEnabled       bool   `json:"variances_enabled"`
 	}
 
 	return Config{
@@ -274,7 +340,9 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		MetricsFlushInterval:   lt.csvData.flushInterval.String(),
 		FlushRetriesOnShutdown: lt.flushRetriesOnShutdown,
 		FlushRetriesTimeout:    lt.flushRetriesTimeout.String(),
-		RetriesDisabled:        lt.retriesDisabled,
+		Retry:                  lt.retry,
+		PercentilesEnabled:     lt.percentilesEnabled,
+		VariancesEnabled:       lt.variancesEnabled,
 	}
 }
 
@@ -354,6 +422,18 @@ func (lt *Loadtest) Run(ctx context.Context) (err_result error) {
 	}()
 
 	return lt.run(ctx, &shutdownErr)
+}
+
+type latencyLists struct {
+	queue latencyList
+	task  latencyList
+}
+
+func newLatencyLists(size int) latencyLists {
+	return latencyLists{
+		latencyList{make([]time.Duration, 0, size)},
+		latencyList{make([]time.Duration, 0, size)},
+	}
 }
 
 //

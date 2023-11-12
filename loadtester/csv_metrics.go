@@ -5,13 +5,12 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 )
 
 const (
-	maxDuration = time.Duration((^uint64(0)) >> 1)
+	maxCsvNumColumns = 39
 )
 
 type csvData struct {
@@ -65,40 +64,11 @@ func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
 	return nil
 }
 
-type metricRecordResetables struct {
-	numTasks                                                int
-	numPass                                                 int
-	numFail                                                 int
-	numRetry                                                int
-	numPanic                                                int
-	sumLag                                                  time.Duration
-	lag                                                     time.Duration
-	minTaskDuration, maxTaskDuration, sumTaskDuration       time.Duration
-	minQueuedDuration, maxQueuedDuration, sumQueuedDuration time.Duration
-}
-
-type metricRecord struct {
-	// fields that are preserved
-	intervalID       time.Time
-	numIntervalTasks int
-	// totalNumTasks is only modified if the loadtest's maxTasks setting is > 0
-	totalNumTasks int
-
-	metricRecordResetables
-}
-
-func (mr *metricRecord) reset() {
-	mr.metricRecordResetables = metricRecordResetables{
-		minTaskDuration:   maxDuration,
-		minQueuedDuration: maxDuration,
-	}
-}
-
 func (lt *Loadtest) writeOutputCsvHeaders() error {
 
 	cd := &lt.csvData
 
-	fields := []string{
+	fields := append(make([]string, 0, maxCsvNumColumns),
 		"sample_time",
 		"interval_id",        // gauge
 		"num_interval_tasks", // gauge
@@ -107,23 +77,60 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 		"num_tasks",
 		"num_pass",
 		"num_fail",
-		"num_retry",
+	)
+
+	if lt.retry {
+		fields = append(fields,
+			"num_retry",
+		)
+	}
+
+	fields = append(fields,
 		"num_panic",
-		"min_queued_duration",
-		"avg_queued_duration",
-		"max_queued_duration",
-		"sum_queued_duration",
-		"min_task_duration",
-		"avg_task_duration",
-		"max_task_duration",
-		"sum_task_duration",
-		"",
+		"min_queue_latency",
+		"avg_queue_latency",
+		"max_queue_latency",
+		"min_task_latency",
+		"avg_task_latency",
+		"max_task_latency",
+	)
+
+	if lt.percentilesEnabled {
+		fields = append(fields,
+			"p25_queue_latency",
+			"p50_queue_latency",
+			"p75_queue_latency",
+			"p80_queue_latency",
+			"p85_queue_latency",
+			"p90_queue_latency",
+			"p95_queue_latency",
+			"p99_queue_latency",
+			"p99p9_queue_latency",
+			"p99p99_queue_latency",
+			"p25_task_latency",
+			"p50_task_latency",
+			"p75_task_latency",
+			"p80_task_latency",
+			"p85_task_latency",
+			"p90_task_latency",
+			"p95_task_latency",
+			"p99_task_latency",
+			"p99p9_task_latency",
+			"p99p99_task_latency",
+		)
+	}
+
+	if lt.variancesEnabled {
+		fields = append(fields,
+			"queue_latency_variance",
+			"task_latency_variance",
+		)
 	}
 
 	if lt.maxTasks > 0 {
-		fields[len(fields)-1] = "percent_done"
-	} else {
-		fields = fields[:len(fields)-1]
+		fields = append(fields,
+			"percent_done",
+		)
 	}
 
 	err := cd.writer.Write(fields)
@@ -135,95 +142,6 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 	cd.writer.Flush()
 
 	return cd.writer.Error()
-}
-
-// writeOutputCsvRow_maxTasksGTZero writes the metric record to the target csv file when maxTasks is > 0
-func (lt *Loadtest) writeOutputCsvRow_maxTasksGTZero(mr metricRecord) {
-
-	cd := &lt.csvData
-	if cd.writeErr != nil {
-		return
-	}
-
-	nowStr := timeToString(time.Now())
-
-	var percent string
-	{
-		high := mr.totalNumTasks * 10000 / lt.maxTasks
-		low := high % 100
-		high /= 100
-
-		var sep string
-		if low < 10 {
-			sep = ".0"
-		} else {
-			sep = "."
-		}
-
-		percent = strconv.Itoa(high) + sep + strconv.Itoa(low)
-	}
-
-	fields := []string{
-		nowStr,
-		timeToString(mr.intervalID),
-		strconv.Itoa(mr.numIntervalTasks),
-		mr.lag.String(),
-		mr.sumLag.String(),
-		strconv.Itoa(mr.numTasks),
-		strconv.Itoa(mr.numPass),
-		strconv.Itoa(mr.numFail),
-		strconv.Itoa(mr.numRetry),
-		strconv.Itoa(mr.numPanic),
-		mr.minQueuedDuration.String(),
-		(mr.sumQueuedDuration / time.Duration(mr.numTasks)).String(),
-		mr.maxQueuedDuration.String(),
-		mr.sumQueuedDuration.String(),
-		mr.minTaskDuration.String(),
-		(mr.sumTaskDuration / time.Duration(mr.numTasks)).String(),
-		mr.maxTaskDuration.String(),
-		mr.sumTaskDuration.String(),
-		percent,
-	}
-
-	if err := cd.writer.Write(fields); err != nil {
-		cd.setErr(err) // sets error state in multiple goroutine safe way
-	}
-}
-
-// writeOutputCsvRow_maxTasksNotGTZero writes the metric record to the target csv file when maxTasks is <= 0
-func (lt *Loadtest) writeOutputCsvRow_maxTasksNotGTZero(mr metricRecord) {
-
-	cd := &lt.csvData
-	if cd.writeErr != nil {
-		return
-	}
-
-	nowStr := timeToString(time.Now())
-
-	fields := []string{
-		nowStr,
-		timeToString(mr.intervalID),
-		strconv.Itoa(mr.numIntervalTasks),
-		mr.lag.String(),
-		mr.sumLag.String(),
-		strconv.Itoa(mr.numTasks),
-		strconv.Itoa(mr.numPass),
-		strconv.Itoa(mr.numFail),
-		strconv.Itoa(mr.numRetry),
-		strconv.Itoa(mr.numPanic),
-		mr.minQueuedDuration.String(),
-		(mr.sumQueuedDuration / time.Duration(mr.numTasks)).String(),
-		mr.maxQueuedDuration.String(),
-		mr.sumQueuedDuration.String(),
-		mr.minTaskDuration.String(),
-		(mr.sumTaskDuration / time.Duration(mr.numTasks)).String(),
-		mr.maxTaskDuration.String(),
-		mr.sumTaskDuration.String(),
-	}
-
-	if err := cd.writer.Write(fields); err != nil {
-		cd.setErr(err) // sets error state in multiple goroutine safe way
-	}
 }
 
 func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
@@ -253,95 +171,6 @@ func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
 	}
 
 	_, cd.writeErr = csvFile.Write([]byte("\n# {\"done\":{\"end_time\":\"" + timeToString(time.Now()) + "\"}}\n"))
-}
-
-func (lt *Loadtest) resultsHandler() {
-
-	cd := &lt.csvData
-	var mr metricRecord
-	mr.reset()
-
-	var writeRow func()
-	if lt.maxTasks > 0 {
-		writeRow = func() {
-			mr.totalNumTasks += mr.numTasks
-			lt.writeOutputCsvRow(mr)
-		}
-	} else {
-		writeRow = func() {
-			lt.writeOutputCsvRow(mr)
-		}
-	}
-
-	cd.flushDeadline = time.Now().Add(cd.flushInterval)
-
-	for {
-		tr, ok := <-lt.resultsChan
-		if !ok {
-			if cd.writeErr == nil && mr.numTasks > 0 {
-				writeRow()
-			}
-			return
-		}
-
-		lt.resultWaitGroup.Done()
-
-		if cd.writeErr != nil {
-			continue
-		}
-
-		if tr.taskResultFlags.isZero() {
-
-			mr.sumLag += tr.Meta.Lag
-
-			continue
-		}
-
-		if mr.intervalID.Before(tr.Meta.IntervalID) {
-			mr.intervalID = tr.Meta.IntervalID
-			mr.numIntervalTasks = tr.Meta.NumIntervalTasks
-			mr.lag = tr.Meta.Lag
-		}
-
-		if mr.minQueuedDuration > tr.QueuedDuration {
-			mr.minQueuedDuration = tr.QueuedDuration
-		}
-
-		if mr.minTaskDuration > tr.TaskDuration {
-			mr.minTaskDuration = tr.TaskDuration
-		}
-
-		if mr.maxTaskDuration < tr.TaskDuration {
-			mr.maxTaskDuration = tr.TaskDuration
-		}
-
-		if mr.maxQueuedDuration < tr.QueuedDuration {
-			mr.maxQueuedDuration = tr.QueuedDuration
-		}
-
-		mr.sumQueuedDuration += tr.QueuedDuration
-		mr.sumTaskDuration += tr.TaskDuration
-		mr.numPass += int(tr.Passed)
-		mr.numFail += int(tr.Errored)
-		mr.numPanic += int(tr.Panicked)
-		mr.numRetry += int(tr.RetryQueued)
-
-		mr.numTasks++
-
-		if mr.numTasks >= mr.numIntervalTasks {
-
-			writeRow()
-			mr.reset()
-
-			if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-				cd.writer.Flush()
-				if err := cd.writer.Error(); err != nil {
-					cd.setErr(err) // sets error state in multiple goroutine safe way
-				}
-				cd.flushDeadline = time.Now().Add(cd.flushInterval)
-			}
-		}
-	}
 }
 
 //

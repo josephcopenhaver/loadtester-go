@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/josephcopenhaver/loadtester-go/v2/loadtester"
+	"github.com/josephcopenhaver/loadtester-go/v3/loadtester"
 )
 
 type task struct {
@@ -138,13 +138,18 @@ func main() {
 
 	const parallelism = 1
 
+	op := loadtester.NewOpts()
 	lt, err := loadtester.NewLoadtest(
-		tr,
-		loadtester.Logger(logger),
-		loadtester.NumWorkers(parallelism),
-		loadtester.NumIntervalTasks(parallelism),
-		loadtester.Interval(5*time.Second),
-		// loadtester.FlushRetriesOnShutdown(true), // default is false
+		op.TaskReader(tr),
+		op.Logger(logger),
+		op.NumWorkers(parallelism),
+		op.NumIntervalTasks(parallelism),
+		op.Interval(5*time.Second),
+		op.Retry(false), // default is true; not required for this example since no tasks can be retried, plus saves some minor compute and disk io
+		// op.MetricsLatencyPercentile(true), // default is false
+		// op.MetricsLatencyVarianceEnabled(true),    // default is false
+		// op.FlushRetriesOnShutdown(true), // default is false
+		// op.MetricsCsv(false) // default is true; set to false to stop creating a metrics.csv file on loadtest run
 	)
 	if err != nil {
 		panic(err)

@@ -1,0 +1,88 @@
+func (lt *Loadtest) writeOutputCsvRow_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if .MaxTasksGTZero}}GTZero{{else}}NotGTZero{{end}}_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}() func(metricRecord_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}) {
+	{{if .PercentileEnabled}}
+	var queuePercentiles, taskPercentiles [numPercentiles]string
+	{{end}}
+
+	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
+
+	return func(mr metricRecord_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}) {
+
+		cd := &lt.csvData
+		if cd.writeErr != nil {
+			return
+		}
+
+		nowStr := timeToString(time.Now())
+
+		{{if .MaxTasksGTZero}}
+		var percent string
+		{
+			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
+			low := high % (percentDonePrecisionFactor/100)
+			high /= (percentDonePrecisionFactor/100)
+
+			var sep string
+			if low < 10 {
+				sep = ".0"
+			} else {
+				sep = "."
+			}
+
+			percent = strconv.Itoa(high) + sep + strconv.Itoa(low)
+		}
+		{{end}}
+
+		bigNumTasks := big.NewInt(int64(mr.numTasks))
+
+		{{if .PercentileEnabled}}
+		mr.latencies.queue.readPercentileStrings(&queuePercentiles)
+		mr.latencies.task.readPercentileStrings(&taskPercentiles)
+		{{end}}
+
+		fields := []string{
+			nowStr,
+			timeToString(mr.intervalID),
+			strconv.Itoa(mr.numIntervalTasks),
+			mr.lag.String(),
+			mr.sumLag.String(),
+			strconv.Itoa(mr.numTasks),
+			strconv.Itoa(mr.numPass),
+			strconv.Itoa(mr.numFail),
+			{{if .RetriesEnabled}}strconv.Itoa(mr.numRetry),
+			{{end}}strconv.Itoa(mr.numPanic),
+			mr.minQueueDuration.String(),
+			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
+			mr.maxQueueDuration.String(),
+			mr.minTaskDuration.String(),
+			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
+			mr.maxTaskDuration.String(),{{if .PercentileEnabled}}
+			queuePercentiles[0],
+			queuePercentiles[1],
+			queuePercentiles[2],
+			queuePercentiles[3],
+			queuePercentiles[4],
+			queuePercentiles[5],
+			queuePercentiles[6],
+			queuePercentiles[7],
+			queuePercentiles[8],
+			queuePercentiles[9],
+			taskPercentiles[0],
+			taskPercentiles[1],
+			taskPercentiles[2],
+			taskPercentiles[3],
+			taskPercentiles[4],
+			taskPercentiles[5],
+			taskPercentiles[6],
+			taskPercentiles[7],
+			taskPercentiles[8],
+			taskPercentiles[9],{{end}}{{if .VarianceEnabled}}
+			varianceFloatString(mr.welfords.queue.Variance(mr.numTasks)),
+			varianceFloatString(mr.welfords.task.Variance(mr.numTasks)),{{end}}{{if .MaxTasksGTZero}}
+			percent,{{end}}
+		}
+
+		if err := cd.writer.Write(fields); err != nil {
+			cd.setErr(err) // sets error state in multiple goroutine safe way
+		}
+	}
+}
