@@ -301,7 +301,13 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 						lt.intervalTasksSema.Release(int64(numNewTasks - taskBufSize))
 					}
 
-					lt.resultWaitGroup.Add(taskBufSize)
+					lt.resultWaitGroup.Add(taskBufSize+1) // +1 because we're sending the expected Sample Size immediately to the results handler before queueing tasks
+					lt.resultsChan <- taskResult{
+						Meta: taskMeta{
+							IntervalID: intervalID,
+							SampleSize: taskBufSize,
+						},
+					}
 
 					meta.IntervalID = intervalID
 
@@ -771,7 +777,13 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 		}
 		{{end}}
 
-		lt.resultWaitGroup.Add(taskBufSize)
+		lt.resultWaitGroup.Add(taskBufSize+1) // +1 because we're sending the expected Sample Size immediately to the results handler before queueing tasks
+		lt.resultsChan <- taskResult{
+			Meta: taskMeta{
+				IntervalID: intervalID,
+				SampleSize: taskBufSize,
+			},
+		}
 
 		meta.IntervalID = intervalID
 

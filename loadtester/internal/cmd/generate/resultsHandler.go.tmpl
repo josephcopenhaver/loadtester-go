@@ -1,97 +1,115 @@
-func (lt *Loadtest) resultsHandler_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}() {
+func (lt *Loadtest) resultsHandler_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}() func() {
 
-	cd := &lt.csvData
-	var mr metricRecord_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}
-	{{if .PercentileEnabled}}mr.latencies = lt.latencies
-	{{end}}mr.reset()
+	// construct ring buffer of sample sizes (ss)
+	ssSize := lt.maxLiveSamples
+	ss := make([]int, ssSize)
+	var ssNextWriteIdx int
+	var ssReadIdx int
 
-	var writeRow func()
-	{
-		f := lt.writeOutputCsvRow_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}()
-		writeRow = func() {
-			{{if .MaxTasksGTZero}}
-			mr.totalNumTasks += mr.numTasks
-			{{end}}
-			f(mr)
-		}
-	}
+	return func() {
+		cd := &lt.csvData
+		var mr metricRecord_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}
+		{{if .PercentileEnabled}}mr.latencies = lt.latencies
+		{{end}}mr.reset()
 
-	cd.flushDeadline = time.Now().Add(cd.flushInterval)
-
-	for {
-		tr, ok := <-lt.resultsChan
-		if !ok {
-			if cd.writeErr == nil && mr.numTasks > 0 {
-				writeRow()
+		var writeRow func()
+		{
+			f := lt.writeOutputCsvRow_retry{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_maxTasks{{if not .MaxTasksGTZero}}Not{{end}}GTZero_percentile{{if .PercentileEnabled}}Enabled{{else}}Disabled{{end}}_variance{{if .VarianceEnabled}}Enabled{{else}}Disabled{{end}}()
+			writeRow = func() {
+				{{if .MaxTasksGTZero}}
+				mr.totalNumTasks += mr.numTasks
+				{{end}}
+				f(mr)
 			}
-			return
 		}
 
-		lt.resultWaitGroup.Done()
+		cd.flushDeadline = time.Now().Add(cd.flushInterval)
 
-		if cd.writeErr != nil {
-			continue
-		}
-
-		if tr.taskResultFlags.isZero() {
-
-			mr.sumLag += tr.Meta.Lag
-
-			continue
-		}
-
-		if mr.intervalID.Before(tr.Meta.IntervalID) {
-			mr.intervalID = tr.Meta.IntervalID
-			mr.numIntervalTasks = tr.Meta.NumIntervalTasks
-			mr.lag = tr.Meta.Lag
-		}
-
-		if mr.minQueueDuration > tr.QueueDuration {
-			mr.minQueueDuration = tr.QueueDuration
-		}
-
-		if mr.minTaskDuration > tr.TaskDuration {
-			mr.minTaskDuration = tr.TaskDuration
-		}
-
-		if mr.maxTaskDuration < tr.TaskDuration {
-			mr.maxTaskDuration = tr.TaskDuration
-		}
-
-		if mr.maxQueueDuration < tr.QueueDuration {
-			mr.maxQueueDuration = tr.QueueDuration
-		}
-
-		mr.sumQueueDuration.Add(&mr.sumQueueDuration, big.NewInt(int64(tr.QueueDuration)))
-		mr.sumTaskDuration.Add(&mr.sumTaskDuration, big.NewInt(int64(tr.TaskDuration)))
-		mr.numPass += int(tr.Passed)
-		mr.numFail += int(tr.Errored)
-		mr.numPanic += int(tr.Panicked){{if .RetriesEnabled}}
-		mr.numRetry += int(tr.RetryQueued){{end}}
-
-		mr.numTasks++
-
-		{{if .VarianceEnabled}}
-		mr.welfords.queue.Update(mr.numTasks, float64(tr.QueueDuration))
-		mr.welfords.task.Update(mr.numTasks, float64(tr.TaskDuration))
-		{{end}}
-
-		{{if .PercentileEnabled -}}
-		mr.latencies.queue.add(tr.QueueDuration)
-		mr.latencies.task.add(tr.TaskDuration)
-		{{end}}
-
-		if mr.numTasks >= mr.numIntervalTasks {
-
-			writeRow()
-			mr.reset()
-
-			if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-				cd.writer.Flush()
-				if err := cd.writer.Error(); err != nil {
-					cd.setErr(err) // sets error state in multiple goroutine safe way
+		for {
+			tr, ok := <-lt.resultsChan
+			if !ok {
+				if cd.writeErr == nil && mr.numTasks > 0 {
+					writeRow()
 				}
-				cd.flushDeadline = time.Now().Add(cd.flushInterval)
+				return
+			}
+
+			lt.resultWaitGroup.Done()
+
+			if cd.writeErr != nil {
+				continue
+			}
+
+			if tr.taskResultFlags.isZero() {
+
+				mr.sumLag += tr.Meta.Lag
+
+				if tr.Meta.SampleSize > 0 {
+					ss[ssNextWriteIdx] = tr.Meta.SampleSize
+
+					// advance write pointer forward
+					ssNextWriteIdx = (ssNextWriteIdx + 1) % ssSize
+				}
+
+				continue
+			}
+
+			if mr.intervalID.Before(tr.Meta.IntervalID) {
+				mr.intervalID = tr.Meta.IntervalID
+				mr.numIntervalTasks = tr.Meta.NumIntervalTasks
+				mr.lag = tr.Meta.Lag
+			}
+
+			if mr.minQueueDuration > tr.QueueDuration {
+				mr.minQueueDuration = tr.QueueDuration
+			}
+
+			if mr.minTaskDuration > tr.TaskDuration {
+				mr.minTaskDuration = tr.TaskDuration
+			}
+
+			if mr.maxTaskDuration < tr.TaskDuration {
+				mr.maxTaskDuration = tr.TaskDuration
+			}
+
+			if mr.maxQueueDuration < tr.QueueDuration {
+				mr.maxQueueDuration = tr.QueueDuration
+			}
+
+			mr.sumQueueDuration.Add(&mr.sumQueueDuration, big.NewInt(int64(tr.QueueDuration)))
+			mr.sumTaskDuration.Add(&mr.sumTaskDuration, big.NewInt(int64(tr.TaskDuration)))
+			mr.numPass += int(tr.Passed)
+			mr.numFail += int(tr.Errored)
+			mr.numPanic += int(tr.Panicked){{if .RetriesEnabled}}
+			mr.numRetry += int(tr.RetryQueued){{end}}
+
+			mr.numTasks++
+
+			{{if .VarianceEnabled}}
+			mr.welfords.queue.Update(mr.numTasks, float64(tr.QueueDuration))
+			mr.welfords.task.Update(mr.numTasks, float64(tr.TaskDuration))
+			{{end}}
+
+			{{if .PercentileEnabled -}}
+			mr.latencies.queue.add(tr.QueueDuration)
+			mr.latencies.task.add(tr.TaskDuration)
+			{{end}}
+
+			if mr.numTasks >= ss[ssReadIdx] {
+
+				writeRow()
+				mr.reset()
+
+				// advance read pointer forward
+				ssReadIdx = (ssReadIdx + 1) % ssSize
+
+				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
+					cd.writer.Flush()
+					if err := cd.writer.Error(); err != nil {
+						cd.setErr(err) // sets error state in multiple goroutine safe way
+					}
+					cd.flushDeadline = time.Now().Add(cd.flushInterval)
+				}
 			}
 		}
 	}
