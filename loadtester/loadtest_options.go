@@ -120,12 +120,13 @@ func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
 	// check for integer overflows from user input when computing metrics
 	if cfg.csvOutputEnabled {
 		const intervalPossibleLagResultCount = 1
+		const intervalSampleSizeResultCount = 1
 		// note: if intervalPossibleLagResultCount is ever adjusted, then the bellow if statement needs to change
-		if cfg.maxIntervalTasks == math.MaxInt {
+		if cfg.maxIntervalTasks > (math.MaxInt - intervalPossibleLagResultCount - intervalSampleSizeResultCount) {
 			return result, errors.New("MaxIntervalTasks value is too large")
 		}
 
-		maxIntervalResultCount := cfg.maxIntervalTasks + intervalPossibleLagResultCount
+		maxIntervalResultCount := cfg.maxIntervalTasks + intervalPossibleLagResultCount + intervalSampleSizeResultCount
 		if maxIntervalResultCount > (math.MaxInt / cfg.outputBufferingFactor) {
 			return result, errors.New("MaxIntervalTasks and OutputBufferingFactor values combination is too large")
 		}
