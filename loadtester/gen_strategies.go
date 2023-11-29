@@ -1091,7 +1091,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 					lt.resultWaitGroup.Add(taskBufSize + 1) // +1 because we're sending the expected Sample Size immediately to the results handler before queueing tasks
 					lt.resultsChan <- taskResult{
 						Meta: taskMeta{
-							IntervalID: intervalID,
+							// IntervalID: intervalID, // not required unless in a debug context
 							SampleSize: taskBufSize,
 						},
 					}
@@ -1133,8 +1133,8 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 						lt.resultWaitGroup.Add(1)
 						lt.resultsChan <- taskResult{
 							Meta: taskMeta{
-								IntervalID: intervalID,
-								Lag:        lag,
+								// IntervalID: intervalID, // not required unless in a debug context
+								Lag: lag,
 							},
 						}
 
@@ -1542,7 +1542,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 		lt.resultWaitGroup.Add(taskBufSize + 1) // +1 because we're sending the expected Sample Size immediately to the results handler before queueing tasks
 		lt.resultsChan <- taskResult{
 			Meta: taskMeta{
-				IntervalID: intervalID,
+				// IntervalID: intervalID, // not required unless in a debug context
 				SampleSize: taskBufSize,
 			},
 		}
@@ -1588,8 +1588,8 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 			lt.resultWaitGroup.Add(1)
 			lt.resultsChan <- taskResult{
 				Meta: taskMeta{
-					IntervalID: intervalID,
-					Lag:        lag,
+					// IntervalID: intervalID, // not required unless in a debug context
+					Lag: lag,
 				},
 			}
 
@@ -1864,7 +1864,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 					lt.resultWaitGroup.Add(taskBufSize + 1) // +1 because we're sending the expected Sample Size immediately to the results handler before queueing tasks
 					lt.resultsChan <- taskResult{
 						Meta: taskMeta{
-							IntervalID: intervalID,
+							// IntervalID: intervalID, // not required unless in a debug context
 							SampleSize: taskBufSize,
 						},
 					}
@@ -2289,7 +2289,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 		lt.resultWaitGroup.Add(taskBufSize + 1) // +1 because we're sending the expected Sample Size immediately to the results handler before queueing tasks
 		lt.resultsChan <- taskResult{
 			Meta: taskMeta{
-				IntervalID: intervalID,
+				// IntervalID: intervalID, // not required unless in a debug context
 				SampleSize: taskBufSize,
 			},
 		}
@@ -2589,7 +2589,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 					lt.resultWaitGroup.Add(taskBufSize + 1) // +1 because we're sending the expected Sample Size immediately to the results handler before queueing tasks
 					lt.resultsChan <- taskResult{
 						Meta: taskMeta{
-							IntervalID: intervalID,
+							// IntervalID: intervalID, // not required unless in a debug context
 							SampleSize: taskBufSize,
 						},
 					}
@@ -2631,8 +2631,8 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 						lt.resultWaitGroup.Add(1)
 						lt.resultsChan <- taskResult{
 							Meta: taskMeta{
-								IntervalID: intervalID,
-								Lag:        lag,
+								// IntervalID: intervalID, // not required unless in a debug context
+								Lag: lag,
 							},
 						}
 
@@ -3025,7 +3025,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 		lt.resultWaitGroup.Add(taskBufSize + 1) // +1 because we're sending the expected Sample Size immediately to the results handler before queueing tasks
 		lt.resultsChan <- taskResult{
 			Meta: taskMeta{
-				IntervalID: intervalID,
+				// IntervalID: intervalID, // not required unless in a debug context
 				SampleSize: taskBufSize,
 			},
 		}
@@ -3071,8 +3071,8 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 			lt.resultWaitGroup.Add(1)
 			lt.resultsChan <- taskResult{
 				Meta: taskMeta{
-					IntervalID: intervalID,
-					Lag:        lag,
+					// IntervalID: intervalID, // not required unless in a debug context
+					Lag: lag,
 				},
 			}
 
@@ -3309,7 +3309,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 					lt.resultWaitGroup.Add(taskBufSize + 1) // +1 because we're sending the expected Sample Size immediately to the results handler before queueing tasks
 					lt.resultsChan <- taskResult{
 						Meta: taskMeta{
-							IntervalID: intervalID,
+							// IntervalID: intervalID, // not required unless in a debug context
 							SampleSize: taskBufSize,
 						},
 					}
@@ -3719,7 +3719,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 		lt.resultWaitGroup.Add(taskBufSize + 1) // +1 because we're sending the expected Sample Size immediately to the results handler before queueing tasks
 		lt.resultsChan <- taskResult{
 			Meta: taskMeta{
-				IntervalID: intervalID,
+				// IntervalID: intervalID, // not required unless in a debug context
 				SampleSize: taskBufSize,
 			},
 		}
@@ -4212,7 +4212,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 		lt.resultWaitGroup.Add(taskBufSize + 1) // +1 because we're sending the expected Sample Size immediately to the results handler before queueing tasks
 		lt.resultsChan <- taskResult{
 			Meta: taskMeta{
-				IntervalID: intervalID,
+				// IntervalID: intervalID, // not required unless in a debug context
 				SampleSize: taskBufSize,
 			},
 		}
@@ -4258,8 +4258,8 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 			lt.resultWaitGroup.Add(1)
 			lt.resultsChan <- taskResult{
 				Meta: taskMeta{
-					IntervalID: intervalID,
-					Lag:        lag,
+					// IntervalID: intervalID, // not required unless in a debug context
+					Lag: lag,
 				},
 			}
 
@@ -4677,7 +4677,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 		lt.resultWaitGroup.Add(taskBufSize + 1) // +1 because we're sending the expected Sample Size immediately to the results handler before queueing tasks
 		lt.resultsChan <- taskResult{
 			Meta: taskMeta{
-				IntervalID: intervalID,
+				// IntervalID: intervalID, // not required unless in a debug context
 				SampleSize: taskBufSize,
 			},
 		}
@@ -5153,7 +5153,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 		lt.resultWaitGroup.Add(taskBufSize + 1) // +1 because we're sending the expected Sample Size immediately to the results handler before queueing tasks
 		lt.resultsChan <- taskResult{
 			Meta: taskMeta{
-				IntervalID: intervalID,
+				// IntervalID: intervalID, // not required unless in a debug context
 				SampleSize: taskBufSize,
 			},
 		}
@@ -5199,8 +5199,8 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 			lt.resultWaitGroup.Add(1)
 			lt.resultsChan <- taskResult{
 				Meta: taskMeta{
-					IntervalID: intervalID,
-					Lag:        lag,
+					// IntervalID: intervalID, // not required unless in a debug context
+					Lag: lag,
 				},
 			}
 
@@ -5601,7 +5601,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 		lt.resultWaitGroup.Add(taskBufSize + 1) // +1 because we're sending the expected Sample Size immediately to the results handler before queueing tasks
 		lt.resultsChan <- taskResult{
 			Meta: taskMeta{
-				IntervalID: intervalID,
+				// IntervalID: intervalID, // not required unless in a debug context
 				SampleSize: taskBufSize,
 			},
 		}
