@@ -74,7 +74,15 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			v := any(err)
+			if r := recover(); r != nil {
+				v = r
+			}
+			panic(v)
+		}
+	}()
 
 	var buf bytes.Buffer
 
