@@ -802,7 +802,6 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 
 	lt.startTime = time.Now()
 
-	// if lt.csvData.writeErr == nil // a.k.a. cfg.csvOutputEnabled // (a.k.a. metrics enabled)
 	{
 
 		csvFile, err := os.Create(lt.csvData.outputFilename)
@@ -993,40 +992,37 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 						return ErrRetriesFailedToFlush
 					}
 
-					// if maxTasks > 0
-					{
-						if numTasks >= maxTasks {
-							lt.logger.ErrorContext(ctx,
-								"failed to flush all retries",
-								"preflush_num_tasks", preflushNumTasks,
-								"num_tasks", numTasks,
-								"reason", "reached max tasks",
-							)
-							return ErrRetriesFailedToFlush
-						}
+					if numTasks >= maxTasks {
+						lt.logger.ErrorContext(ctx,
+							"failed to flush all retries",
+							"preflush_num_tasks", preflushNumTasks,
+							"num_tasks", numTasks,
+							"reason", "reached max tasks",
+						)
+						return ErrRetriesFailedToFlush
+					}
 
-						// 1. the below looks off/odd, why not use?:
-						//
-						// ```
-						// if n := maxTasks - numTasks; n < numNewTasks {
-						// 	numNewTasks = n
-						// }
-						// ```
-						//
-						// 2. And for that matter, why not keep meta.NumIntervalTasks in sync with numNewTasks?
-						//
-						// ---
-						//
-						// 1. The implementation would be exactly the same, just using another variable
-						// 2. the meta.NumIntervalTasks value is used in RATE calculations, if we keep it in sync
-						//    with BOUNDS values then the last tasks could run at a lower RATE than intended. It
-						//    is only kept in sync when a user adjusts the RATE via a ConfigUpdate. Don't confuse
-						//    bounds purpose values with rate purpose values.
-						//
-						numNewTasks = maxTasks - numTasks
-						if numNewTasks > meta.NumIntervalTasks {
-							numNewTasks = meta.NumIntervalTasks
-						}
+					// 1. the below looks off/odd, why not use?:
+					//
+					// ```
+					// if n := maxTasks - numTasks; n < numNewTasks {
+					// 	numNewTasks = n
+					// }
+					// ```
+					//
+					// 2. And for that matter, why not keep meta.NumIntervalTasks in sync with numNewTasks?
+					//
+					// ---
+					//
+					// 1. The implementation would be exactly the same, just using another variable
+					// 2. the meta.NumIntervalTasks value is used in RATE calculations, if we keep it in sync
+					//    with BOUNDS values then the last tasks could run at a lower RATE than intended. It
+					//    is only kept in sync when a user adjusts the RATE via a ConfigUpdate. Don't confuse
+					//    bounds purpose values with rate purpose values.
+					//
+					numNewTasks = maxTasks - numTasks
+					if numNewTasks > meta.NumIntervalTasks {
+						numNewTasks = meta.NumIntervalTasks
 					}
 
 					select {
@@ -1431,24 +1427,24 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 
 	// main task scheduling loop
 	for {
-		// if maxTasks > 0
-		{
-			if numTasks >= maxTasks {
-				lt.logger.WarnContext(ctx,
-					"loadtest finished: max task count reached",
-					"max_tasks", maxTasks,
-				)
-				return nil
-			}
-
-			numNewTasks = maxTasks - numTasks
-			if numNewTasks > meta.NumIntervalTasks {
-				numNewTasks = meta.NumIntervalTasks
-			}
+		if numTasks >= maxTasks {
+			lt.logger.WarnContext(ctx,
+				"loadtest finished: max task count reached",
+				"max_tasks", maxTasks,
+			)
+			return nil
 		}
 
-		// duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
-		// that follows
+		numNewTasks = maxTasks - numTasks
+		if numNewTasks > meta.NumIntervalTasks {
+			numNewTasks = meta.NumIntervalTasks
+		}
+
+		// Not duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
+		// that follows because this is a ordered sequence where all selects in the sequence have non-blocking default cases.
+		//
+		// The odds of thread switching between these selects is minimal as is the impact of having to wait at most one more cycle
+		// to short circuit and return.
 		//
 		// ref: https://go.dev/ref/spec#Select_statements
 		select {
@@ -1457,8 +1453,6 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 		default:
 		}
 		select {
-		case <-ctxDone:
-			return nil
 		case cu := <-cfgUpdateChan:
 			if err := handleConfigUpdateAndPauseState(cu); err != nil {
 				if err == errLoadtestContextDone {
@@ -1473,8 +1467,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 			// continue with load generation
 		}
 
-		// read up to numNewTasks from retry slice
 		taskBufSize := 0
+
+		//
+		// read up to numNewTasks from retry slice
+		//
 
 		// acquire load generation opportunity slots ( smooths bursts )
 		//
@@ -1499,31 +1496,28 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 			}
 			if n == 0 {
 
-				// if !lt.retriesDisabled
-				{
-					// iteration is technically done now
-					// but there could be straggling retries
-					// queued after this, those should continue
-					// to be flushed if and only if maxTasks
-					// has not been reached and if it is greater
-					// than zero
-					if taskBufSize == 0 {
-						// return immediately if there is nothing
-						// new to enqueue
+				// iteration is technically done now
+				// but there could be straggling retries
+				// queued after this, those should continue
+				// to be flushed if and only if maxTasks
+				// has not been reached and if it is greater
+				// than zero
+				if taskBufSize == 0 {
+					// return immediately if there is nothing
+					// new to enqueue
 
-						lt.logger.WarnContext(ctx,
-							"stopping loadtest: ReadTasks did not load enough tasks",
-							"final_task_delta", 0,
-						)
-
-						return nil
-					}
-
-					lt.logger.DebugContext(ctx,
-						"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
-						"retry_count", taskBufSize,
+					lt.logger.WarnContext(ctx,
+						"stopping loadtest: ReadTasks did not load enough tasks",
+						"final_task_delta", 0,
 					)
+
+					return nil
 				}
+
+				lt.logger.DebugContext(ctx,
+					"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
+					"retry_count", taskBufSize,
+				)
 			}
 
 			taskBufSize += n
@@ -1766,40 +1760,37 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 						return ErrRetriesFailedToFlush
 					}
 
-					// if maxTasks > 0
-					{
-						if numTasks >= maxTasks {
-							lt.logger.ErrorContext(ctx,
-								"failed to flush all retries",
-								"preflush_num_tasks", preflushNumTasks,
-								"num_tasks", numTasks,
-								"reason", "reached max tasks",
-							)
-							return ErrRetriesFailedToFlush
-						}
+					if numTasks >= maxTasks {
+						lt.logger.ErrorContext(ctx,
+							"failed to flush all retries",
+							"preflush_num_tasks", preflushNumTasks,
+							"num_tasks", numTasks,
+							"reason", "reached max tasks",
+						)
+						return ErrRetriesFailedToFlush
+					}
 
-						// 1. the below looks off/odd, why not use?:
-						//
-						// ```
-						// if n := maxTasks - numTasks; n < numNewTasks {
-						// 	numNewTasks = n
-						// }
-						// ```
-						//
-						// 2. And for that matter, why not keep meta.NumIntervalTasks in sync with numNewTasks?
-						//
-						// ---
-						//
-						// 1. The implementation would be exactly the same, just using another variable
-						// 2. the meta.NumIntervalTasks value is used in RATE calculations, if we keep it in sync
-						//    with BOUNDS values then the last tasks could run at a lower RATE than intended. It
-						//    is only kept in sync when a user adjusts the RATE via a ConfigUpdate. Don't confuse
-						//    bounds purpose values with rate purpose values.
-						//
-						numNewTasks = maxTasks - numTasks
-						if numNewTasks > meta.NumIntervalTasks {
-							numNewTasks = meta.NumIntervalTasks
-						}
+					// 1. the below looks off/odd, why not use?:
+					//
+					// ```
+					// if n := maxTasks - numTasks; n < numNewTasks {
+					// 	numNewTasks = n
+					// }
+					// ```
+					//
+					// 2. And for that matter, why not keep meta.NumIntervalTasks in sync with numNewTasks?
+					//
+					// ---
+					//
+					// 1. The implementation would be exactly the same, just using another variable
+					// 2. the meta.NumIntervalTasks value is used in RATE calculations, if we keep it in sync
+					//    with BOUNDS values then the last tasks could run at a lower RATE than intended. It
+					//    is only kept in sync when a user adjusts the RATE via a ConfigUpdate. Don't confuse
+					//    bounds purpose values with rate purpose values.
+					//
+					numNewTasks = maxTasks - numTasks
+					if numNewTasks > meta.NumIntervalTasks {
+						numNewTasks = meta.NumIntervalTasks
 					}
 
 					select {
@@ -2178,24 +2169,24 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 
 	// main task scheduling loop
 	for {
-		// if maxTasks > 0
-		{
-			if numTasks >= maxTasks {
-				lt.logger.WarnContext(ctx,
-					"loadtest finished: max task count reached",
-					"max_tasks", maxTasks,
-				)
-				return nil
-			}
-
-			numNewTasks = maxTasks - numTasks
-			if numNewTasks > meta.NumIntervalTasks {
-				numNewTasks = meta.NumIntervalTasks
-			}
+		if numTasks >= maxTasks {
+			lt.logger.WarnContext(ctx,
+				"loadtest finished: max task count reached",
+				"max_tasks", maxTasks,
+			)
+			return nil
 		}
 
-		// duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
-		// that follows
+		numNewTasks = maxTasks - numTasks
+		if numNewTasks > meta.NumIntervalTasks {
+			numNewTasks = meta.NumIntervalTasks
+		}
+
+		// Not duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
+		// that follows because this is a ordered sequence where all selects in the sequence have non-blocking default cases.
+		//
+		// The odds of thread switching between these selects is minimal as is the impact of having to wait at most one more cycle
+		// to short circuit and return.
 		//
 		// ref: https://go.dev/ref/spec#Select_statements
 		select {
@@ -2204,8 +2195,6 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 		default:
 		}
 		select {
-		case <-ctxDone:
-			return nil
 		case cu := <-cfgUpdateChan:
 			if err := handleConfigUpdateAndPauseState(cu); err != nil {
 				if err == errLoadtestContextDone {
@@ -2220,8 +2209,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 			// continue with load generation
 		}
 
-		// read up to numNewTasks from retry slice
 		taskBufSize := 0
+
+		//
+		// read up to numNewTasks from retry slice
+		//
 
 		// acquire load generation opportunity slots ( smooths bursts )
 		//
@@ -2246,31 +2238,28 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 			}
 			if n == 0 {
 
-				// if !lt.retriesDisabled
-				{
-					// iteration is technically done now
-					// but there could be straggling retries
-					// queued after this, those should continue
-					// to be flushed if and only if maxTasks
-					// has not been reached and if it is greater
-					// than zero
-					if taskBufSize == 0 {
-						// return immediately if there is nothing
-						// new to enqueue
+				// iteration is technically done now
+				// but there could be straggling retries
+				// queued after this, those should continue
+				// to be flushed if and only if maxTasks
+				// has not been reached and if it is greater
+				// than zero
+				if taskBufSize == 0 {
+					// return immediately if there is nothing
+					// new to enqueue
 
-						lt.logger.WarnContext(ctx,
-							"stopping loadtest: ReadTasks did not load enough tasks",
-							"final_task_delta", 0,
-						)
-
-						return nil
-					}
-
-					lt.logger.DebugContext(ctx,
-						"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
-						"retry_count", taskBufSize,
+					lt.logger.WarnContext(ctx,
+						"stopping loadtest: ReadTasks did not load enough tasks",
+						"final_task_delta", 0,
 					)
+
+					return nil
 				}
+
+				lt.logger.DebugContext(ctx,
+					"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
+					"retry_count", taskBufSize,
+				)
 			}
 
 			taskBufSize += n
@@ -2338,7 +2327,6 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 
 	lt.startTime = time.Now()
 
-	// if lt.csvData.writeErr == nil // a.k.a. cfg.csvOutputEnabled // (a.k.a. metrics enabled)
 	{
 
 		csvFile, err := os.Create(lt.csvData.outputFilename)
@@ -2930,8 +2918,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 	// main task scheduling loop
 	for {
 
-		// duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
-		// that follows
+		// Not duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
+		// that follows because this is a ordered sequence where all selects in the sequence have non-blocking default cases.
+		//
+		// The odds of thread switching between these selects is minimal as is the impact of having to wait at most one more cycle
+		// to short circuit and return.
 		//
 		// ref: https://go.dev/ref/spec#Select_statements
 		select {
@@ -2940,8 +2931,6 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 		default:
 		}
 		select {
-		case <-ctxDone:
-			return nil
 		case cu := <-cfgUpdateChan:
 			if err := handleConfigUpdateAndPauseState(cu); err != nil {
 				if err == errLoadtestContextDone {
@@ -2956,8 +2945,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 			// continue with load generation
 		}
 
-		// read up to numNewTasks from retry slice
 		taskBufSize := 0
+
+		//
+		// read up to numNewTasks from retry slice
+		//
 
 		// acquire load generation opportunity slots ( smooths bursts )
 		//
@@ -2982,31 +2974,28 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 			}
 			if n == 0 {
 
-				// if !lt.retriesDisabled
-				{
-					// iteration is technically done now
-					// but there could be straggling retries
-					// queued after this, those should continue
-					// to be flushed if and only if maxTasks
-					// has not been reached and if it is greater
-					// than zero
-					if taskBufSize == 0 {
-						// return immediately if there is nothing
-						// new to enqueue
+				// iteration is technically done now
+				// but there could be straggling retries
+				// queued after this, those should continue
+				// to be flushed if and only if maxTasks
+				// has not been reached and if it is greater
+				// than zero
+				if taskBufSize == 0 {
+					// return immediately if there is nothing
+					// new to enqueue
 
-						lt.logger.WarnContext(ctx,
-							"stopping loadtest: ReadTasks did not load enough tasks",
-							"final_task_delta", 0,
-						)
-
-						return nil
-					}
-
-					lt.logger.DebugContext(ctx,
-						"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
-						"retry_count", taskBufSize,
+					lt.logger.WarnContext(ctx,
+						"stopping loadtest: ReadTasks did not load enough tasks",
+						"final_task_delta", 0,
 					)
+
+					return nil
 				}
+
+				lt.logger.DebugContext(ctx,
+					"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
+					"retry_count", taskBufSize,
+				)
 			}
 
 			taskBufSize += n
@@ -3624,8 +3613,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 	// main task scheduling loop
 	for {
 
-		// duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
-		// that follows
+		// Not duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
+		// that follows because this is a ordered sequence where all selects in the sequence have non-blocking default cases.
+		//
+		// The odds of thread switching between these selects is minimal as is the impact of having to wait at most one more cycle
+		// to short circuit and return.
 		//
 		// ref: https://go.dev/ref/spec#Select_statements
 		select {
@@ -3634,8 +3626,6 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 		default:
 		}
 		select {
-		case <-ctxDone:
-			return nil
 		case cu := <-cfgUpdateChan:
 			if err := handleConfigUpdateAndPauseState(cu); err != nil {
 				if err == errLoadtestContextDone {
@@ -3650,8 +3640,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 			// continue with load generation
 		}
 
-		// read up to numNewTasks from retry slice
 		taskBufSize := 0
+
+		//
+		// read up to numNewTasks from retry slice
+		//
 
 		// acquire load generation opportunity slots ( smooths bursts )
 		//
@@ -3676,31 +3669,28 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 			}
 			if n == 0 {
 
-				// if !lt.retriesDisabled
-				{
-					// iteration is technically done now
-					// but there could be straggling retries
-					// queued after this, those should continue
-					// to be flushed if and only if maxTasks
-					// has not been reached and if it is greater
-					// than zero
-					if taskBufSize == 0 {
-						// return immediately if there is nothing
-						// new to enqueue
+				// iteration is technically done now
+				// but there could be straggling retries
+				// queued after this, those should continue
+				// to be flushed if and only if maxTasks
+				// has not been reached and if it is greater
+				// than zero
+				if taskBufSize == 0 {
+					// return immediately if there is nothing
+					// new to enqueue
 
-						lt.logger.WarnContext(ctx,
-							"stopping loadtest: ReadTasks did not load enough tasks",
-							"final_task_delta", 0,
-						)
-
-						return nil
-					}
-
-					lt.logger.DebugContext(ctx,
-						"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
-						"retry_count", taskBufSize,
+					lt.logger.WarnContext(ctx,
+						"stopping loadtest: ReadTasks did not load enough tasks",
+						"final_task_delta", 0,
 					)
+
+					return nil
 				}
+
+				lt.logger.DebugContext(ctx,
+					"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
+					"retry_count", taskBufSize,
+				)
 			}
 
 			taskBufSize += n
@@ -3768,7 +3758,6 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 
 	lt.startTime = time.Now()
 
-	// if lt.csvData.writeErr == nil // a.k.a. cfg.csvOutputEnabled // (a.k.a. metrics enabled)
 	{
 
 		csvFile, err := os.Create(lt.csvData.outputFilename)
@@ -4138,24 +4127,24 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 
 	// main task scheduling loop
 	for {
-		// if maxTasks > 0
-		{
-			if numTasks >= maxTasks {
-				lt.logger.WarnContext(ctx,
-					"loadtest finished: max task count reached",
-					"max_tasks", maxTasks,
-				)
-				return nil
-			}
-
-			numNewTasks = maxTasks - numTasks
-			if numNewTasks > meta.NumIntervalTasks {
-				numNewTasks = meta.NumIntervalTasks
-			}
+		if numTasks >= maxTasks {
+			lt.logger.WarnContext(ctx,
+				"loadtest finished: max task count reached",
+				"max_tasks", maxTasks,
+			)
+			return nil
 		}
 
-		// duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
-		// that follows
+		numNewTasks = maxTasks - numTasks
+		if numNewTasks > meta.NumIntervalTasks {
+			numNewTasks = meta.NumIntervalTasks
+		}
+
+		// Not duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
+		// that follows because this is a ordered sequence where all selects in the sequence have non-blocking default cases.
+		//
+		// The odds of thread switching between these selects is minimal as is the impact of having to wait at most one more cycle
+		// to short circuit and return.
 		//
 		// ref: https://go.dev/ref/spec#Select_statements
 		select {
@@ -4164,8 +4153,6 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 		default:
 		}
 		select {
-		case <-ctxDone:
-			return nil
 		case cu := <-cfgUpdateChan:
 			if err := handleConfigUpdateAndPauseState(cu); err != nil {
 				if err == errLoadtestContextDone {
@@ -4603,24 +4590,24 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 
 	// main task scheduling loop
 	for {
-		// if maxTasks > 0
-		{
-			if numTasks >= maxTasks {
-				lt.logger.WarnContext(ctx,
-					"loadtest finished: max task count reached",
-					"max_tasks", maxTasks,
-				)
-				return nil
-			}
-
-			numNewTasks = maxTasks - numTasks
-			if numNewTasks > meta.NumIntervalTasks {
-				numNewTasks = meta.NumIntervalTasks
-			}
+		if numTasks >= maxTasks {
+			lt.logger.WarnContext(ctx,
+				"loadtest finished: max task count reached",
+				"max_tasks", maxTasks,
+			)
+			return nil
 		}
 
-		// duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
-		// that follows
+		numNewTasks = maxTasks - numTasks
+		if numNewTasks > meta.NumIntervalTasks {
+			numNewTasks = meta.NumIntervalTasks
+		}
+
+		// Not duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
+		// that follows because this is a ordered sequence where all selects in the sequence have non-blocking default cases.
+		//
+		// The odds of thread switching between these selects is minimal as is the impact of having to wait at most one more cycle
+		// to short circuit and return.
 		//
 		// ref: https://go.dev/ref/spec#Select_statements
 		select {
@@ -4629,8 +4616,6 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 		default:
 		}
 		select {
-		case <-ctxDone:
-			return nil
 		case cu := <-cfgUpdateChan:
 			if err := handleConfigUpdateAndPauseState(cu); err != nil {
 				if err == errLoadtestContextDone {
@@ -4726,7 +4711,6 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 
 	lt.startTime = time.Now()
 
-	// if lt.csvData.writeErr == nil // a.k.a. cfg.csvOutputEnabled // (a.k.a. metrics enabled)
 	{
 
 		csvFile, err := os.Create(lt.csvData.outputFilename)
@@ -5095,8 +5079,11 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 	// main task scheduling loop
 	for {
 
-		// duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
-		// that follows
+		// Not duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
+		// that follows because this is a ordered sequence where all selects in the sequence have non-blocking default cases.
+		//
+		// The odds of thread switching between these selects is minimal as is the impact of having to wait at most one more cycle
+		// to short circuit and return.
 		//
 		// ref: https://go.dev/ref/spec#Select_statements
 		select {
@@ -5105,8 +5092,6 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 		default:
 		}
 		select {
-		case <-ctxDone:
-			return nil
 		case cu := <-cfgUpdateChan:
 			if err := handleConfigUpdateAndPauseState(cu); err != nil {
 				if err == errLoadtestContextDone {
@@ -5543,8 +5528,11 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 	// main task scheduling loop
 	for {
 
-		// duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
-		// that follows
+		// Not duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
+		// that follows because this is a ordered sequence where all selects in the sequence have non-blocking default cases.
+		//
+		// The odds of thread switching between these selects is minimal as is the impact of having to wait at most one more cycle
+		// to short circuit and return.
 		//
 		// ref: https://go.dev/ref/spec#Select_statements
 		select {
@@ -5553,8 +5541,6 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 		default:
 		}
 		select {
-		case <-ctxDone:
-			return nil
 		case cu := <-cfgUpdateChan:
 			if err := handleConfigUpdateAndPauseState(cu); err != nil {
 				if err == errLoadtestContextDone {
