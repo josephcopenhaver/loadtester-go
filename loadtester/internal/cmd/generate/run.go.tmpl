@@ -6,7 +6,6 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 	lt.startTime = time.Now()
 
 	{{if .MetricsEnabled}}
-	// if lt.csvData.writeErr == nil // a.k.a. cfg.csvOutputEnabled // (a.k.a. metrics enabled)
 	{
 
 		csvFile, err := os.Create(lt.csvData.outputFilename)
@@ -205,40 +204,37 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 					}
 
 					{{if .MaxTasksGTZero -}}
-					// if maxTasks > 0
-					{
-						if numTasks >= maxTasks {
-							lt.logger.ErrorContext(ctx,
-								"failed to flush all retries",
-								"preflush_num_tasks", preflushNumTasks,
-								"num_tasks", numTasks,
-								"reason", "reached max tasks",
-							)
-							return ErrRetriesFailedToFlush
-						}
+					if numTasks >= maxTasks {
+						lt.logger.ErrorContext(ctx,
+							"failed to flush all retries",
+							"preflush_num_tasks", preflushNumTasks,
+							"num_tasks", numTasks,
+							"reason", "reached max tasks",
+						)
+						return ErrRetriesFailedToFlush
+					}
 
-						// 1. the below looks off/odd, why not use?:
-						//
-						// ```
-						// if n := maxTasks - numTasks; n < numNewTasks {
-						// 	numNewTasks = n
-						// }
-						// ```
-						//
-						// 2. And for that matter, why not keep meta.NumIntervalTasks in sync with numNewTasks?
-						//
-						// ---
-						//
-						// 1. The implementation would be exactly the same, just using another variable
-						// 2. the meta.NumIntervalTasks value is used in RATE calculations, if we keep it in sync
-						//    with BOUNDS values then the last tasks could run at a lower RATE than intended. It
-						//    is only kept in sync when a user adjusts the RATE via a ConfigUpdate. Don't confuse
-						//    bounds purpose values with rate purpose values.
-						//
-						numNewTasks = maxTasks - numTasks
-						if numNewTasks > meta.NumIntervalTasks {
-							numNewTasks = meta.NumIntervalTasks
-						}
+					// 1. the below looks off/odd, why not use?:
+					//
+					// ```
+					// if n := maxTasks - numTasks; n < numNewTasks {
+					// 	numNewTasks = n
+					// }
+					// ```
+					//
+					// 2. And for that matter, why not keep meta.NumIntervalTasks in sync with numNewTasks?
+					//
+					// ---
+					//
+					// 1. The implementation would be exactly the same, just using another variable
+					// 2. the meta.NumIntervalTasks value is used in RATE calculations, if we keep it in sync
+					//    with BOUNDS values then the last tasks could run at a lower RATE than intended. It
+					//    is only kept in sync when a user adjusts the RATE via a ConfigUpdate. Don't confuse
+					//    bounds purpose values with rate purpose values.
+					//
+					numNewTasks = maxTasks - numTasks
+					if numNewTasks > meta.NumIntervalTasks {
+						numNewTasks = meta.NumIntervalTasks
 					}
 					{{end}}
 
@@ -651,25 +647,25 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 	// main task scheduling loop
 	for {
 		{{if .MaxTasksGTZero -}}
-		// if maxTasks > 0
-		{
-			if numTasks >= maxTasks {
-				lt.logger.WarnContext(ctx,
-					"loadtest finished: max task count reached",
-					"max_tasks", maxTasks,
-				)
-				return nil
-			}
+		if numTasks >= maxTasks {
+			lt.logger.WarnContext(ctx,
+				"loadtest finished: max task count reached",
+				"max_tasks", maxTasks,
+			)
+			return nil
+		}
 
-			numNewTasks = maxTasks - numTasks
-			if numNewTasks > meta.NumIntervalTasks {
-				numNewTasks = meta.NumIntervalTasks
-			}
+		numNewTasks = maxTasks - numTasks
+		if numNewTasks > meta.NumIntervalTasks {
+			numNewTasks = meta.NumIntervalTasks
 		}
 		{{end}}
 
-		// duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
-		// that follows
+		// Not duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select
+		// that follows because this is a ordered sequence where all selects in the sequence have non-blocking default cases.
+		//
+		// The odds of thread switching between these selects is minimal as is the impact of having to wait at most one more cycle
+		// to short circuit and return.
 		//
 		// ref: https://go.dev/ref/spec#Select_statements
 		select {
@@ -678,8 +674,6 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 		default:
 		}
 		select {
-		case <-ctxDone:
-			return nil
 		case cu := <-cfgUpdateChan:
 			if err := handleConfigUpdateAndPauseState(cu); err != nil {
 				if err == errLoadtestContextDone {
@@ -694,11 +688,12 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 			// continue with load generation
 		}
 
-		{{if .RetriesEnabled}}
-		// read up to numNewTasks from retry slice
-		{{- end}}
 		taskBufSize := 0
 		{{- if .RetriesEnabled}}
+
+		//
+		// read up to numNewTasks from retry slice
+		//
 
 		// acquire load generation opportunity slots ( smooths bursts )
 		//
@@ -724,31 +719,28 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 			}
 			if n == 0 {
 				{{if .RetriesEnabled}}
-				// if !lt.retriesDisabled
-				{
-					// iteration is technically done now
-					// but there could be straggling retries
-					// queued after this, those should continue
-					// to be flushed if and only if maxTasks
-					// has not been reached and if it is greater
-					// than zero
-					if taskBufSize == 0 {
-						// return immediately if there is nothing
-						// new to enqueue
+				// iteration is technically done now
+				// but there could be straggling retries
+				// queued after this, those should continue
+				// to be flushed if and only if maxTasks
+				// has not been reached and if it is greater
+				// than zero
+				if taskBufSize == 0 {
+					// return immediately if there is nothing
+					// new to enqueue
 
-						lt.logger.WarnContext(ctx,
-							"stopping loadtest: ReadTasks did not load enough tasks",
-							"final_task_delta", 0,
-						)
-
-						return nil
-					}
-
-					lt.logger.DebugContext(ctx,
-						"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
-						"retry_count", taskBufSize,
+					lt.logger.WarnContext(ctx,
+						"stopping loadtest: ReadTasks did not load enough tasks",
+						"final_task_delta", 0,
 					)
+
+					return nil
 				}
+
+				lt.logger.DebugContext(ctx,
+					"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
+					"retry_count", taskBufSize,
+				)
 				{{- else}}
 				lt.logger.WarnContext(ctx,
 					"stopping loadtest: ReadTasks did not load enough tasks",
