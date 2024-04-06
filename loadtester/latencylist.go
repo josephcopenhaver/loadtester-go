@@ -1,7 +1,6 @@
 package loadtester
 
 import (
-	"errors"
 	"math"
 	"slices"
 	"time"
@@ -28,7 +27,7 @@ type percentileTarget struct {
 // newPTarget constructs a new integer rational multiplication lookup table record and validates the input elements
 func newPTarget(percentileTimes100, n, d int) percentileTarget {
 	if percentileTimes100 <= 0 || n <= 0 || d <= 0 || n >= d || d%2 != 0 || (10000%d != 0) || ((10000/d)*n != percentileTimes100) {
-		panic(errors.New("should never happen"))
+		panic("should never happen")
 	}
 	return percentileTarget{n, d, d >> 1}
 }
