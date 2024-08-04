@@ -8,14 +8,7 @@ import (
 )
 
 type StructuredLogger interface {
-	Debug(msg string, keysAndValues ...any)
-	DebugContext(ctx context.Context, msg string, keysAndValues ...any)
-	Warn(msg string, keysAndValues ...any)
-	WarnContext(ctx context.Context, msg string, keysAndValues ...any)
-	Error(msg string, keysAndValues ...any)
-	ErrorContext(ctx context.Context, msg string, keysAndValues ...any)
-	Info(msg string, keysAndValues ...any)
-	InfoContext(ctx context.Context, msg string, keysAndValues ...any)
+	LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr)
 }
 
 // NewLogger should likely be followed by a call to slog.SetDefault with the logger

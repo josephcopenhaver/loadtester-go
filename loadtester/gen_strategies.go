@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/big"
 	"os"
@@ -482,36 +483,38 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled(ctx context.Context, wo
 			respFlags.Panicked = 1
 			respFlags.Errored = 1
 
+			const evtName = "worker recovered from panic"
+
 			switch v := r.(type) {
 			case error:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", v,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.Any("error", v),
 				)
 			case []byte:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", string(v),
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", string(v)),
 				)
 			case string:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", v,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", v),
 				)
 			default:
 				const msg = "unknown cause"
 
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", msg,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", msg),
 				)
 			}
 		}
@@ -523,10 +526,10 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled(ctx context.Context, wo
 		return
 	}
 
-	lt.logger.WarnContext(ctx,
+	lt.logger.LogAttrs(ctx, slog.LevelWarn,
 		"task error",
-		"worker_id", workerID,
-		"error", err,
+		slog.Int("worker_id", workerID),
+		slog.Any("error", err),
 	)
 
 	respFlags.Errored = 1
@@ -580,36 +583,38 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled(ctx context.Context, w
 
 		if r := recover(); r != nil {
 
+			const evtName = "worker recovered from panic"
+
 			switch v := r.(type) {
 			case error:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", v,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.Any("error", v),
 				)
 			case []byte:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", string(v),
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", string(v)),
 				)
 			case string:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", v,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", v),
 				)
 			default:
 				const msg = "unknown cause"
 
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", msg,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", msg),
 				)
 			}
 		}
@@ -621,10 +626,10 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled(ctx context.Context, w
 		return
 	}
 
-	lt.logger.WarnContext(ctx,
+	lt.logger.LogAttrs(ctx, slog.LevelWarn,
 		"task error",
-		"worker_id", workerID,
-		"error", err,
+		slog.Int("worker_id", workerID),
+		slog.Any("error", err),
 	)
 
 	var dr DoRetryer
@@ -682,36 +687,38 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled(ctx context.Context, w
 			respFlags.Panicked = 1
 			respFlags.Errored = 1
 
+			const evtName = "worker recovered from panic"
+
 			switch v := r.(type) {
 			case error:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", v,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.Any("error", v),
 				)
 			case []byte:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", string(v),
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", string(v)),
 				)
 			case string:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", v,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", v),
 				)
 			default:
 				const msg = "unknown cause"
 
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", msg,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", msg),
 				)
 			}
 		}
@@ -723,10 +730,10 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled(ctx context.Context, w
 		return
 	}
 
-	lt.logger.WarnContext(ctx,
+	lt.logger.LogAttrs(ctx, slog.LevelWarn,
 		"task error",
-		"worker_id", workerID,
-		"error", err,
+		slog.Int("worker_id", workerID),
+		slog.Any("error", err),
 	)
 
 	respFlags.Errored = 1
@@ -745,36 +752,38 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled(ctx context.Context, 
 
 		if r := recover(); r != nil {
 
+			const evtName = "worker recovered from panic"
+
 			switch v := r.(type) {
 			case error:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", v,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.Any("error", v),
 				)
 			case []byte:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", string(v),
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", string(v)),
 				)
 			case string:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", v,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", v),
 				)
 			default:
 				const msg = "unknown cause"
 
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", msg,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", msg),
 				)
 			}
 		}
@@ -786,10 +795,10 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled(ctx context.Context, 
 		return
 	}
 
-	lt.logger.WarnContext(ctx,
+	lt.logger.LogAttrs(ctx, slog.LevelWarn,
 		"task error",
-		"worker_id", workerID,
-		"error", err,
+		slog.Int("worker_id", workerID),
+		slog.Any("error", err),
 	)
 
 	return
@@ -820,9 +829,9 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 		}
 	}
 
-	lt.logger.InfoContext(ctx,
+	lt.logger.LogAttrs(ctx, slog.LevelInfo,
 		"starting loadtest",
-		"config", lt.loadtestConfigAsJson(),
+		slog.Any("config", lt.loadtestConfigAsJson()),
 	)
 
 	var wg sync.WaitGroup
@@ -848,7 +857,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]any, 0, 12)
+	configChanges := make([]slog.Attr, 0, 6)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -913,37 +922,37 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 		err := func(flushRetries bool) error {
 			if !flushRetries {
 
-				lt.logger.DebugContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelDebug,
 					"not waiting on retries to flush on shutdown",
-					"reason", "retries disabled or flush retries on shutdown disabled",
-					"num_tasks", numTasks,
+					slog.String("reason", "retries disabled or flush retries on shutdown disabled"),
+					slog.Int("num_tasks", numTasks),
 				)
 
 				return nil
 			}
 
 			if err := ctx.Err(); err != nil {
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"not waiting on retries to flush on shutdown",
-					"reason", "user stopped loadtest",
-					"num_tasks", numTasks,
-					"error", err,
+					slog.String("reason", "user stopped loadtest"),
+					slog.Int("num_tasks", numTasks),
+					slog.Any("error", err),
 				)
 				return nil
 			}
 
-			lt.logger.DebugContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelDebug,
 				"waiting on retries to flush",
-				"num_tasks", numTasks,
+				slog.Int("num_tasks", numTasks),
 			)
 
 			if meta.NumIntervalTasks <= 0 || numWorkers <= 0 {
 
-				lt.logger.ErrorContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
 					"retry flushing could not be attempted",
-					"num_tasks", numTasks,
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
+					slog.Int("num_tasks", numTasks),
+					slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("num_workers", numWorkers),
 				)
 
 				return ErrRetriesFailedToFlush
@@ -951,10 +960,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 
 			preflushNumTasks := numTasks
 
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"shutting down: flushing retries",
-				"num_tasks", numTasks,
-				"flush_retries_timeout", lt.flushRetriesTimeout.String(),
+				slog.Int("num_tasks", numTasks),
+				slog.String("flush_retries_timeout", lt.flushRetriesTimeout.String()),
 			)
 
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), lt.flushRetriesTimeout)
@@ -967,11 +976,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 			for {
 
 				if err := shutdownCtx.Err(); err != nil {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"failed to flush all retries",
-						"preflush_num_tasks", preflushNumTasks,
-						"num_tasks", numTasks,
-						"error", err,
+						slog.Int("preflush_num_tasks", preflushNumTasks),
+						slog.Int("num_tasks", numTasks),
+						slog.Any("error", err),
 					)
 
 					return ErrRetriesFailedToFlush
@@ -982,22 +991,22 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 				for {
 
 					if err := shutdownCtx.Err(); err != nil {
-						lt.logger.ErrorContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelError,
 							"failed to flush all retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
-							"error", err,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
+							slog.Any("error", err),
 						)
 
 						return ErrRetriesFailedToFlush
 					}
 
 					if numTasks >= maxTasks {
-						lt.logger.ErrorContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelError,
 							"failed to flush all retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
-							"reason", "reached max tasks",
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
+							slog.String("reason", "reached max tasks"),
 						)
 						return ErrRetriesFailedToFlush
 					}
@@ -1027,10 +1036,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 
 					select {
 					case <-ctxDone:
-						lt.logger.WarnContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelWarn,
 							"user stopped loadtest while attempting to flush retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
 						)
 						return nil
 					default:
@@ -1042,12 +1051,12 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 					// in the shutdown retry flow we always want to acquire before reading retries
 					// to avoid a deadlock edge case of the retry queue being full, all workers tasks failed and need to be retried
 					if err := lt.intervalTasksSema.Acquire(shutdownCtx, int64(numNewTasks)); err != nil {
-						lt.logger.ErrorContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelError,
 							"failed to flush all retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
-							"error", err,
-							"reason", "shutdown timeout likely reached while waiting for semaphore acquisition",
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
+							slog.Any("error", err),
+							slog.String("reason", "shutdown timeout likely reached while waiting for semaphore acquisition"),
 						)
 						return ErrRetriesFailedToFlush
 					}
@@ -1057,10 +1066,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 					if taskBufSize <= 0 {
 						// wait for any pending tasks to flush and try read again
 
-						lt.logger.DebugContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelDebug,
 							"verifying all retries have flushed",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
 						)
 
 						lt.resultWaitGroup.Wait()
@@ -1069,10 +1078,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 						taskBufSize = readRetries(taskBuf[:numNewTasks:numNewTasks])
 						if taskBufSize <= 0 {
 
-							lt.logger.InfoContext(ctx,
+							lt.logger.LogAttrs(ctx, slog.LevelInfo,
 								"all retries flushed",
-								"preflush_num_tasks", preflushNumTasks,
-								"num_tasks", numTasks,
+								slog.Int("preflush_num_tasks", preflushNumTasks),
+								slog.Int("num_tasks", numTasks),
 							)
 							return nil
 						}
@@ -1149,12 +1158,12 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 			*shutdownErrResp = err
 		}
 
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for running tasks to stop",
 		)
 		lt.resultWaitGroup.Wait()
 
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping result handler routine",
 		)
 
@@ -1162,7 +1171,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 		close(lt.resultsChan)
 
 		// signal for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
 		for i := 0; i < len(lt.workers); i++ {
@@ -1170,18 +1179,18 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 		}
 
 		// wait for result handler routines to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for result handler routines to stop",
 		)
 		wg.Wait()
 
 		// wait for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for workers to stop",
 		)
 		lt.workerWaitGroup.Wait()
 
-		lt.logger.InfoContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelInfo,
 			"loadtest stopped",
 		)
 	}()
@@ -1217,22 +1226,22 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 
 				// prevent over committing on the maxWorkers count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numWorkers too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxWorkers {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too high",
-						"remediation_hint", "increase the loadtest MaxWorkers setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxWorkers,
+						slog.String("reason", "update tried to set numWorkers too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxWorkers setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxWorkers),
 					)
 					n = lt.maxWorkers
 				}
@@ -1257,8 +1266,8 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 				}
 
 				configChanges = append(configChanges,
-					"old_num_workers", numWorkers,
-					"new_num_workers", n,
+					slog.Int("old_num_workers", numWorkers),
+					slog.Int("new_num_workers", n),
 				)
 				numWorkers = n
 			}
@@ -1271,29 +1280,29 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 
 				// prevent over committing on the maxIntervalTasks count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numIntervalTasks too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxIntervalTasks {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too high",
-						"remediation_hint", "increase the loadtest MaxIntervalTasks setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxIntervalTasks,
+						slog.String("reason", "update tried to set numIntervalTasks too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxIntervalTasks setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxIntervalTasks),
 					)
 					n = lt.maxIntervalTasks
 				}
 
 				configChanges = append(configChanges,
-					"old_num_interval_tasks", meta.NumIntervalTasks,
-					"new_num_interval_tasks", n,
+					slog.Int("old_num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("new_num_interval_tasks", n),
 				)
 				numNewTasks = n
 				meta.NumIntervalTasks = n
@@ -1305,19 +1314,19 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 				n := cu.interval.val
 
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: interval",
-						"reason", "update tried to set interval too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set interval too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.String("requested", n.String()),
+						slog.String("min", time.Duration(0).String()),
 					)
 					n = 0
 				}
 
 				configChanges = append(configChanges,
-					"old_interval", interval,
-					"new_interval", n,
+					slog.String("old_interval", interval.String()),
+					slog.String("new_interval", n.String()),
 				)
 				interval = n
 			}
@@ -1336,9 +1345,9 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 					} else {
 						prepSemaErr = lt.intervalTasksSema.Acquire(ctx, int64(taskSlotCount-newTaskSlotCount))
 						if prepSemaErr != nil {
-							lt.logger.ErrorContext(ctx,
+							lt.logger.LogAttrs(ctx, slog.LevelError,
 								"loadtest config update: failed to pre-acquire load generation slots",
-								"error", prepSemaErr,
+								slog.Any("error", prepSemaErr),
 							)
 
 							// not returning and error... yet
@@ -1351,7 +1360,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 			}
 
 			if !cu.onStartup {
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"loadtest config updated",
 					configChanges...,
 				)
@@ -1369,11 +1378,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 					paused = true
 					pauseStart = time.Now().UTC()
 
-					lt.logger.WarnContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelWarn,
 						"pausing load generation",
-						"num_interval_tasks", meta.NumIntervalTasks,
-						"num_workers", numWorkers,
-						"paused_at", pauseStart,
+						slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+						slog.Int("num_workers", numWorkers),
+						slog.String("paused_at", pauseStart.String()),
 					)
 				}
 
@@ -1398,12 +1407,12 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 				paused = false
 				intervalID = time.Now()
 
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"resuming load generation",
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
-					"paused_at", pauseStart,
-					"resumed_at", intervalID.UTC(),
+					slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("num_workers", numWorkers),
+					slog.String("paused_at", pauseStart.String()),
+					slog.String("resumed_at", intervalID.UTC().String()),
 				)
 			}
 
@@ -1428,9 +1437,9 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 	// main task scheduling loop
 	for {
 		if numTasks >= maxTasks {
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"loadtest finished: max task count reached",
-				"max_tasks", maxTasks,
+				slog.Int("max_tasks", maxTasks),
 			)
 			return nil
 		}
@@ -1506,17 +1515,17 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 					// return immediately if there is nothing
 					// new to enqueue
 
-					lt.logger.WarnContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelWarn,
 						"stopping loadtest: ReadTasks did not load enough tasks",
-						"final_task_delta", 0,
+						slog.Int("final_task_delta", 0),
 					)
 
 					return nil
 				}
 
-				lt.logger.DebugContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelDebug,
 					"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
-					"retry_count", taskBufSize,
+					slog.Int("retry_count", taskBufSize),
 				)
 			}
 
@@ -1550,9 +1559,9 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 			// increase numTasks total by actual number queued
 			// and stop traffic generation
 			numTasks += taskBufSize
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"stopping loadtest: ReadTasks did not load enough tasks",
-				"final_task_delta", taskBufSize,
+				slog.Int("final_task_delta", taskBufSize),
 			)
 			return nil
 		}
@@ -1598,9 +1607,9 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 
 	lt.startTime = time.Now()
 
-	lt.logger.InfoContext(ctx,
+	lt.logger.LogAttrs(ctx, slog.LevelInfo,
 		"starting loadtest",
-		"config", lt.loadtestConfigAsJson(),
+		slog.Any("config", lt.loadtestConfigAsJson()),
 	)
 
 	numWorkers := lt.numWorkers
@@ -1617,7 +1626,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]any, 0, 12)
+	configChanges := make([]slog.Attr, 0, 6)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -1682,37 +1691,37 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 		err := func(flushRetries bool) error {
 			if !flushRetries {
 
-				lt.logger.DebugContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelDebug,
 					"not waiting on retries to flush on shutdown",
-					"reason", "retries disabled or flush retries on shutdown disabled",
-					"num_tasks", numTasks,
+					slog.String("reason", "retries disabled or flush retries on shutdown disabled"),
+					slog.Int("num_tasks", numTasks),
 				)
 
 				return nil
 			}
 
 			if err := ctx.Err(); err != nil {
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"not waiting on retries to flush on shutdown",
-					"reason", "user stopped loadtest",
-					"num_tasks", numTasks,
-					"error", err,
+					slog.String("reason", "user stopped loadtest"),
+					slog.Int("num_tasks", numTasks),
+					slog.Any("error", err),
 				)
 				return nil
 			}
 
-			lt.logger.DebugContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelDebug,
 				"waiting on retries to flush",
-				"num_tasks", numTasks,
+				slog.Int("num_tasks", numTasks),
 			)
 
 			if meta.NumIntervalTasks <= 0 || numWorkers <= 0 {
 
-				lt.logger.ErrorContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
 					"retry flushing could not be attempted",
-					"num_tasks", numTasks,
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
+					slog.Int("num_tasks", numTasks),
+					slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("num_workers", numWorkers),
 				)
 
 				return ErrRetriesFailedToFlush
@@ -1720,10 +1729,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 
 			preflushNumTasks := numTasks
 
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"shutting down: flushing retries",
-				"num_tasks", numTasks,
-				"flush_retries_timeout", lt.flushRetriesTimeout.String(),
+				slog.Int("num_tasks", numTasks),
+				slog.String("flush_retries_timeout", lt.flushRetriesTimeout.String()),
 			)
 
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), lt.flushRetriesTimeout)
@@ -1735,11 +1744,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 			for {
 
 				if err := shutdownCtx.Err(); err != nil {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"failed to flush all retries",
-						"preflush_num_tasks", preflushNumTasks,
-						"num_tasks", numTasks,
-						"error", err,
+						slog.Int("preflush_num_tasks", preflushNumTasks),
+						slog.Int("num_tasks", numTasks),
+						slog.Any("error", err),
 					)
 
 					return ErrRetriesFailedToFlush
@@ -1750,22 +1759,22 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 				for {
 
 					if err := shutdownCtx.Err(); err != nil {
-						lt.logger.ErrorContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelError,
 							"failed to flush all retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
-							"error", err,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
+							slog.Any("error", err),
 						)
 
 						return ErrRetriesFailedToFlush
 					}
 
 					if numTasks >= maxTasks {
-						lt.logger.ErrorContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelError,
 							"failed to flush all retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
-							"reason", "reached max tasks",
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
+							slog.String("reason", "reached max tasks"),
 						)
 						return ErrRetriesFailedToFlush
 					}
@@ -1795,10 +1804,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 
 					select {
 					case <-ctxDone:
-						lt.logger.WarnContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelWarn,
 							"user stopped loadtest while attempting to flush retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
 						)
 						return nil
 					default:
@@ -1810,12 +1819,12 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 					// in the shutdown retry flow we always want to acquire before reading retries
 					// to avoid a deadlock edge case of the retry queue being full, all workers tasks failed and need to be retried
 					if err := lt.intervalTasksSema.Acquire(shutdownCtx, int64(numNewTasks)); err != nil {
-						lt.logger.ErrorContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelError,
 							"failed to flush all retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
-							"error", err,
-							"reason", "shutdown timeout likely reached while waiting for semaphore acquisition",
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
+							slog.Any("error", err),
+							slog.String("reason", "shutdown timeout likely reached while waiting for semaphore acquisition"),
 						)
 						return ErrRetriesFailedToFlush
 					}
@@ -1825,10 +1834,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 					if taskBufSize <= 0 {
 						// wait for any pending tasks to flush and try read again
 
-						lt.logger.DebugContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelDebug,
 							"verifying all retries have flushed",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
 						)
 
 						lt.resultWaitGroup.Wait()
@@ -1837,10 +1846,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 						taskBufSize = readRetries(taskBuf[:numNewTasks:numNewTasks])
 						if taskBufSize <= 0 {
 
-							lt.logger.InfoContext(ctx,
+							lt.logger.LogAttrs(ctx, slog.LevelInfo,
 								"all retries flushed",
-								"preflush_num_tasks", preflushNumTasks,
-								"num_tasks", numTasks,
+								slog.Int("preflush_num_tasks", preflushNumTasks),
+								slog.Int("num_tasks", numTasks),
 							)
 							return nil
 						}
@@ -1904,13 +1913,13 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 			*shutdownErrResp = err
 		}
 
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for running tasks to stop",
 		)
 		lt.resultWaitGroup.Wait()
 
 		// signal for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
 		for i := 0; i < len(lt.workers); i++ {
@@ -1918,12 +1927,12 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 		}
 
 		// wait for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for workers to stop",
 		)
 		lt.workerWaitGroup.Wait()
 
-		lt.logger.InfoContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelInfo,
 			"loadtest stopped",
 		)
 	}()
@@ -1959,22 +1968,22 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 
 				// prevent over committing on the maxWorkers count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numWorkers too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxWorkers {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too high",
-						"remediation_hint", "increase the loadtest MaxWorkers setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxWorkers,
+						slog.String("reason", "update tried to set numWorkers too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxWorkers setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxWorkers),
 					)
 					n = lt.maxWorkers
 				}
@@ -1999,8 +2008,8 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 				}
 
 				configChanges = append(configChanges,
-					"old_num_workers", numWorkers,
-					"new_num_workers", n,
+					slog.Int("old_num_workers", numWorkers),
+					slog.Int("new_num_workers", n),
 				)
 				numWorkers = n
 			}
@@ -2013,29 +2022,29 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 
 				// prevent over committing on the maxIntervalTasks count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numIntervalTasks too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxIntervalTasks {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too high",
-						"remediation_hint", "increase the loadtest MaxIntervalTasks setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxIntervalTasks,
+						slog.String("reason", "update tried to set numIntervalTasks too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxIntervalTasks setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxIntervalTasks),
 					)
 					n = lt.maxIntervalTasks
 				}
 
 				configChanges = append(configChanges,
-					"old_num_interval_tasks", meta.NumIntervalTasks,
-					"new_num_interval_tasks", n,
+					slog.Int("old_num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("new_num_interval_tasks", n),
 				)
 				numNewTasks = n
 				meta.NumIntervalTasks = n
@@ -2047,19 +2056,19 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 				n := cu.interval.val
 
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: interval",
-						"reason", "update tried to set interval too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set interval too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.String("requested", n.String()),
+						slog.String("min", time.Duration(0).String()),
 					)
 					n = 0
 				}
 
 				configChanges = append(configChanges,
-					"old_interval", interval,
-					"new_interval", n,
+					slog.String("old_interval", interval.String()),
+					slog.String("new_interval", n.String()),
 				)
 				interval = n
 			}
@@ -2078,9 +2087,9 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 					} else {
 						prepSemaErr = lt.intervalTasksSema.Acquire(ctx, int64(taskSlotCount-newTaskSlotCount))
 						if prepSemaErr != nil {
-							lt.logger.ErrorContext(ctx,
+							lt.logger.LogAttrs(ctx, slog.LevelError,
 								"loadtest config update: failed to pre-acquire load generation slots",
-								"error", prepSemaErr,
+								slog.Any("error", prepSemaErr),
 							)
 
 							// not returning and error... yet
@@ -2093,7 +2102,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 			}
 
 			if !cu.onStartup {
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"loadtest config updated",
 					configChanges...,
 				)
@@ -2111,11 +2120,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 					paused = true
 					pauseStart = time.Now().UTC()
 
-					lt.logger.WarnContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelWarn,
 						"pausing load generation",
-						"num_interval_tasks", meta.NumIntervalTasks,
-						"num_workers", numWorkers,
-						"paused_at", pauseStart,
+						slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+						slog.Int("num_workers", numWorkers),
+						slog.String("paused_at", pauseStart.String()),
 					)
 				}
 
@@ -2140,12 +2149,12 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 				paused = false
 				intervalID = time.Now()
 
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"resuming load generation",
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
-					"paused_at", pauseStart,
-					"resumed_at", intervalID.UTC(),
+					slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("num_workers", numWorkers),
+					slog.String("paused_at", pauseStart.String()),
+					slog.String("resumed_at", intervalID.UTC().String()),
 				)
 			}
 
@@ -2170,9 +2179,9 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 	// main task scheduling loop
 	for {
 		if numTasks >= maxTasks {
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"loadtest finished: max task count reached",
-				"max_tasks", maxTasks,
+				slog.Int("max_tasks", maxTasks),
 			)
 			return nil
 		}
@@ -2248,17 +2257,17 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 					// return immediately if there is nothing
 					// new to enqueue
 
-					lt.logger.WarnContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelWarn,
 						"stopping loadtest: ReadTasks did not load enough tasks",
-						"final_task_delta", 0,
+						slog.Int("final_task_delta", 0),
 					)
 
 					return nil
 				}
 
-				lt.logger.DebugContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelDebug,
 					"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
-					"retry_count", taskBufSize,
+					slog.Int("retry_count", taskBufSize),
 				)
 			}
 
@@ -2292,9 +2301,9 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 			// increase numTasks total by actual number queued
 			// and stop traffic generation
 			numTasks += taskBufSize
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"stopping loadtest: ReadTasks did not load enough tasks",
-				"final_task_delta", taskBufSize,
+				slog.Int("final_task_delta", taskBufSize),
 			)
 			return nil
 		}
@@ -2345,9 +2354,9 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 		}
 	}
 
-	lt.logger.InfoContext(ctx,
+	lt.logger.LogAttrs(ctx, slog.LevelInfo,
 		"starting loadtest",
-		"config", lt.loadtestConfigAsJson(),
+		slog.Any("config", lt.loadtestConfigAsJson()),
 	)
 
 	var wg sync.WaitGroup
@@ -2371,7 +2380,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]any, 0, 12)
+	configChanges := make([]slog.Attr, 0, 6)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -2436,37 +2445,37 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 		err := func(flushRetries bool) error {
 			if !flushRetries {
 
-				lt.logger.DebugContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelDebug,
 					"not waiting on retries to flush on shutdown",
-					"reason", "retries disabled or flush retries on shutdown disabled",
-					"num_tasks", numTasks,
+					slog.String("reason", "retries disabled or flush retries on shutdown disabled"),
+					slog.Int("num_tasks", numTasks),
 				)
 
 				return nil
 			}
 
 			if err := ctx.Err(); err != nil {
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"not waiting on retries to flush on shutdown",
-					"reason", "user stopped loadtest",
-					"num_tasks", numTasks,
-					"error", err,
+					slog.String("reason", "user stopped loadtest"),
+					slog.Int("num_tasks", numTasks),
+					slog.Any("error", err),
 				)
 				return nil
 			}
 
-			lt.logger.DebugContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelDebug,
 				"waiting on retries to flush",
-				"num_tasks", numTasks,
+				slog.Int("num_tasks", numTasks),
 			)
 
 			if meta.NumIntervalTasks <= 0 || numWorkers <= 0 {
 
-				lt.logger.ErrorContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
 					"retry flushing could not be attempted",
-					"num_tasks", numTasks,
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
+					slog.Int("num_tasks", numTasks),
+					slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("num_workers", numWorkers),
 				)
 
 				return ErrRetriesFailedToFlush
@@ -2474,10 +2483,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 
 			preflushNumTasks := numTasks
 
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"shutting down: flushing retries",
-				"num_tasks", numTasks,
-				"flush_retries_timeout", lt.flushRetriesTimeout.String(),
+				slog.Int("num_tasks", numTasks),
+				slog.String("flush_retries_timeout", lt.flushRetriesTimeout.String()),
 			)
 
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), lt.flushRetriesTimeout)
@@ -2490,11 +2499,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 			for {
 
 				if err := shutdownCtx.Err(); err != nil {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"failed to flush all retries",
-						"preflush_num_tasks", preflushNumTasks,
-						"num_tasks", numTasks,
-						"error", err,
+						slog.Int("preflush_num_tasks", preflushNumTasks),
+						slog.Int("num_tasks", numTasks),
+						slog.Any("error", err),
 					)
 
 					return ErrRetriesFailedToFlush
@@ -2505,11 +2514,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 				for {
 
 					if err := shutdownCtx.Err(); err != nil {
-						lt.logger.ErrorContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelError,
 							"failed to flush all retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
-							"error", err,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
+							slog.Any("error", err),
 						)
 
 						return ErrRetriesFailedToFlush
@@ -2517,10 +2526,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 
 					select {
 					case <-ctxDone:
-						lt.logger.WarnContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelWarn,
 							"user stopped loadtest while attempting to flush retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
 						)
 						return nil
 					default:
@@ -2532,12 +2541,12 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 					// in the shutdown retry flow we always want to acquire before reading retries
 					// to avoid a deadlock edge case of the retry queue being full, all workers tasks failed and need to be retried
 					if err := lt.intervalTasksSema.Acquire(shutdownCtx, int64(numNewTasks)); err != nil {
-						lt.logger.ErrorContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelError,
 							"failed to flush all retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
-							"error", err,
-							"reason", "shutdown timeout likely reached while waiting for semaphore acquisition",
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
+							slog.Any("error", err),
+							slog.String("reason", "shutdown timeout likely reached while waiting for semaphore acquisition"),
 						)
 						return ErrRetriesFailedToFlush
 					}
@@ -2547,10 +2556,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 					if taskBufSize <= 0 {
 						// wait for any pending tasks to flush and try read again
 
-						lt.logger.DebugContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelDebug,
 							"verifying all retries have flushed",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
 						)
 
 						lt.resultWaitGroup.Wait()
@@ -2559,10 +2568,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 						taskBufSize = readRetries(taskBuf[:numNewTasks:numNewTasks])
 						if taskBufSize <= 0 {
 
-							lt.logger.InfoContext(ctx,
+							lt.logger.LogAttrs(ctx, slog.LevelInfo,
 								"all retries flushed",
-								"preflush_num_tasks", preflushNumTasks,
-								"num_tasks", numTasks,
+								slog.Int("preflush_num_tasks", preflushNumTasks),
+								slog.Int("num_tasks", numTasks),
 							)
 							return nil
 						}
@@ -2639,12 +2648,12 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 			*shutdownErrResp = err
 		}
 
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for running tasks to stop",
 		)
 		lt.resultWaitGroup.Wait()
 
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping result handler routine",
 		)
 
@@ -2652,7 +2661,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 		close(lt.resultsChan)
 
 		// signal for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
 		for i := 0; i < len(lt.workers); i++ {
@@ -2660,18 +2669,18 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 		}
 
 		// wait for result handler routines to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for result handler routines to stop",
 		)
 		wg.Wait()
 
 		// wait for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for workers to stop",
 		)
 		lt.workerWaitGroup.Wait()
 
-		lt.logger.InfoContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelInfo,
 			"loadtest stopped",
 		)
 	}()
@@ -2707,22 +2716,22 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 
 				// prevent over committing on the maxWorkers count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numWorkers too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxWorkers {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too high",
-						"remediation_hint", "increase the loadtest MaxWorkers setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxWorkers,
+						slog.String("reason", "update tried to set numWorkers too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxWorkers setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxWorkers),
 					)
 					n = lt.maxWorkers
 				}
@@ -2747,8 +2756,8 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 				}
 
 				configChanges = append(configChanges,
-					"old_num_workers", numWorkers,
-					"new_num_workers", n,
+					slog.Int("old_num_workers", numWorkers),
+					slog.Int("new_num_workers", n),
 				)
 				numWorkers = n
 			}
@@ -2761,29 +2770,29 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 
 				// prevent over committing on the maxIntervalTasks count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numIntervalTasks too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxIntervalTasks {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too high",
-						"remediation_hint", "increase the loadtest MaxIntervalTasks setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxIntervalTasks,
+						slog.String("reason", "update tried to set numIntervalTasks too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxIntervalTasks setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxIntervalTasks),
 					)
 					n = lt.maxIntervalTasks
 				}
 
 				configChanges = append(configChanges,
-					"old_num_interval_tasks", meta.NumIntervalTasks,
-					"new_num_interval_tasks", n,
+					slog.Int("old_num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("new_num_interval_tasks", n),
 				)
 				numNewTasks = n
 				meta.NumIntervalTasks = n
@@ -2795,19 +2804,19 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 				n := cu.interval.val
 
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: interval",
-						"reason", "update tried to set interval too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set interval too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.String("requested", n.String()),
+						slog.String("min", time.Duration(0).String()),
 					)
 					n = 0
 				}
 
 				configChanges = append(configChanges,
-					"old_interval", interval,
-					"new_interval", n,
+					slog.String("old_interval", interval.String()),
+					slog.String("new_interval", n.String()),
 				)
 				interval = n
 			}
@@ -2826,9 +2835,9 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 					} else {
 						prepSemaErr = lt.intervalTasksSema.Acquire(ctx, int64(taskSlotCount-newTaskSlotCount))
 						if prepSemaErr != nil {
-							lt.logger.ErrorContext(ctx,
+							lt.logger.LogAttrs(ctx, slog.LevelError,
 								"loadtest config update: failed to pre-acquire load generation slots",
-								"error", prepSemaErr,
+								slog.Any("error", prepSemaErr),
 							)
 
 							// not returning and error... yet
@@ -2841,7 +2850,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 			}
 
 			if !cu.onStartup {
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"loadtest config updated",
 					configChanges...,
 				)
@@ -2859,11 +2868,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 					paused = true
 					pauseStart = time.Now().UTC()
 
-					lt.logger.WarnContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelWarn,
 						"pausing load generation",
-						"num_interval_tasks", meta.NumIntervalTasks,
-						"num_workers", numWorkers,
-						"paused_at", pauseStart,
+						slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+						slog.Int("num_workers", numWorkers),
+						slog.String("paused_at", pauseStart.String()),
 					)
 				}
 
@@ -2888,12 +2897,12 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 				paused = false
 				intervalID = time.Now()
 
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"resuming load generation",
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
-					"paused_at", pauseStart,
-					"resumed_at", intervalID.UTC(),
+					slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("num_workers", numWorkers),
+					slog.String("paused_at", pauseStart.String()),
+					slog.String("resumed_at", intervalID.UTC().String()),
 				)
 			}
 
@@ -2984,17 +2993,17 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 					// return immediately if there is nothing
 					// new to enqueue
 
-					lt.logger.WarnContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelWarn,
 						"stopping loadtest: ReadTasks did not load enough tasks",
-						"final_task_delta", 0,
+						slog.Int("final_task_delta", 0),
 					)
 
 					return nil
 				}
 
-				lt.logger.DebugContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelDebug,
 					"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
-					"retry_count", taskBufSize,
+					slog.Int("retry_count", taskBufSize),
 				)
 			}
 
@@ -3028,9 +3037,9 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 			// increase numTasks total by actual number queued
 			// and stop traffic generation
 			numTasks += taskBufSize
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"stopping loadtest: ReadTasks did not load enough tasks",
-				"final_task_delta", taskBufSize,
+				slog.Int("final_task_delta", taskBufSize),
 			)
 			return nil
 		}
@@ -3076,9 +3085,9 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 
 	lt.startTime = time.Now()
 
-	lt.logger.InfoContext(ctx,
+	lt.logger.LogAttrs(ctx, slog.LevelInfo,
 		"starting loadtest",
-		"config", lt.loadtestConfigAsJson(),
+		slog.Any("config", lt.loadtestConfigAsJson()),
 	)
 
 	numWorkers := lt.numWorkers
@@ -3093,7 +3102,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]any, 0, 12)
+	configChanges := make([]slog.Attr, 0, 6)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -3158,37 +3167,37 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 		err := func(flushRetries bool) error {
 			if !flushRetries {
 
-				lt.logger.DebugContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelDebug,
 					"not waiting on retries to flush on shutdown",
-					"reason", "retries disabled or flush retries on shutdown disabled",
-					"num_tasks", numTasks,
+					slog.String("reason", "retries disabled or flush retries on shutdown disabled"),
+					slog.Int("num_tasks", numTasks),
 				)
 
 				return nil
 			}
 
 			if err := ctx.Err(); err != nil {
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"not waiting on retries to flush on shutdown",
-					"reason", "user stopped loadtest",
-					"num_tasks", numTasks,
-					"error", err,
+					slog.String("reason", "user stopped loadtest"),
+					slog.Int("num_tasks", numTasks),
+					slog.Any("error", err),
 				)
 				return nil
 			}
 
-			lt.logger.DebugContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelDebug,
 				"waiting on retries to flush",
-				"num_tasks", numTasks,
+				slog.Int("num_tasks", numTasks),
 			)
 
 			if meta.NumIntervalTasks <= 0 || numWorkers <= 0 {
 
-				lt.logger.ErrorContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
 					"retry flushing could not be attempted",
-					"num_tasks", numTasks,
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
+					slog.Int("num_tasks", numTasks),
+					slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("num_workers", numWorkers),
 				)
 
 				return ErrRetriesFailedToFlush
@@ -3196,10 +3205,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 
 			preflushNumTasks := numTasks
 
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"shutting down: flushing retries",
-				"num_tasks", numTasks,
-				"flush_retries_timeout", lt.flushRetriesTimeout.String(),
+				slog.Int("num_tasks", numTasks),
+				slog.String("flush_retries_timeout", lt.flushRetriesTimeout.String()),
 			)
 
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), lt.flushRetriesTimeout)
@@ -3211,11 +3220,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 			for {
 
 				if err := shutdownCtx.Err(); err != nil {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"failed to flush all retries",
-						"preflush_num_tasks", preflushNumTasks,
-						"num_tasks", numTasks,
-						"error", err,
+						slog.Int("preflush_num_tasks", preflushNumTasks),
+						slog.Int("num_tasks", numTasks),
+						slog.Any("error", err),
 					)
 
 					return ErrRetriesFailedToFlush
@@ -3226,11 +3235,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 				for {
 
 					if err := shutdownCtx.Err(); err != nil {
-						lt.logger.ErrorContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelError,
 							"failed to flush all retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
-							"error", err,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
+							slog.Any("error", err),
 						)
 
 						return ErrRetriesFailedToFlush
@@ -3238,10 +3247,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 
 					select {
 					case <-ctxDone:
-						lt.logger.WarnContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelWarn,
 							"user stopped loadtest while attempting to flush retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
 						)
 						return nil
 					default:
@@ -3253,12 +3262,12 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 					// in the shutdown retry flow we always want to acquire before reading retries
 					// to avoid a deadlock edge case of the retry queue being full, all workers tasks failed and need to be retried
 					if err := lt.intervalTasksSema.Acquire(shutdownCtx, int64(numNewTasks)); err != nil {
-						lt.logger.ErrorContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelError,
 							"failed to flush all retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
-							"error", err,
-							"reason", "shutdown timeout likely reached while waiting for semaphore acquisition",
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
+							slog.Any("error", err),
+							slog.String("reason", "shutdown timeout likely reached while waiting for semaphore acquisition"),
 						)
 						return ErrRetriesFailedToFlush
 					}
@@ -3268,10 +3277,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 					if taskBufSize <= 0 {
 						// wait for any pending tasks to flush and try read again
 
-						lt.logger.DebugContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelDebug,
 							"verifying all retries have flushed",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
 						)
 
 						lt.resultWaitGroup.Wait()
@@ -3280,10 +3289,10 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 						taskBufSize = readRetries(taskBuf[:numNewTasks:numNewTasks])
 						if taskBufSize <= 0 {
 
-							lt.logger.InfoContext(ctx,
+							lt.logger.LogAttrs(ctx, slog.LevelInfo,
 								"all retries flushed",
-								"preflush_num_tasks", preflushNumTasks,
-								"num_tasks", numTasks,
+								slog.Int("preflush_num_tasks", preflushNumTasks),
+								slog.Int("num_tasks", numTasks),
 							)
 							return nil
 						}
@@ -3347,13 +3356,13 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 			*shutdownErrResp = err
 		}
 
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for running tasks to stop",
 		)
 		lt.resultWaitGroup.Wait()
 
 		// signal for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
 		for i := 0; i < len(lt.workers); i++ {
@@ -3361,12 +3370,12 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 		}
 
 		// wait for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for workers to stop",
 		)
 		lt.workerWaitGroup.Wait()
 
-		lt.logger.InfoContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelInfo,
 			"loadtest stopped",
 		)
 	}()
@@ -3402,22 +3411,22 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 
 				// prevent over committing on the maxWorkers count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numWorkers too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxWorkers {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too high",
-						"remediation_hint", "increase the loadtest MaxWorkers setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxWorkers,
+						slog.String("reason", "update tried to set numWorkers too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxWorkers setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxWorkers),
 					)
 					n = lt.maxWorkers
 				}
@@ -3442,8 +3451,8 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 				}
 
 				configChanges = append(configChanges,
-					"old_num_workers", numWorkers,
-					"new_num_workers", n,
+					slog.Int("old_num_workers", numWorkers),
+					slog.Int("new_num_workers", n),
 				)
 				numWorkers = n
 			}
@@ -3456,29 +3465,29 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 
 				// prevent over committing on the maxIntervalTasks count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numIntervalTasks too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxIntervalTasks {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too high",
-						"remediation_hint", "increase the loadtest MaxIntervalTasks setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxIntervalTasks,
+						slog.String("reason", "update tried to set numIntervalTasks too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxIntervalTasks setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxIntervalTasks),
 					)
 					n = lt.maxIntervalTasks
 				}
 
 				configChanges = append(configChanges,
-					"old_num_interval_tasks", meta.NumIntervalTasks,
-					"new_num_interval_tasks", n,
+					slog.Int("old_num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("new_num_interval_tasks", n),
 				)
 				numNewTasks = n
 				meta.NumIntervalTasks = n
@@ -3490,19 +3499,19 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 				n := cu.interval.val
 
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: interval",
-						"reason", "update tried to set interval too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set interval too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.String("requested", n.String()),
+						slog.String("min", time.Duration(0).String()),
 					)
 					n = 0
 				}
 
 				configChanges = append(configChanges,
-					"old_interval", interval,
-					"new_interval", n,
+					slog.String("old_interval", interval.String()),
+					slog.String("new_interval", n.String()),
 				)
 				interval = n
 			}
@@ -3521,9 +3530,9 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 					} else {
 						prepSemaErr = lt.intervalTasksSema.Acquire(ctx, int64(taskSlotCount-newTaskSlotCount))
 						if prepSemaErr != nil {
-							lt.logger.ErrorContext(ctx,
+							lt.logger.LogAttrs(ctx, slog.LevelError,
 								"loadtest config update: failed to pre-acquire load generation slots",
-								"error", prepSemaErr,
+								slog.Any("error", prepSemaErr),
 							)
 
 							// not returning and error... yet
@@ -3536,7 +3545,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 			}
 
 			if !cu.onStartup {
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"loadtest config updated",
 					configChanges...,
 				)
@@ -3554,11 +3563,11 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 					paused = true
 					pauseStart = time.Now().UTC()
 
-					lt.logger.WarnContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelWarn,
 						"pausing load generation",
-						"num_interval_tasks", meta.NumIntervalTasks,
-						"num_workers", numWorkers,
-						"paused_at", pauseStart,
+						slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+						slog.Int("num_workers", numWorkers),
+						slog.String("paused_at", pauseStart.String()),
 					)
 				}
 
@@ -3583,12 +3592,12 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 				paused = false
 				intervalID = time.Now()
 
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"resuming load generation",
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
-					"paused_at", pauseStart,
-					"resumed_at", intervalID.UTC(),
+					slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("num_workers", numWorkers),
+					slog.String("paused_at", pauseStart.String()),
+					slog.String("resumed_at", intervalID.UTC().String()),
 				)
 			}
 
@@ -3679,17 +3688,17 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 					// return immediately if there is nothing
 					// new to enqueue
 
-					lt.logger.WarnContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelWarn,
 						"stopping loadtest: ReadTasks did not load enough tasks",
-						"final_task_delta", 0,
+						slog.Int("final_task_delta", 0),
 					)
 
 					return nil
 				}
 
-				lt.logger.DebugContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelDebug,
 					"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
-					"retry_count", taskBufSize,
+					slog.Int("retry_count", taskBufSize),
 				)
 			}
 
@@ -3723,9 +3732,9 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 			// increase numTasks total by actual number queued
 			// and stop traffic generation
 			numTasks += taskBufSize
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"stopping loadtest: ReadTasks did not load enough tasks",
-				"final_task_delta", taskBufSize,
+				slog.Int("final_task_delta", taskBufSize),
 			)
 			return nil
 		}
@@ -3776,9 +3785,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 		}
 	}
 
-	lt.logger.InfoContext(ctx,
+	lt.logger.LogAttrs(ctx, slog.LevelInfo,
 		"starting loadtest",
-		"config", lt.loadtestConfigAsJson(),
+		slog.Any("config", lt.loadtestConfigAsJson()),
 	)
 
 	var wg sync.WaitGroup
@@ -3804,7 +3813,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]any, 0, 12)
+	configChanges := make([]slog.Attr, 0, 6)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -3849,12 +3858,12 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 	// flushing as much as possible
 	defer func() {
 
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for running tasks to stop",
 		)
 		lt.resultWaitGroup.Wait()
 
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping result handler routine",
 		)
 
@@ -3862,7 +3871,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 		close(lt.resultsChan)
 
 		// signal for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
 		for i := 0; i < len(lt.workers); i++ {
@@ -3870,18 +3879,18 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 		}
 
 		// wait for result handler routines to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for result handler routines to stop",
 		)
 		wg.Wait()
 
 		// wait for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for workers to stop",
 		)
 		lt.workerWaitGroup.Wait()
 
-		lt.logger.InfoContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelInfo,
 			"loadtest stopped",
 		)
 	}()
@@ -3917,22 +3926,22 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 
 				// prevent over committing on the maxWorkers count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numWorkers too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxWorkers {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too high",
-						"remediation_hint", "increase the loadtest MaxWorkers setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxWorkers,
+						slog.String("reason", "update tried to set numWorkers too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxWorkers setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxWorkers),
 					)
 					n = lt.maxWorkers
 				}
@@ -3957,8 +3966,8 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 				}
 
 				configChanges = append(configChanges,
-					"old_num_workers", numWorkers,
-					"new_num_workers", n,
+					slog.Int("old_num_workers", numWorkers),
+					slog.Int("new_num_workers", n),
 				)
 				numWorkers = n
 			}
@@ -3971,29 +3980,29 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 
 				// prevent over committing on the maxIntervalTasks count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numIntervalTasks too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxIntervalTasks {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too high",
-						"remediation_hint", "increase the loadtest MaxIntervalTasks setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxIntervalTasks,
+						slog.String("reason", "update tried to set numIntervalTasks too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxIntervalTasks setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxIntervalTasks),
 					)
 					n = lt.maxIntervalTasks
 				}
 
 				configChanges = append(configChanges,
-					"old_num_interval_tasks", meta.NumIntervalTasks,
-					"new_num_interval_tasks", n,
+					slog.Int("old_num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("new_num_interval_tasks", n),
 				)
 				numNewTasks = n
 				meta.NumIntervalTasks = n
@@ -4005,19 +4014,19 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 				n := cu.interval.val
 
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: interval",
-						"reason", "update tried to set interval too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set interval too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.String("requested", n.String()),
+						slog.String("min", time.Duration(0).String()),
 					)
 					n = 0
 				}
 
 				configChanges = append(configChanges,
-					"old_interval", interval,
-					"new_interval", n,
+					slog.String("old_interval", interval.String()),
+					slog.String("new_interval", n.String()),
 				)
 				interval = n
 			}
@@ -4036,9 +4045,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 					} else {
 						prepSemaErr = lt.intervalTasksSema.Acquire(ctx, int64(taskSlotCount-newTaskSlotCount))
 						if prepSemaErr != nil {
-							lt.logger.ErrorContext(ctx,
+							lt.logger.LogAttrs(ctx, slog.LevelError,
 								"loadtest config update: failed to pre-acquire load generation slots",
-								"error", prepSemaErr,
+								slog.Any("error", prepSemaErr),
 							)
 
 							// not returning and error... yet
@@ -4051,7 +4060,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 			}
 
 			if !cu.onStartup {
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"loadtest config updated",
 					configChanges...,
 				)
@@ -4069,11 +4078,11 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 					paused = true
 					pauseStart = time.Now().UTC()
 
-					lt.logger.WarnContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelWarn,
 						"pausing load generation",
-						"num_interval_tasks", meta.NumIntervalTasks,
-						"num_workers", numWorkers,
-						"paused_at", pauseStart,
+						slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+						slog.Int("num_workers", numWorkers),
+						slog.String("paused_at", pauseStart.String()),
 					)
 				}
 
@@ -4098,12 +4107,12 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 				paused = false
 				intervalID = time.Now()
 
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"resuming load generation",
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
-					"paused_at", pauseStart,
-					"resumed_at", intervalID.UTC(),
+					slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("num_workers", numWorkers),
+					slog.String("paused_at", pauseStart.String()),
+					slog.String("resumed_at", intervalID.UTC().String()),
 				)
 			}
 
@@ -4128,9 +4137,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 	// main task scheduling loop
 	for {
 		if numTasks >= maxTasks {
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"loadtest finished: max task count reached",
-				"max_tasks", maxTasks,
+				slog.Int("max_tasks", maxTasks),
 			)
 			return nil
 		}
@@ -4178,9 +4187,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 			}
 			if n == 0 {
 
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"stopping loadtest: ReadTasks did not load enough tasks",
-					"final_task_delta", 0,
+					slog.Int("final_task_delta", 0),
 				)
 
 				return nil
@@ -4213,9 +4222,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 			// increase numTasks total by actual number queued
 			// and stop traffic generation
 			// numTasks += taskBufSize // this line only has an effect except in a retries enabled context
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"stopping loadtest: ReadTasks did not load enough tasks",
-				"final_task_delta", taskBufSize,
+				slog.Int("final_task_delta", taskBufSize),
 			)
 			return nil
 		}
@@ -4261,9 +4270,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 
 	lt.startTime = time.Now()
 
-	lt.logger.InfoContext(ctx,
+	lt.logger.LogAttrs(ctx, slog.LevelInfo,
 		"starting loadtest",
-		"config", lt.loadtestConfigAsJson(),
+		slog.Any("config", lt.loadtestConfigAsJson()),
 	)
 
 	numWorkers := lt.numWorkers
@@ -4280,7 +4289,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]any, 0, 12)
+	configChanges := make([]slog.Attr, 0, 6)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -4325,13 +4334,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 	// flushing as much as possible
 	defer func() {
 
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for running tasks to stop",
 		)
 		lt.resultWaitGroup.Wait()
 
 		// signal for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
 		for i := 0; i < len(lt.workers); i++ {
@@ -4339,12 +4348,12 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 		}
 
 		// wait for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for workers to stop",
 		)
 		lt.workerWaitGroup.Wait()
 
-		lt.logger.InfoContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelInfo,
 			"loadtest stopped",
 		)
 	}()
@@ -4380,22 +4389,22 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 
 				// prevent over committing on the maxWorkers count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numWorkers too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxWorkers {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too high",
-						"remediation_hint", "increase the loadtest MaxWorkers setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxWorkers,
+						slog.String("reason", "update tried to set numWorkers too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxWorkers setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxWorkers),
 					)
 					n = lt.maxWorkers
 				}
@@ -4420,8 +4429,8 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 				}
 
 				configChanges = append(configChanges,
-					"old_num_workers", numWorkers,
-					"new_num_workers", n,
+					slog.Int("old_num_workers", numWorkers),
+					slog.Int("new_num_workers", n),
 				)
 				numWorkers = n
 			}
@@ -4434,29 +4443,29 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 
 				// prevent over committing on the maxIntervalTasks count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numIntervalTasks too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxIntervalTasks {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too high",
-						"remediation_hint", "increase the loadtest MaxIntervalTasks setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxIntervalTasks,
+						slog.String("reason", "update tried to set numIntervalTasks too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxIntervalTasks setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxIntervalTasks),
 					)
 					n = lt.maxIntervalTasks
 				}
 
 				configChanges = append(configChanges,
-					"old_num_interval_tasks", meta.NumIntervalTasks,
-					"new_num_interval_tasks", n,
+					slog.Int("old_num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("new_num_interval_tasks", n),
 				)
 				numNewTasks = n
 				meta.NumIntervalTasks = n
@@ -4468,19 +4477,19 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 				n := cu.interval.val
 
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: interval",
-						"reason", "update tried to set interval too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set interval too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.String("requested", n.String()),
+						slog.String("min", time.Duration(0).String()),
 					)
 					n = 0
 				}
 
 				configChanges = append(configChanges,
-					"old_interval", interval,
-					"new_interval", n,
+					slog.String("old_interval", interval.String()),
+					slog.String("new_interval", n.String()),
 				)
 				interval = n
 			}
@@ -4499,9 +4508,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 					} else {
 						prepSemaErr = lt.intervalTasksSema.Acquire(ctx, int64(taskSlotCount-newTaskSlotCount))
 						if prepSemaErr != nil {
-							lt.logger.ErrorContext(ctx,
+							lt.logger.LogAttrs(ctx, slog.LevelError,
 								"loadtest config update: failed to pre-acquire load generation slots",
-								"error", prepSemaErr,
+								slog.Any("error", prepSemaErr),
 							)
 
 							// not returning and error... yet
@@ -4514,7 +4523,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 			}
 
 			if !cu.onStartup {
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"loadtest config updated",
 					configChanges...,
 				)
@@ -4532,11 +4541,11 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 					paused = true
 					pauseStart = time.Now().UTC()
 
-					lt.logger.WarnContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelWarn,
 						"pausing load generation",
-						"num_interval_tasks", meta.NumIntervalTasks,
-						"num_workers", numWorkers,
-						"paused_at", pauseStart,
+						slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+						slog.Int("num_workers", numWorkers),
+						slog.String("paused_at", pauseStart.String()),
 					)
 				}
 
@@ -4561,12 +4570,12 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 				paused = false
 				intervalID = time.Now()
 
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"resuming load generation",
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
-					"paused_at", pauseStart,
-					"resumed_at", intervalID.UTC(),
+					slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("num_workers", numWorkers),
+					slog.String("paused_at", pauseStart.String()),
+					slog.String("resumed_at", intervalID.UTC().String()),
 				)
 			}
 
@@ -4591,9 +4600,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 	// main task scheduling loop
 	for {
 		if numTasks >= maxTasks {
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"loadtest finished: max task count reached",
-				"max_tasks", maxTasks,
+				slog.Int("max_tasks", maxTasks),
 			)
 			return nil
 		}
@@ -4641,9 +4650,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 			}
 			if n == 0 {
 
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"stopping loadtest: ReadTasks did not load enough tasks",
-					"final_task_delta", 0,
+					slog.Int("final_task_delta", 0),
 				)
 
 				return nil
@@ -4676,9 +4685,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 			// increase numTasks total by actual number queued
 			// and stop traffic generation
 			// numTasks += taskBufSize // this line only has an effect except in a retries enabled context
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"stopping loadtest: ReadTasks did not load enough tasks",
-				"final_task_delta", taskBufSize,
+				slog.Int("final_task_delta", taskBufSize),
 			)
 			return nil
 		}
@@ -4729,9 +4738,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 		}
 	}
 
-	lt.logger.InfoContext(ctx,
+	lt.logger.LogAttrs(ctx, slog.LevelInfo,
 		"starting loadtest",
-		"config", lt.loadtestConfigAsJson(),
+		slog.Any("config", lt.loadtestConfigAsJson()),
 	)
 
 	var wg sync.WaitGroup
@@ -4755,7 +4764,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]any, 0, 12)
+	configChanges := make([]slog.Attr, 0, 6)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -4800,12 +4809,12 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 	// flushing as much as possible
 	defer func() {
 
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for running tasks to stop",
 		)
 		lt.resultWaitGroup.Wait()
 
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping result handler routine",
 		)
 
@@ -4813,7 +4822,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 		close(lt.resultsChan)
 
 		// signal for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
 		for i := 0; i < len(lt.workers); i++ {
@@ -4821,18 +4830,18 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 		}
 
 		// wait for result handler routines to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for result handler routines to stop",
 		)
 		wg.Wait()
 
 		// wait for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for workers to stop",
 		)
 		lt.workerWaitGroup.Wait()
 
-		lt.logger.InfoContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelInfo,
 			"loadtest stopped",
 		)
 	}()
@@ -4868,22 +4877,22 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 
 				// prevent over committing on the maxWorkers count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numWorkers too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxWorkers {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too high",
-						"remediation_hint", "increase the loadtest MaxWorkers setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxWorkers,
+						slog.String("reason", "update tried to set numWorkers too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxWorkers setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxWorkers),
 					)
 					n = lt.maxWorkers
 				}
@@ -4908,8 +4917,8 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 				}
 
 				configChanges = append(configChanges,
-					"old_num_workers", numWorkers,
-					"new_num_workers", n,
+					slog.Int("old_num_workers", numWorkers),
+					slog.Int("new_num_workers", n),
 				)
 				numWorkers = n
 			}
@@ -4922,29 +4931,29 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 
 				// prevent over committing on the maxIntervalTasks count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numIntervalTasks too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxIntervalTasks {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too high",
-						"remediation_hint", "increase the loadtest MaxIntervalTasks setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxIntervalTasks,
+						slog.String("reason", "update tried to set numIntervalTasks too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxIntervalTasks setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxIntervalTasks),
 					)
 					n = lt.maxIntervalTasks
 				}
 
 				configChanges = append(configChanges,
-					"old_num_interval_tasks", meta.NumIntervalTasks,
-					"new_num_interval_tasks", n,
+					slog.Int("old_num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("new_num_interval_tasks", n),
 				)
 				numNewTasks = n
 				meta.NumIntervalTasks = n
@@ -4956,19 +4965,19 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 				n := cu.interval.val
 
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: interval",
-						"reason", "update tried to set interval too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set interval too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.String("requested", n.String()),
+						slog.String("min", time.Duration(0).String()),
 					)
 					n = 0
 				}
 
 				configChanges = append(configChanges,
-					"old_interval", interval,
-					"new_interval", n,
+					slog.String("old_interval", interval.String()),
+					slog.String("new_interval", n.String()),
 				)
 				interval = n
 			}
@@ -4987,9 +4996,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 					} else {
 						prepSemaErr = lt.intervalTasksSema.Acquire(ctx, int64(taskSlotCount-newTaskSlotCount))
 						if prepSemaErr != nil {
-							lt.logger.ErrorContext(ctx,
+							lt.logger.LogAttrs(ctx, slog.LevelError,
 								"loadtest config update: failed to pre-acquire load generation slots",
-								"error", prepSemaErr,
+								slog.Any("error", prepSemaErr),
 							)
 
 							// not returning and error... yet
@@ -5002,7 +5011,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 			}
 
 			if !cu.onStartup {
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"loadtest config updated",
 					configChanges...,
 				)
@@ -5020,11 +5029,11 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 					paused = true
 					pauseStart = time.Now().UTC()
 
-					lt.logger.WarnContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelWarn,
 						"pausing load generation",
-						"num_interval_tasks", meta.NumIntervalTasks,
-						"num_workers", numWorkers,
-						"paused_at", pauseStart,
+						slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+						slog.Int("num_workers", numWorkers),
+						slog.String("paused_at", pauseStart.String()),
 					)
 				}
 
@@ -5049,12 +5058,12 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 				paused = false
 				intervalID = time.Now()
 
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"resuming load generation",
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
-					"paused_at", pauseStart,
-					"resumed_at", intervalID.UTC(),
+					slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("num_workers", numWorkers),
+					slog.String("paused_at", pauseStart.String()),
+					slog.String("resumed_at", intervalID.UTC().String()),
 				)
 			}
 
@@ -5117,9 +5126,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 			}
 			if n == 0 {
 
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"stopping loadtest: ReadTasks did not load enough tasks",
-					"final_task_delta", 0,
+					slog.Int("final_task_delta", 0),
 				)
 
 				return nil
@@ -5152,9 +5161,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 			// increase numTasks total by actual number queued
 			// and stop traffic generation
 			// numTasks += taskBufSize // this line only has an effect except in a retries enabled context
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"stopping loadtest: ReadTasks did not load enough tasks",
-				"final_task_delta", taskBufSize,
+				slog.Int("final_task_delta", taskBufSize),
 			)
 			return nil
 		}
@@ -5200,9 +5209,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 
 	lt.startTime = time.Now()
 
-	lt.logger.InfoContext(ctx,
+	lt.logger.LogAttrs(ctx, slog.LevelInfo,
 		"starting loadtest",
-		"config", lt.loadtestConfigAsJson(),
+		slog.Any("config", lt.loadtestConfigAsJson()),
 	)
 
 	numWorkers := lt.numWorkers
@@ -5217,7 +5226,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]any, 0, 12)
+	configChanges := make([]slog.Attr, 0, 6)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -5262,13 +5271,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 	// flushing as much as possible
 	defer func() {
 
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for running tasks to stop",
 		)
 		lt.resultWaitGroup.Wait()
 
 		// signal for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
 		for i := 0; i < len(lt.workers); i++ {
@@ -5276,12 +5285,12 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 		}
 
 		// wait for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for workers to stop",
 		)
 		lt.workerWaitGroup.Wait()
 
-		lt.logger.InfoContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelInfo,
 			"loadtest stopped",
 		)
 	}()
@@ -5317,22 +5326,22 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 
 				// prevent over committing on the maxWorkers count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numWorkers too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxWorkers {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too high",
-						"remediation_hint", "increase the loadtest MaxWorkers setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxWorkers,
+						slog.String("reason", "update tried to set numWorkers too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxWorkers setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxWorkers),
 					)
 					n = lt.maxWorkers
 				}
@@ -5357,8 +5366,8 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 				}
 
 				configChanges = append(configChanges,
-					"old_num_workers", numWorkers,
-					"new_num_workers", n,
+					slog.Int("old_num_workers", numWorkers),
+					slog.Int("new_num_workers", n),
 				)
 				numWorkers = n
 			}
@@ -5371,29 +5380,29 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 
 				// prevent over committing on the maxIntervalTasks count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numIntervalTasks too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxIntervalTasks {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too high",
-						"remediation_hint", "increase the loadtest MaxIntervalTasks setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxIntervalTasks,
+						slog.String("reason", "update tried to set numIntervalTasks too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxIntervalTasks setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxIntervalTasks),
 					)
 					n = lt.maxIntervalTasks
 				}
 
 				configChanges = append(configChanges,
-					"old_num_interval_tasks", meta.NumIntervalTasks,
-					"new_num_interval_tasks", n,
+					slog.Int("old_num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("new_num_interval_tasks", n),
 				)
 				numNewTasks = n
 				meta.NumIntervalTasks = n
@@ -5405,19 +5414,19 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 				n := cu.interval.val
 
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: interval",
-						"reason", "update tried to set interval too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set interval too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.String("requested", n.String()),
+						slog.String("min", time.Duration(0).String()),
 					)
 					n = 0
 				}
 
 				configChanges = append(configChanges,
-					"old_interval", interval,
-					"new_interval", n,
+					slog.String("old_interval", interval.String()),
+					slog.String("new_interval", n.String()),
 				)
 				interval = n
 			}
@@ -5436,9 +5445,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 					} else {
 						prepSemaErr = lt.intervalTasksSema.Acquire(ctx, int64(taskSlotCount-newTaskSlotCount))
 						if prepSemaErr != nil {
-							lt.logger.ErrorContext(ctx,
+							lt.logger.LogAttrs(ctx, slog.LevelError,
 								"loadtest config update: failed to pre-acquire load generation slots",
-								"error", prepSemaErr,
+								slog.Any("error", prepSemaErr),
 							)
 
 							// not returning and error... yet
@@ -5451,7 +5460,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 			}
 
 			if !cu.onStartup {
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"loadtest config updated",
 					configChanges...,
 				)
@@ -5469,11 +5478,11 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 					paused = true
 					pauseStart = time.Now().UTC()
 
-					lt.logger.WarnContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelWarn,
 						"pausing load generation",
-						"num_interval_tasks", meta.NumIntervalTasks,
-						"num_workers", numWorkers,
-						"paused_at", pauseStart,
+						slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+						slog.Int("num_workers", numWorkers),
+						slog.String("paused_at", pauseStart.String()),
 					)
 				}
 
@@ -5498,12 +5507,12 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 				paused = false
 				intervalID = time.Now()
 
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"resuming load generation",
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
-					"paused_at", pauseStart,
-					"resumed_at", intervalID.UTC(),
+					slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("num_workers", numWorkers),
+					slog.String("paused_at", pauseStart.String()),
+					slog.String("resumed_at", intervalID.UTC().String()),
 				)
 			}
 
@@ -5566,9 +5575,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 			}
 			if n == 0 {
 
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"stopping loadtest: ReadTasks did not load enough tasks",
-					"final_task_delta", 0,
+					slog.Int("final_task_delta", 0),
 				)
 
 				return nil
@@ -5601,9 +5610,9 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 			// increase numTasks total by actual number queued
 			// and stop traffic generation
 			// numTasks += taskBufSize // this line only has an effect except in a retries enabled context
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"stopping loadtest: ReadTasks did not load enough tasks",
-				"final_task_delta", taskBufSize,
+				slog.Int("final_task_delta", taskBufSize),
 			)
 			return nil
 		}

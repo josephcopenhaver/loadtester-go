@@ -25,9 +25,9 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 	}
 	{{end}}
 
-	lt.logger.InfoContext(ctx,
+	lt.logger.LogAttrs(ctx, slog.LevelInfo,
 		"starting loadtest",
-		"config", lt.loadtestConfigAsJson(),
+		slog.Any("config", lt.loadtestConfigAsJson()),
 	)
 
 	{{if .MetricsEnabled}}
@@ -56,7 +56,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]any, 0, 12)
+	configChanges := make([]slog.Attr, 0, 6)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -124,37 +124,37 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 		err := func(flushRetries bool) error {
 			if !flushRetries {
 
-				lt.logger.DebugContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelDebug,
 					"not waiting on retries to flush on shutdown",
-					"reason", "retries disabled or flush retries on shutdown disabled",
-					"num_tasks", numTasks,
+					slog.String("reason", "retries disabled or flush retries on shutdown disabled"),
+					slog.Int("num_tasks", numTasks),
 				)
 
 				return nil
 			}
 
 			if err := ctx.Err(); err != nil {
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"not waiting on retries to flush on shutdown",
-					"reason", "user stopped loadtest",
-					"num_tasks", numTasks,
-					"error", err,
+					slog.String("reason", "user stopped loadtest"),
+					slog.Int("num_tasks", numTasks),
+					slog.Any("error", err),
 				)
 				return nil
 			}
 
-			lt.logger.DebugContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelDebug,
 				"waiting on retries to flush",
-				"num_tasks", numTasks,
+				slog.Int("num_tasks", numTasks),
 			)
 
 			if meta.NumIntervalTasks <= 0 || numWorkers <= 0 {
 
-				lt.logger.ErrorContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
 					"retry flushing could not be attempted",
-					"num_tasks", numTasks,
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
+					slog.Int("num_tasks", numTasks),
+					slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("num_workers", numWorkers),
 				)
 
 				return ErrRetriesFailedToFlush
@@ -162,10 +162,10 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 			preflushNumTasks := numTasks
 
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"shutting down: flushing retries",
-				"num_tasks", numTasks,
-				"flush_retries_timeout", lt.flushRetriesTimeout.String(),
+				slog.Int("num_tasks", numTasks),
+				slog.String("flush_retries_timeout", lt.flushRetriesTimeout.String()),
 			)
 
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), lt.flushRetriesTimeout)
@@ -178,11 +178,11 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 			for {
 
 				if err := shutdownCtx.Err(); err != nil {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"failed to flush all retries",
-						"preflush_num_tasks", preflushNumTasks,
-						"num_tasks", numTasks,
-						"error", err,
+						slog.Int("preflush_num_tasks", preflushNumTasks),
+						slog.Int("num_tasks", numTasks),
+						slog.Any("error", err),
 					)
 
 					return ErrRetriesFailedToFlush
@@ -193,11 +193,11 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 				for {
 
 					if err := shutdownCtx.Err(); err != nil {
-						lt.logger.ErrorContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelError,
 							"failed to flush all retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
-							"error", err,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
+							slog.Any("error", err),
 						)
 
 						return ErrRetriesFailedToFlush
@@ -205,11 +205,11 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 					{{if .MaxTasksGTZero -}}
 					if numTasks >= maxTasks {
-						lt.logger.ErrorContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelError,
 							"failed to flush all retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
-							"reason", "reached max tasks",
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
+							slog.String("reason", "reached max tasks"),
 						)
 						return ErrRetriesFailedToFlush
 					}
@@ -240,10 +240,10 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 					select {
 					case <-ctxDone:
-						lt.logger.WarnContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelWarn,
 							"user stopped loadtest while attempting to flush retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
 						)
 						return nil
 					default:
@@ -255,12 +255,12 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 					// in the shutdown retry flow we always want to acquire before reading retries
 					// to avoid a deadlock edge case of the retry queue being full, all workers tasks failed and need to be retried
 					if err := lt.intervalTasksSema.Acquire(shutdownCtx, int64(numNewTasks)); err != nil {
-						lt.logger.ErrorContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelError,
 							"failed to flush all retries",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
-							"error", err,
-							"reason", "shutdown timeout likely reached while waiting for semaphore acquisition",
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
+							slog.Any("error", err),
+							slog.String("reason", "shutdown timeout likely reached while waiting for semaphore acquisition"),
 						)
 						return ErrRetriesFailedToFlush
 					}
@@ -270,10 +270,10 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 					if taskBufSize <= 0 {
 						// wait for any pending tasks to flush and try read again
 
-						lt.logger.DebugContext(ctx,
+						lt.logger.LogAttrs(ctx, slog.LevelDebug,
 							"verifying all retries have flushed",
-							"preflush_num_tasks", preflushNumTasks,
-							"num_tasks", numTasks,
+							slog.Int("preflush_num_tasks", preflushNumTasks),
+							slog.Int("num_tasks", numTasks),
 						)
 
 						lt.resultWaitGroup.Wait()
@@ -282,10 +282,10 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 						taskBufSize = readRetries(taskBuf[:numNewTasks:numNewTasks])
 						if taskBufSize <= 0 {
 
-							lt.logger.InfoContext(ctx,
+							lt.logger.LogAttrs(ctx, slog.LevelInfo,
 								"all retries flushed",
-								"preflush_num_tasks", preflushNumTasks,
-								"num_tasks", numTasks,
+								slog.Int("preflush_num_tasks", preflushNumTasks),
+								slog.Int("num_tasks", numTasks),
 							)
 							return nil
 						}
@@ -364,13 +364,13 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 		}
 		{{- end}}
 
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for running tasks to stop",
 		)
 		lt.resultWaitGroup.Wait()
 
 		{{if .MetricsEnabled}}
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping result handler routine",
 		)
 
@@ -379,7 +379,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 		{{end}}
 
 		// signal for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
 		for i := 0; i < len(lt.workers); i++ {
@@ -388,19 +388,19 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 		{{if .MetricsEnabled}}
 		// wait for result handler routines to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for result handler routines to stop",
 		)
 		wg.Wait()
 		{{end}}
 
 		// wait for workers to stop
-		lt.logger.DebugContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"waiting for workers to stop",
 		)
 		lt.workerWaitGroup.Wait()
 
-		lt.logger.InfoContext(ctx,
+		lt.logger.LogAttrs(ctx, slog.LevelInfo,
 			"loadtest stopped",
 		)
 	}()
@@ -436,22 +436,22 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 				// prevent over committing on the maxWorkers count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numWorkers too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxWorkers {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numWorkers",
-						"reason", "update tried to set numWorkers too high",
-						"remediation_hint", "increase the loadtest MaxWorkers setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxWorkers,
+						slog.String("reason", "update tried to set numWorkers too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxWorkers setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxWorkers),
 					)
 					n = lt.maxWorkers
 				}
@@ -476,8 +476,8 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 				}
 
 				configChanges = append(configChanges,
-					"old_num_workers", numWorkers,
-					"new_num_workers", n,
+					slog.Int("old_num_workers", numWorkers),
+					slog.Int("new_num_workers", n),
 				)
 				numWorkers = n
 			}
@@ -490,29 +490,29 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 				// prevent over committing on the maxIntervalTasks count
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set numIntervalTasks too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.Int("requested", n),
+						slog.Int("min", 0),
 					)
 					n = 0
 				} else if n > lt.maxIntervalTasks {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: numIntervalTasks",
-						"reason", "update tried to set numIntervalTasks too high",
-						"remediation_hint", "increase the loadtest MaxIntervalTasks setting",
-						"remediation_taken", "using max value",
-						"requested", n,
-						"max", lt.maxIntervalTasks,
+						slog.String("reason", "update tried to set numIntervalTasks too high"),
+						slog.String("remediation_hint", "increase the loadtest MaxIntervalTasks setting"),
+						slog.String("remediation_taken", "using max value"),
+						slog.Int("requested", n),
+						slog.Int("max", lt.maxIntervalTasks),
 					)
 					n = lt.maxIntervalTasks
 				}
 
 				configChanges = append(configChanges,
-					"old_num_interval_tasks", meta.NumIntervalTasks,
-					"new_num_interval_tasks", n,
+					slog.Int("old_num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("new_num_interval_tasks", n),
 				)
 				numNewTasks = n
 				meta.NumIntervalTasks = n
@@ -524,19 +524,19 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 				n := cu.interval.val
 
 				if n < 0 {
-					lt.logger.ErrorContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelError,
 						"config update not within loadtest boundary conditions: interval",
-						"reason", "update tried to set interval too low",
-						"remediation_taken", "using min value",
-						"requested", n,
-						"min", 0,
+						slog.String("reason", "update tried to set interval too low"),
+						slog.String("remediation_taken", "using min value"),
+						slog.String("requested", n.String()),
+						slog.String("min", time.Duration(0).String()),
 					)
 					n = 0
 				}
 
 				configChanges = append(configChanges,
-					"old_interval", interval,
-					"new_interval", n,
+					slog.String("old_interval", interval.String()),
+					slog.String("new_interval", n.String()),
 				)
 				interval = n
 			}
@@ -555,9 +555,9 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 					} else {
 						prepSemaErr = lt.intervalTasksSema.Acquire(ctx, int64(taskSlotCount-newTaskSlotCount))
 						if prepSemaErr != nil {
-							lt.logger.ErrorContext(ctx,
+							lt.logger.LogAttrs(ctx, slog.LevelError,
 								"loadtest config update: failed to pre-acquire load generation slots",
-								"error", prepSemaErr,
+								slog.Any("error", prepSemaErr),
 							)
 
 							// not returning and error... yet
@@ -570,7 +570,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 			}
 
 			if !cu.onStartup {
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"loadtest config updated",
 					configChanges...,
 				)
@@ -588,11 +588,11 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 					paused = true
 					pauseStart = time.Now().UTC()
 
-					lt.logger.WarnContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelWarn,
 						"pausing load generation",
-						"num_interval_tasks", meta.NumIntervalTasks,
-						"num_workers", numWorkers,
-						"paused_at", pauseStart,
+						slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+						slog.Int("num_workers", numWorkers),
+						slog.String("paused_at", pauseStart.String()),
 					)
 				}
 
@@ -617,12 +617,12 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 				paused = false
 				intervalID = time.Now()
 
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"resuming load generation",
-					"num_interval_tasks", meta.NumIntervalTasks,
-					"num_workers", numWorkers,
-					"paused_at", pauseStart,
-					"resumed_at", intervalID.UTC(),
+					slog.Int("num_interval_tasks", meta.NumIntervalTasks),
+					slog.Int("num_workers", numWorkers),
+					slog.String("paused_at", pauseStart.String()),
+					slog.String("resumed_at", intervalID.UTC().String()),
 				)
 			}
 
@@ -648,9 +648,9 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 	for {
 		{{if .MaxTasksGTZero -}}
 		if numTasks >= maxTasks {
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"loadtest finished: max task count reached",
-				"max_tasks", maxTasks,
+				slog.Int("max_tasks", maxTasks),
 			)
 			return nil
 		}
@@ -729,22 +729,22 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 					// return immediately if there is nothing
 					// new to enqueue
 
-					lt.logger.WarnContext(ctx,
+					lt.logger.LogAttrs(ctx, slog.LevelWarn,
 						"stopping loadtest: ReadTasks did not load enough tasks",
-						"final_task_delta", 0,
+						slog.Int("final_task_delta", 0),
 					)
 
 					return nil
 				}
 
-				lt.logger.DebugContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelDebug,
 					"scheduled: stopping loadtest: ReadTasks did not load enough tasks",
-					"retry_count", taskBufSize,
+					slog.Int("retry_count", taskBufSize),
 				)
 				{{- else}}
-				lt.logger.WarnContext(ctx,
+				lt.logger.LogAttrs(ctx, slog.LevelWarn,
 					"stopping loadtest: ReadTasks did not load enough tasks",
-					"final_task_delta", 0,
+					slog.Int("final_task_delta", 0),
 				)
 
 				return nil
@@ -786,9 +786,9 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 			// increase numTasks total by actual number queued
 			// and stop traffic generation
 			{{if not .RetriesEnabled}}// {{end}}numTasks += taskBufSize{{if not .RetriesEnabled}} // this line only has an effect except in a retries enabled context{{end}}
-			lt.logger.WarnContext(ctx,
+			lt.logger.LogAttrs(ctx, slog.LevelWarn,
 				"stopping loadtest: ReadTasks did not load enough tasks",
-				"final_task_delta", taskBufSize,
+				slog.Int("final_task_delta", taskBufSize),
 			)
 			return nil
 		}
