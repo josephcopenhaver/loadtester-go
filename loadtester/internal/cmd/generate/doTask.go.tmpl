@@ -39,36 +39,38 @@ func (lt *Loadtest) doTask_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{
 			respFlags.Errored = 1
 			{{end}}
 
+			const evtName = "worker recovered from panic"
+
 			switch v := r.(type) {
 			case error:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", v,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.Any("error", v),
 				)
 			case []byte:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", string(v),
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", string(v)),
 				)
 			case string:
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", v,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", v),
 				)
 			default:
 				const msg = "unknown cause"
 
-				lt.logger.ErrorContext(ctx,
-					"worker recovered from panic",
-					"worker_id", workerID,
-					"phase", phase,
-					"error", msg,
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase),
+					slog.String("error", msg),
 				)
 			}
 		}
@@ -80,10 +82,10 @@ func (lt *Loadtest) doTask_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{
 		return
 	}
 
-	lt.logger.WarnContext(ctx,
+	lt.logger.LogAttrs(ctx, slog.LevelWarn,
 		"task error",
-		"worker_id", workerID,
-		"error", err,
+		slog.Int("worker_id", workerID),
+		slog.Any("error", err),
 	)
 
 	{{if .MetricsEnabled}}respFlags.Errored = 1{{end}}

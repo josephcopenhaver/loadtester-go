@@ -2,6 +2,7 @@ package loadtester
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,24 +23,33 @@ func RootContext(logger StructuredLogger) (context.Context, func()) {
 	go func() {
 		defer cancel()
 
+		const evtName = "shutdown requested"
+		const typeName = "signaler"
+
 		done := ctx.Done()
 
-		var requester string
 		select {
 		case <-procDone:
-			requester = "user"
+			if logger == nil {
+				return
+			}
+
+			logger.LogAttrs(ctx, slog.LevelWarn,
+				evtName,
+				slog.String(typeName, "process"),
+			)
 		case <-done:
-			requester = "process"
-		}
+			if logger == nil {
+				return
+			}
 
-		if logger == nil {
-			return
+			logger.LogAttrs(ctx, slog.LevelWarn,
+				evtName,
+				slog.String(typeName, "context"),
+				slog.Any("error", ctx.Err()),
+				slog.Any("cause", context.Cause(ctx)),
+			)
 		}
-
-		logger.WarnContext(ctx,
-			"shutdown requested",
-			"requester", requester,
-		)
 	}()
 
 	return ctx, cancel

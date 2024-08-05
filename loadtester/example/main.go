@@ -93,9 +93,9 @@ func main() {
 		// just to ensure all child workers exit before any cleanup runs
 		//
 		// it's duplicated on the positive path and does no harm to be called twice on the positive path
-		logger.DebugContext(ctx, "post-wg-decl: waiting for all goroutines to finish")
+		logger.LogAttrs(ctx, slog.LevelDebug, "post-wg-decl: waiting for all goroutines to finish")
 		wg.Wait()
-		logger.DebugContext(ctx, "post-wg-decl: all goroutines finished")
+		logger.LogAttrs(ctx, slog.LevelDebug, "post-wg-decl: all goroutines finished")
 	}()
 
 	//
@@ -112,10 +112,10 @@ func main() {
 		// the loadtest and don't use a wait group or goroutine for it
 
 		if err := lt.Run(ctx); err != nil {
-			logger.ErrorContext(ctx,
+			logger.LogAttrs(ctx, slog.LevelError,
 				"loadtest errored",
-				"error", err,
-				"panic", true,
+				slog.Any("error", err),
+				slog.Bool("panic", true),
 			)
 			panic(err)
 		}
@@ -209,7 +209,7 @@ func main() {
 
 	cancel()
 
-	logger.WarnContext(ctx, "waiting for all goroutines to finish")
+	logger.LogAttrs(ctx, slog.LevelWarn, "waiting for all goroutines to finish")
 	wg.Wait()
-	logger.WarnContext(ctx, "all goroutines finished")
+	logger.LogAttrs(ctx, slog.LevelWarn, "all goroutines finished")
 }
