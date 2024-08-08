@@ -42,6 +42,10 @@ func (wv *welfordVariance) Variance(count int) float64 {
 // 	return wv.m2 / (float64(count) - float64(1.0))
 // }
 
+// varianceFloatString takes a zero or greater than zero or NaN float value representing welford variance of a sample of floats
+// and returns a "unit-squared" representation integer as a string
+//
+// Note that if you copy this function it really should panic if the input is negative. Variance cannot be negative!
 func varianceFloatString(f float64) string {
 	if math.IsNaN(f) {
 		return ""
@@ -49,8 +53,8 @@ func varianceFloatString(f float64) string {
 
 	v := int64(math.MaxInt64)
 	if !math.IsInf(f, 1) {
-		v = int64(math.Round(f)) & math.MaxInt64
+		v = int64(math.Round(f))
 	}
 
-	return strconv.FormatInt(v, 10) + "ns"
+	return strconv.FormatInt(v, 10)
 }

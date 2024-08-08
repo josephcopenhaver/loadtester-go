@@ -39,8 +39,8 @@ The output CSV file has the following metric possibilities:
 | p99_task_latency | RFC3339Nano Time String \| empty string | 99% of all metric records in the sample interval have an execution phase latency at or under this value. It will be an empty string if there are no records in the sample interval. Only present in output file when the MetricsLatencyPercentile() option is set to true ( default value: false) |
 | p99p9_task_latency | RFC3339Nano Time String \| empty string | 99.90% of all metric records in the sample interval have an execution phase latency at or under this value. It will be an empty string if there are no records in the sample interval. Only present in output file when the MetricsLatencyPercentile() option is set to true ( default value: false) |
 | p99p99_task_latency | RFC3339Nano Time String \| empty string | 99.99% of all metric records in the sample interval have an execution phase latency at or under this value. It will be an empty string if there are no records in the sample interval. Only present in output file when the MetricsLatencyPercentile() option is set to true ( default value: false) |
-| queue_latency_variance | Duration String \| empty string | The welford variance value computed for the queue phase of tasks completed in the sample interval. Always output in nanoseconds. Will be set to an empty string if the sample size for the interval is less than two. Only present in output file when the MetricsLatencyVariance() option is set to true ( default value: false) |
-| task_latency_variance | Duration String \| empty string | The welford variance value computed for the execution phase of tasks completed in the sample interval. Always output in nanoseconds. Will be set to an empty string if the sample size for the interval is less than two. Only present in output file when the MetricsLatencyVariance() option is set to true ( default value: false) |
+| queue_latency_variance | Duration String \| empty string | The welford variance value computed for the queue phase of tasks completed in the sample interval. Always output in nanoseconds squared. No unit indicator will be at the end of the integer value. Will be set to an empty string if the sample size for the interval is less than two. Only present in output file when the MetricsLatencyVariance() option is set to true ( default value: false) |
+| task_latency_variance | Duration String \| empty string | The welford variance value computed for the execution phase of tasks completed in the sample interval. Always output in nanoseconds squared. No unit indicator will be at the end of the integer value. Will be set to an empty string if the sample size for the interval is less than two. Only present in output file when the MetricsLatencyVariance() option is set to true ( default value: false) |
 | percent_done | Double | A numeric value with precision to the second decimal place ranging from 0 to 100. Only present in output file when the MaxTasks() option is set to a value greater than zero ( default value: 0) |
 
 # changelog
@@ -51,6 +51,8 @@ In version 2.x of this "library" sums of queued and execution durations for all 
 
 | version | metric                 | change             |
 | ------- | ---------------------- | ------------------ |
+| 5.x     | queue_latency_variance | :wavy_dash: format |
+| 5.x     | task_latency_variance  | :wavy_dash: format |
 | 3.x     | p25_queue_latency      | :heavy_plus_sign:  |
 | 3.x     | p50_queue_latency      | :heavy_plus_sign:  |
 | 3.x     | p75_queue_latency      | :heavy_plus_sign:  |
