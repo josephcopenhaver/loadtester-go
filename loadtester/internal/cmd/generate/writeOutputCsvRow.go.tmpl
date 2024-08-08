@@ -12,7 +12,7 @@ func (lt *Loadtest) writeOutputCsvRow_retry{{if .RetriesEnabled}}Enabled{{else}}
 			return
 		}
 
-		nowNS := time.Now().UnixNano()
+		now := time.Now()
 
 		{{if .MaxTasksGTZero}}
 		var percent string
@@ -40,7 +40,7 @@ func (lt *Loadtest) writeOutputCsvRow_retry{{if .RetriesEnabled}}Enabled{{else}}
 		{{end}}
 
 		fields := []string{
-			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(now),
 			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
 			durationToNanoString(mr.lag),
