@@ -20,7 +20,7 @@ func Test_varianceFloatString(t *testing.T) {
 	}
 	{
 		// garbage in - garbage out case
-		exp := "-9223372036854775808"
+		exp := "9223372036854775807"
 		if v := varianceFloatString(math.Inf(-1)); v != exp {
 			t.Fatalf("expected %s string, got %s", exp, v)
 		}
@@ -33,7 +33,7 @@ func Test_varianceFloatString(t *testing.T) {
 	}
 	{
 		// garbage in - garbage out case
-		exp := "-1"
+		exp := "9223372036854775807"
 		if v := varianceFloatString(-1.0); v != exp {
 			t.Fatalf("expected %s string, got %s", exp, v)
 		}

@@ -47,13 +47,18 @@ func (wv *welfordVariance) Variance(count int) float64 {
 //
 // Note that if you copy this function it really should panic if the input is negative. Variance cannot be negative!
 func varianceFloatString(f float64) string {
+	// round first thing because it can cause an overflow on various CPU architectures
+	f = math.Round(f)
+
 	if math.IsNaN(f) {
 		return ""
 	}
 
 	v := int64(math.MaxInt64)
 	if !math.IsInf(f, 1) {
-		v = int64(math.Round(f))
+		if n := int64(f); n >= 0 {
+			v = n
+		}
 	}
 
 	return strconv.FormatInt(v, 10)
