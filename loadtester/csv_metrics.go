@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -54,10 +55,6 @@ func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
 		C any `json:"config"`
 	}{lt.loadtestConfigAsJson()})
 	if err != nil {
-		return err
-	}
-
-	if _, err := w.Write([]byte("\n")); err != nil {
 		return err
 	}
 
@@ -170,7 +167,7 @@ func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
 		return
 	}
 
-	_, cd.writeErr = csvFile.Write([]byte("\n# {\"done\":{\"end_time\":\"" + timeToString(time.Now()) + "\"}}\n"))
+	_, cd.writeErr = csvFile.Write([]byte("# {\"done\":{\"end_time\":\"" + timeToString(time.Now()) + "\"}}"))
 }
 
 //
@@ -179,4 +176,12 @@ func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
 
 func timeToString(t time.Time) string {
 	return t.UTC().Format(time.RFC3339Nano)
+}
+
+func timeToUnixNanoString(t time.Time) string {
+	return strconv.FormatInt(t.UnixNano(), 10)
+}
+
+func durationToNanoString(d time.Duration) string {
+	return strconv.FormatInt(d.Nanoseconds(), 10)
 }

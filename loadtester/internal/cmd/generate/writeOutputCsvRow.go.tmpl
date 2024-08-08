@@ -12,7 +12,7 @@ func (lt *Loadtest) writeOutputCsvRow_retry{{if .RetriesEnabled}}Enabled{{else}}
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		{{if .MaxTasksGTZero}}
 		var percent string
@@ -40,22 +40,22 @@ func (lt *Loadtest) writeOutputCsvRow_retry{{if .RetriesEnabled}}Enabled{{else}}
 		{{end}}
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			{{if .RetriesEnabled}}strconv.Itoa(mr.numRetry),
 			{{end}}strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),{{if .PercentileEnabled}}
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),{{if .PercentileEnabled}}
 			queuePercentiles[0],
 			queuePercentiles[1],
 			queuePercentiles[2],

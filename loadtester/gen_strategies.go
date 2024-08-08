@@ -5651,7 +5651,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		var percent string
 		{
@@ -5675,22 +5675,22 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 		mr.latencies.task.readPercentileStrings(&taskPercentiles)
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numRetry),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 			queuePercentiles[0],
 			queuePercentiles[1],
 			queuePercentiles[2],
@@ -5735,7 +5735,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		var percent string
 		{
@@ -5759,22 +5759,22 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 		mr.latencies.task.readPercentileStrings(&taskPercentiles)
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numRetry),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 			queuePercentiles[0],
 			queuePercentiles[1],
 			queuePercentiles[2],
@@ -5815,7 +5815,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		var percent string
 		{
@@ -5836,22 +5836,22 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numRetry),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 			varianceFloatString(mr.welfords.queue.Variance(mr.numTasks)),
 			varianceFloatString(mr.welfords.task.Variance(mr.numTasks)),
 			percent,
@@ -5874,7 +5874,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		var percent string
 		{
@@ -5895,22 +5895,22 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numRetry),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 			percent,
 		}
 
@@ -5933,7 +5933,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileE
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
@@ -5941,22 +5941,22 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileE
 		mr.latencies.task.readPercentileStrings(&taskPercentiles)
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numRetry),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 			queuePercentiles[0],
 			queuePercentiles[1],
 			queuePercentiles[2],
@@ -6000,7 +6000,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileE
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
@@ -6008,22 +6008,22 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileE
 		mr.latencies.task.readPercentileStrings(&taskPercentiles)
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numRetry),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 			queuePercentiles[0],
 			queuePercentiles[1],
 			queuePercentiles[2],
@@ -6063,27 +6063,27 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileD
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numRetry),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 			varianceFloatString(mr.welfords.queue.Variance(mr.numTasks)),
 			varianceFloatString(mr.welfords.task.Variance(mr.numTasks)),
 		}
@@ -6105,27 +6105,27 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileD
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numRetry),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 		}
 
 		if err := cd.writer.Write(fields); err != nil {
@@ -6147,7 +6147,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		var percent string
 		{
@@ -6171,21 +6171,21 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 		mr.latencies.task.readPercentileStrings(&taskPercentiles)
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 			queuePercentiles[0],
 			queuePercentiles[1],
 			queuePercentiles[2],
@@ -6230,7 +6230,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		var percent string
 		{
@@ -6254,21 +6254,21 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 		mr.latencies.task.readPercentileStrings(&taskPercentiles)
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 			queuePercentiles[0],
 			queuePercentiles[1],
 			queuePercentiles[2],
@@ -6309,7 +6309,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		var percent string
 		{
@@ -6330,21 +6330,21 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 			varianceFloatString(mr.welfords.queue.Variance(mr.numTasks)),
 			varianceFloatString(mr.welfords.task.Variance(mr.numTasks)),
 			percent,
@@ -6367,7 +6367,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		var percent string
 		{
@@ -6388,21 +6388,21 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 			percent,
 		}
 
@@ -6425,7 +6425,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
@@ -6433,21 +6433,21 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 		mr.latencies.task.readPercentileStrings(&taskPercentiles)
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 			queuePercentiles[0],
 			queuePercentiles[1],
 			queuePercentiles[2],
@@ -6491,7 +6491,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
@@ -6499,21 +6499,21 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 		mr.latencies.task.readPercentileStrings(&taskPercentiles)
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 			queuePercentiles[0],
 			queuePercentiles[1],
 			queuePercentiles[2],
@@ -6553,26 +6553,26 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 			varianceFloatString(mr.welfords.queue.Variance(mr.numTasks)),
 			varianceFloatString(mr.welfords.task.Variance(mr.numTasks)),
 		}
@@ -6594,26 +6594,26 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 			return
 		}
 
-		nowStr := timeToString(time.Now())
+		nowNS := time.Now().UnixNano()
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
 		fields := []string{
-			nowStr,
-			timeToString(mr.intervalID),
+			strconv.FormatInt(nowNS, 10),
+			timeToUnixNanoString(mr.intervalID),
 			strconv.Itoa(mr.numIntervalTasks),
-			mr.lag.String(),
-			mr.sumLag.String(),
+			durationToNanoString(mr.lag),
+			durationToNanoString(mr.sumLag),
 			strconv.Itoa(mr.numTasks),
 			strconv.Itoa(mr.numPass),
 			strconv.Itoa(mr.numFail),
 			strconv.Itoa(mr.numPanic),
-			mr.minQueueDuration.String(),
-			time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64()).String(),
-			mr.maxQueueDuration.String(),
-			mr.minTaskDuration.String(),
-			time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()).String(),
-			mr.maxTaskDuration.String(),
+			durationToNanoString(mr.minQueueDuration),
+			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxQueueDuration),
+			durationToNanoString(mr.minTaskDuration),
+			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
+			durationToNanoString(mr.maxTaskDuration),
 		}
 
 		if err := cd.writer.Write(fields); err != nil {

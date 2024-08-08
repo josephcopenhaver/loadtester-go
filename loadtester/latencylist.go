@@ -72,7 +72,7 @@ func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
 	}
 
 	if maxIdx == 0 {
-		s := ll.data[0].String()
+		s := durationToNanoString(ll.data[0])
 		for i := range out {
 			out[i] = s
 		}
@@ -90,7 +90,7 @@ func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
 
 			v := ll.data[((maxIdx*pt.n)+pt.rt)/pt.d]
 
-			out[pcv] = v.String()
+			out[pcv] = durationToNanoString(v)
 			continue
 		}
 
@@ -100,7 +100,7 @@ func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
 
 			idx := int(fidx)
 			v := ll.data[idx]
-			out[pcv] = v.String()
+			out[pcv] = durationToNanoString(v)
 
 			pci++
 			if pci >= numPercentiles {
