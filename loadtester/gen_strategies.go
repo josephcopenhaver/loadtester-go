@@ -447,7 +447,7 @@ func (mr *metricRecord_retryDisabled_maxTasksNotGTZero_percentileDisabled_varian
 
 }
 
-func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
+func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled_metricsContextEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
 
 	var respFlags taskResultFlags
 	{
@@ -464,13 +464,21 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled(ctx context.Context, wo
 		}()
 	}
 
+	mc := newMetricsContext()
+	defer releaseMetricsContext(mc)
+
+	mc.enqueueTime = twm.enqueueTime
+	mc.meta = twm.meta
+	mc.Context = ctx
+	ctx = mc
+
 	// phase is the name of the step which has possibly caused a panic
-	phase := "do"
+	phase := doPhaseDo
 
 	var rt *retryTask
 	if v, ok := twm.doer.(*retryTask); ok {
 		rt = v
-		phase = "retry"
+		phase = doPhaseRetry
 		defer func() {
 			*rt = retryTask{}
 			lt.retryTaskPool.Put(v)
@@ -490,21 +498,21 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled(ctx context.Context, wo
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.Any("error", v),
 				)
 			case []byte:
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", string(v)),
 				)
 			case string:
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", v),
 				)
 			default:
@@ -513,14 +521,14 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled(ctx context.Context, wo
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", msg),
 				)
 			}
 		}
 	}()
 	err := twm.doer.Do(ctx, workerID)
-	phase = "" // done, no panic occurred
+	phase = doPhaseInvalid // done, no panic occurred
 	if err == nil {
 		respFlags.Passed = 1
 		return
@@ -543,12 +551,12 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled(ctx context.Context, wo
 		return
 	}
 
-	phase = "can-retry"
+	phase = doPhaseCanRetry
 	if v, ok := dr.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
-		phase = "" // done, no panic occurred
+		phase = doPhaseInvalid // done, no panic occurred
 		return
 	}
-	phase = "" // done, no panic occurred
+	phase = doPhaseInvalid // done, no panic occurred
 
 	// queue a new retry task
 	{
@@ -563,17 +571,141 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled(ctx context.Context, wo
 	return
 }
 
-func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
+func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled_metricsContextDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
 
-	defer lt.resultWaitGroup.Done()
+	var respFlags taskResultFlags
+	{
+		taskStart := time.Now()
+		defer func() {
+			taskEnd := time.Now()
+
+			lt.resultsChan <- taskResult{
+				taskResultFlags: respFlags,
+				QueueDuration:   taskStart.Sub(twm.enqueueTime),
+				TaskDuration:    taskEnd.Sub(taskStart),
+				Meta:            twm.meta,
+			}
+		}()
+	}
 
 	// phase is the name of the step which has possibly caused a panic
-	phase := "do"
+	phase := doPhaseDo
 
 	var rt *retryTask
 	if v, ok := twm.doer.(*retryTask); ok {
 		rt = v
-		phase = "retry"
+		phase = doPhaseRetry
+		defer func() {
+			*rt = retryTask{}
+			lt.retryTaskPool.Put(v)
+		}()
+	}
+	defer func() {
+
+		if r := recover(); r != nil {
+
+			respFlags.Panicked = 1
+			respFlags.Errored = 1
+
+			const evtName = "worker recovered from panic"
+
+			switch v := r.(type) {
+			case error:
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.Any("error", v),
+				)
+			case []byte:
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.String("error", string(v)),
+				)
+			case string:
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.String("error", v),
+				)
+			default:
+				const msg = "unknown cause"
+
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.String("error", msg),
+				)
+			}
+		}
+	}()
+	err := twm.doer.Do(ctx, workerID)
+	phase = doPhaseInvalid // done, no panic occurred
+	if err == nil {
+		respFlags.Passed = 1
+		return
+	}
+
+	lt.logger.LogAttrs(ctx, slog.LevelWarn,
+		"task error",
+		slog.Int("worker_id", workerID),
+		slog.Any("error", err),
+	)
+
+	respFlags.Errored = 1
+
+	var dr DoRetryer
+	if rt != nil {
+		dr = rt.DoRetryer
+	} else if v, ok := twm.doer.(DoRetryer); ok {
+		dr = v
+	} else {
+		return
+	}
+
+	phase = doPhaseCanRetry
+	if v, ok := dr.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
+		phase = doPhaseInvalid // done, no panic occurred
+		return
+	}
+	phase = doPhaseInvalid // done, no panic occurred
+
+	// queue a new retry task
+	{
+		rt := lt.retryTaskPool.Get().(*retryTask)
+
+		*rt = retryTask{dr, err}
+
+		lt.retryTaskChan <- rt
+	}
+
+	respFlags.RetryQueued = 1
+	return
+}
+
+func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled_metricsContextEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
+
+	defer lt.resultWaitGroup.Done()
+
+	mc := newMetricsContext()
+	defer releaseMetricsContext(mc)
+
+	mc.enqueueTime = twm.enqueueTime
+	mc.meta = twm.meta
+	mc.Context = ctx
+	ctx = mc
+
+	// phase is the name of the step which has possibly caused a panic
+	phase := doPhaseDo
+
+	var rt *retryTask
+	if v, ok := twm.doer.(*retryTask); ok {
+		rt = v
+		phase = doPhaseRetry
 		defer func() {
 			*rt = retryTask{}
 			lt.retryTaskPool.Put(v)
@@ -590,21 +722,21 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled(ctx context.Context, w
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.Any("error", v),
 				)
 			case []byte:
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", string(v)),
 				)
 			case string:
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", v),
 				)
 			default:
@@ -613,14 +745,14 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled(ctx context.Context, w
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", msg),
 				)
 			}
 		}
 	}()
 	err := twm.doer.Do(ctx, workerID)
-	phase = "" // done, no panic occurred
+	phase = doPhaseInvalid // done, no panic occurred
 	if err == nil {
 
 		return
@@ -641,12 +773,12 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled(ctx context.Context, w
 		return
 	}
 
-	phase = "can-retry"
+	phase = doPhaseCanRetry
 	if v, ok := dr.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
-		phase = "" // done, no panic occurred
+		phase = doPhaseInvalid // done, no panic occurred
 		return
 	}
-	phase = "" // done, no panic occurred
+	phase = doPhaseInvalid // done, no panic occurred
 
 	// queue a new retry task
 	{
@@ -660,7 +792,193 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled(ctx context.Context, w
 	return
 }
 
-func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
+func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled_metricsContextDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
+
+	defer lt.resultWaitGroup.Done()
+
+	// phase is the name of the step which has possibly caused a panic
+	phase := doPhaseDo
+
+	var rt *retryTask
+	if v, ok := twm.doer.(*retryTask); ok {
+		rt = v
+		phase = doPhaseRetry
+		defer func() {
+			*rt = retryTask{}
+			lt.retryTaskPool.Put(v)
+		}()
+	}
+	defer func() {
+
+		if r := recover(); r != nil {
+
+			const evtName = "worker recovered from panic"
+
+			switch v := r.(type) {
+			case error:
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.Any("error", v),
+				)
+			case []byte:
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.String("error", string(v)),
+				)
+			case string:
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.String("error", v),
+				)
+			default:
+				const msg = "unknown cause"
+
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.String("error", msg),
+				)
+			}
+		}
+	}()
+	err := twm.doer.Do(ctx, workerID)
+	phase = doPhaseInvalid // done, no panic occurred
+	if err == nil {
+
+		return
+	}
+
+	lt.logger.LogAttrs(ctx, slog.LevelWarn,
+		"task error",
+		slog.Int("worker_id", workerID),
+		slog.Any("error", err),
+	)
+
+	var dr DoRetryer
+	if rt != nil {
+		dr = rt.DoRetryer
+	} else if v, ok := twm.doer.(DoRetryer); ok {
+		dr = v
+	} else {
+		return
+	}
+
+	phase = doPhaseCanRetry
+	if v, ok := dr.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
+		phase = doPhaseInvalid // done, no panic occurred
+		return
+	}
+	phase = doPhaseInvalid // done, no panic occurred
+
+	// queue a new retry task
+	{
+		rt := lt.retryTaskPool.Get().(*retryTask)
+
+		*rt = retryTask{dr, err}
+
+		lt.retryTaskChan <- rt
+	}
+
+	return
+}
+
+func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled_metricsContextEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
+
+	var respFlags taskResultFlags
+	{
+		taskStart := time.Now()
+		defer func() {
+			taskEnd := time.Now()
+
+			lt.resultsChan <- taskResult{
+				taskResultFlags: respFlags,
+				QueueDuration:   taskStart.Sub(twm.enqueueTime),
+				TaskDuration:    taskEnd.Sub(taskStart),
+				Meta:            twm.meta,
+			}
+		}()
+	}
+
+	mc := newMetricsContext()
+	defer releaseMetricsContext(mc)
+
+	mc.enqueueTime = twm.enqueueTime
+	mc.meta = twm.meta
+	mc.Context = ctx
+	ctx = mc
+
+	// phase is the name of the step which has possibly caused a panic
+	phase := doPhaseDo
+
+	defer func() {
+
+		if r := recover(); r != nil {
+
+			respFlags.Panicked = 1
+			respFlags.Errored = 1
+
+			const evtName = "worker recovered from panic"
+
+			switch v := r.(type) {
+			case error:
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.Any("error", v),
+				)
+			case []byte:
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.String("error", string(v)),
+				)
+			case string:
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.String("error", v),
+				)
+			default:
+				const msg = "unknown cause"
+
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.String("error", msg),
+				)
+			}
+		}
+	}()
+	err := twm.doer.Do(ctx, workerID)
+	phase = doPhaseInvalid // done, no panic occurred
+	if err == nil {
+		respFlags.Passed = 1
+		return
+	}
+
+	lt.logger.LogAttrs(ctx, slog.LevelWarn,
+		"task error",
+		slog.Int("worker_id", workerID),
+		slog.Any("error", err),
+	)
+
+	respFlags.Errored = 1
+
+	return
+}
+
+func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled_metricsContextDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
 
 	var respFlags taskResultFlags
 	{
@@ -678,7 +996,7 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled(ctx context.Context, w
 	}
 
 	// phase is the name of the step which has possibly caused a panic
-	phase := "do"
+	phase := doPhaseDo
 
 	defer func() {
 
@@ -694,21 +1012,21 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled(ctx context.Context, w
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.Any("error", v),
 				)
 			case []byte:
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", string(v)),
 				)
 			case string:
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", v),
 				)
 			default:
@@ -717,14 +1035,14 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled(ctx context.Context, w
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", msg),
 				)
 			}
 		}
 	}()
 	err := twm.doer.Do(ctx, workerID)
-	phase = "" // done, no panic occurred
+	phase = doPhaseInvalid // done, no panic occurred
 	if err == nil {
 		respFlags.Passed = 1
 		return
@@ -741,12 +1059,20 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled(ctx context.Context, w
 	return
 }
 
-func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
+func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled_metricsContextEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
 
 	defer lt.resultWaitGroup.Done()
 
+	mc := newMetricsContext()
+	defer releaseMetricsContext(mc)
+
+	mc.enqueueTime = twm.enqueueTime
+	mc.meta = twm.meta
+	mc.Context = ctx
+	ctx = mc
+
 	// phase is the name of the step which has possibly caused a panic
-	phase := "do"
+	phase := doPhaseDo
 
 	defer func() {
 
@@ -759,21 +1085,21 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled(ctx context.Context, 
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.Any("error", v),
 				)
 			case []byte:
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", string(v)),
 				)
 			case string:
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", v),
 				)
 			default:
@@ -782,14 +1108,77 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled(ctx context.Context, 
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", msg),
 				)
 			}
 		}
 	}()
 	err := twm.doer.Do(ctx, workerID)
-	phase = "" // done, no panic occurred
+	phase = doPhaseInvalid // done, no panic occurred
+	if err == nil {
+
+		return
+	}
+
+	lt.logger.LogAttrs(ctx, slog.LevelWarn,
+		"task error",
+		slog.Int("worker_id", workerID),
+		slog.Any("error", err),
+	)
+
+	return
+}
+
+func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled_metricsContextDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
+
+	defer lt.resultWaitGroup.Done()
+
+	// phase is the name of the step which has possibly caused a panic
+	phase := doPhaseDo
+
+	defer func() {
+
+		if r := recover(); r != nil {
+
+			const evtName = "worker recovered from panic"
+
+			switch v := r.(type) {
+			case error:
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.Any("error", v),
+				)
+			case []byte:
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.String("error", string(v)),
+				)
+			case string:
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.String("error", v),
+				)
+			default:
+				const msg = "unknown cause"
+
+				lt.logger.LogAttrs(ctx, slog.LevelError,
+					evtName,
+					slog.Int("worker_id", workerID),
+					slog.String("phase", phase.String()),
+					slog.String("error", msg),
+				)
+			}
+		}
+	}()
+	err := twm.doer.Do(ctx, workerID)
+	phase = doPhaseInvalid // done, no panic occurred
 	if err == nil {
 
 		return

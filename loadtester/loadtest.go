@@ -190,9 +190,19 @@ func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 
 	if cfg.retry {
 		if cfg.csvOutputEnabled {
-			lt.doTask = lt.doTask_retriesEnabled_metricsEnabled
+			if cfg.metricsContextEnabled {
+				lt.doTask = lt.doTask_retriesEnabled_metricsEnabled_metricsContextEnabled
+			} else {
+
+				lt.doTask = lt.doTask_retriesEnabled_metricsEnabled_metricsContextDisabled
+			}
 		} else {
-			lt.doTask = lt.doTask_retriesEnabled_metricsDisabled
+			if cfg.metricsContextEnabled {
+				lt.doTask = lt.doTask_retriesEnabled_metricsDisabled_metricsContextEnabled
+			} else {
+
+				lt.doTask = lt.doTask_retriesEnabled_metricsDisabled_metricsContextDisabled
+			}
 		}
 		if cfg.maxTasks > 0 {
 			if cfg.csvOutputEnabled {
@@ -207,9 +217,19 @@ func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 		}
 	} else {
 		if cfg.csvOutputEnabled {
-			lt.doTask = lt.doTask_retriesDisabled_metricsEnabled
+			if cfg.metricsContextEnabled {
+				lt.doTask = lt.doTask_retriesDisabled_metricsEnabled_metricsContextEnabled
+			} else {
+
+				lt.doTask = lt.doTask_retriesDisabled_metricsEnabled_metricsContextDisabled
+			}
 		} else {
-			lt.doTask = lt.doTask_retriesDisabled_metricsDisabled
+			if cfg.metricsContextEnabled {
+				lt.doTask = lt.doTask_retriesDisabled_metricsDisabled_metricsContextEnabled
+			} else {
+
+				lt.doTask = lt.doTask_retriesDisabled_metricsDisabled_metricsContextDisabled
+			}
 		}
 		if cfg.maxTasks > 0 {
 			if cfg.csvOutputEnabled {
