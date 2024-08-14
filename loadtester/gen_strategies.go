@@ -447,11 +447,11 @@ func (mr *metricRecord_retryDisabled_maxTasksNotGTZero_percentileDisabled_varian
 
 }
 
-func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled_metricsContextEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
+func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled_taskMetadataProviderEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
+	taskStart := time.Now()
 
 	var respFlags taskResultFlags
 	{
-		taskStart := time.Now()
 		defer func() {
 			taskEnd := time.Now()
 
@@ -464,21 +464,21 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled_metricsContextEnabled(c
 		}()
 	}
 
-	mc := newMetricsContext()
-	defer releaseMetricsContext(mc)
+	tm := newTaskMetadata()
+	defer releaseTaskMetadata(tm)
 
-	mc.enqueueTime = twm.enqueueTime
-	mc.meta = twm.meta
-	mc.Context = ctx
-	ctx = mc
+	tm.enqueueTime = twm.enqueueTime
+	tm.dequeueTime = taskStart
+	tm.meta = twm.meta
+	ctx = injectTaskMetadataProvider(ctx, tm)
 
 	// phase is the name of the step which has possibly caused a panic
-	phase := doPhaseDo
+	phase := taskPhaseDo
 
 	var rt *retryTask
 	if v, ok := twm.doer.(*retryTask); ok {
 		rt = v
-		phase = doPhaseRetry
+		phase = taskPhaseRetry
 		defer func() {
 			*rt = retryTask{}
 			lt.retryTaskPool.Put(v)
@@ -528,7 +528,7 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled_metricsContextEnabled(c
 		}
 	}()
 	err := twm.doer.Do(ctx, workerID)
-	phase = doPhaseInvalid // done, no panic occurred
+	phase = taskPhaseInvalid // done, no panic occurred
 	if err == nil {
 		respFlags.Passed = 1
 		return
@@ -551,12 +551,12 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled_metricsContextEnabled(c
 		return
 	}
 
-	phase = doPhaseCanRetry
+	phase = taskPhaseCanRetry
 	if v, ok := dr.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
-		phase = doPhaseInvalid // done, no panic occurred
+		phase = taskPhaseInvalid // done, no panic occurred
 		return
 	}
-	phase = doPhaseInvalid // done, no panic occurred
+	phase = taskPhaseInvalid // done, no panic occurred
 
 	// queue a new retry task
 	{
@@ -571,7 +571,7 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled_metricsContextEnabled(c
 	return
 }
 
-func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled_metricsContextDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
+func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled_taskMetadataProviderDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
 
 	var respFlags taskResultFlags
 	{
@@ -589,12 +589,12 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled_metricsContextDisabled(
 	}
 
 	// phase is the name of the step which has possibly caused a panic
-	phase := doPhaseDo
+	phase := taskPhaseDo
 
 	var rt *retryTask
 	if v, ok := twm.doer.(*retryTask); ok {
 		rt = v
-		phase = doPhaseRetry
+		phase = taskPhaseRetry
 		defer func() {
 			*rt = retryTask{}
 			lt.retryTaskPool.Put(v)
@@ -644,7 +644,7 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled_metricsContextDisabled(
 		}
 	}()
 	err := twm.doer.Do(ctx, workerID)
-	phase = doPhaseInvalid // done, no panic occurred
+	phase = taskPhaseInvalid // done, no panic occurred
 	if err == nil {
 		respFlags.Passed = 1
 		return
@@ -667,12 +667,12 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled_metricsContextDisabled(
 		return
 	}
 
-	phase = doPhaseCanRetry
+	phase = taskPhaseCanRetry
 	if v, ok := dr.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
-		phase = doPhaseInvalid // done, no panic occurred
+		phase = taskPhaseInvalid // done, no panic occurred
 		return
 	}
-	phase = doPhaseInvalid // done, no panic occurred
+	phase = taskPhaseInvalid // done, no panic occurred
 
 	// queue a new retry task
 	{
@@ -687,25 +687,26 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsEnabled_metricsContextDisabled(
 	return
 }
 
-func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled_metricsContextEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
+func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled_taskMetadataProviderEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
+	taskStart := time.Now()
 
 	defer lt.resultWaitGroup.Done()
 
-	mc := newMetricsContext()
-	defer releaseMetricsContext(mc)
+	tm := newTaskMetadata()
+	defer releaseTaskMetadata(tm)
 
-	mc.enqueueTime = twm.enqueueTime
-	mc.meta = twm.meta
-	mc.Context = ctx
-	ctx = mc
+	tm.enqueueTime = twm.enqueueTime
+	tm.dequeueTime = taskStart
+	tm.meta = twm.meta
+	ctx = injectTaskMetadataProvider(ctx, tm)
 
 	// phase is the name of the step which has possibly caused a panic
-	phase := doPhaseDo
+	phase := taskPhaseDo
 
 	var rt *retryTask
 	if v, ok := twm.doer.(*retryTask); ok {
 		rt = v
-		phase = doPhaseRetry
+		phase = taskPhaseRetry
 		defer func() {
 			*rt = retryTask{}
 			lt.retryTaskPool.Put(v)
@@ -752,7 +753,7 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled_metricsContextEnabled(
 		}
 	}()
 	err := twm.doer.Do(ctx, workerID)
-	phase = doPhaseInvalid // done, no panic occurred
+	phase = taskPhaseInvalid // done, no panic occurred
 	if err == nil {
 
 		return
@@ -773,12 +774,12 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled_metricsContextEnabled(
 		return
 	}
 
-	phase = doPhaseCanRetry
+	phase = taskPhaseCanRetry
 	if v, ok := dr.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
-		phase = doPhaseInvalid // done, no panic occurred
+		phase = taskPhaseInvalid // done, no panic occurred
 		return
 	}
-	phase = doPhaseInvalid // done, no panic occurred
+	phase = taskPhaseInvalid // done, no panic occurred
 
 	// queue a new retry task
 	{
@@ -792,17 +793,17 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled_metricsContextEnabled(
 	return
 }
 
-func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled_metricsContextDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
+func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled_taskMetadataProviderDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
 
 	defer lt.resultWaitGroup.Done()
 
 	// phase is the name of the step which has possibly caused a panic
-	phase := doPhaseDo
+	phase := taskPhaseDo
 
 	var rt *retryTask
 	if v, ok := twm.doer.(*retryTask); ok {
 		rt = v
-		phase = doPhaseRetry
+		phase = taskPhaseRetry
 		defer func() {
 			*rt = retryTask{}
 			lt.retryTaskPool.Put(v)
@@ -849,7 +850,7 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled_metricsContextDisabled
 		}
 	}()
 	err := twm.doer.Do(ctx, workerID)
-	phase = doPhaseInvalid // done, no panic occurred
+	phase = taskPhaseInvalid // done, no panic occurred
 	if err == nil {
 
 		return
@@ -870,12 +871,12 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled_metricsContextDisabled
 		return
 	}
 
-	phase = doPhaseCanRetry
+	phase = taskPhaseCanRetry
 	if v, ok := dr.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
-		phase = doPhaseInvalid // done, no panic occurred
+		phase = taskPhaseInvalid // done, no panic occurred
 		return
 	}
-	phase = doPhaseInvalid // done, no panic occurred
+	phase = taskPhaseInvalid // done, no panic occurred
 
 	// queue a new retry task
 	{
@@ -889,11 +890,11 @@ func (lt *Loadtest) doTask_retriesEnabled_metricsDisabled_metricsContextDisabled
 	return
 }
 
-func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled_metricsContextEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
+func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled_taskMetadataProviderEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
+	taskStart := time.Now()
 
 	var respFlags taskResultFlags
 	{
-		taskStart := time.Now()
 		defer func() {
 			taskEnd := time.Now()
 
@@ -906,16 +907,16 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled_metricsContextEnabled(
 		}()
 	}
 
-	mc := newMetricsContext()
-	defer releaseMetricsContext(mc)
+	tm := newTaskMetadata()
+	defer releaseTaskMetadata(tm)
 
-	mc.enqueueTime = twm.enqueueTime
-	mc.meta = twm.meta
-	mc.Context = ctx
-	ctx = mc
+	tm.enqueueTime = twm.enqueueTime
+	tm.dequeueTime = taskStart
+	tm.meta = twm.meta
+	ctx = injectTaskMetadataProvider(ctx, tm)
 
 	// phase is the name of the step which has possibly caused a panic
-	phase := doPhaseDo
+	phase := taskPhaseDo
 
 	defer func() {
 
@@ -961,7 +962,7 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled_metricsContextEnabled(
 		}
 	}()
 	err := twm.doer.Do(ctx, workerID)
-	phase = doPhaseInvalid // done, no panic occurred
+	phase = taskPhaseInvalid // done, no panic occurred
 	if err == nil {
 		respFlags.Passed = 1
 		return
@@ -978,7 +979,7 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled_metricsContextEnabled(
 	return
 }
 
-func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled_metricsContextDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
+func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled_taskMetadataProviderDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
 
 	var respFlags taskResultFlags
 	{
@@ -996,7 +997,7 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled_metricsContextDisabled
 	}
 
 	// phase is the name of the step which has possibly caused a panic
-	phase := doPhaseDo
+	phase := taskPhaseDo
 
 	defer func() {
 
@@ -1042,7 +1043,7 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled_metricsContextDisabled
 		}
 	}()
 	err := twm.doer.Do(ctx, workerID)
-	phase = doPhaseInvalid // done, no panic occurred
+	phase = taskPhaseInvalid // done, no panic occurred
 	if err == nil {
 		respFlags.Passed = 1
 		return
@@ -1059,20 +1060,21 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsEnabled_metricsContextDisabled
 	return
 }
 
-func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled_metricsContextEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
+func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled_taskMetadataProviderEnabled(ctx context.Context, workerID int, twm taskWithMeta) {
+	taskStart := time.Now()
 
 	defer lt.resultWaitGroup.Done()
 
-	mc := newMetricsContext()
-	defer releaseMetricsContext(mc)
+	tm := newTaskMetadata()
+	defer releaseTaskMetadata(tm)
 
-	mc.enqueueTime = twm.enqueueTime
-	mc.meta = twm.meta
-	mc.Context = ctx
-	ctx = mc
+	tm.enqueueTime = twm.enqueueTime
+	tm.dequeueTime = taskStart
+	tm.meta = twm.meta
+	ctx = injectTaskMetadataProvider(ctx, tm)
 
 	// phase is the name of the step which has possibly caused a panic
-	phase := doPhaseDo
+	phase := taskPhaseDo
 
 	defer func() {
 
@@ -1115,7 +1117,7 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled_metricsContextEnabled
 		}
 	}()
 	err := twm.doer.Do(ctx, workerID)
-	phase = doPhaseInvalid // done, no panic occurred
+	phase = taskPhaseInvalid // done, no panic occurred
 	if err == nil {
 
 		return
@@ -1130,12 +1132,12 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled_metricsContextEnabled
 	return
 }
 
-func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled_metricsContextDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
+func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled_taskMetadataProviderDisabled(ctx context.Context, workerID int, twm taskWithMeta) {
 
 	defer lt.resultWaitGroup.Done()
 
 	// phase is the name of the step which has possibly caused a panic
-	phase := doPhaseDo
+	phase := taskPhaseDo
 
 	defer func() {
 
@@ -1178,7 +1180,7 @@ func (lt *Loadtest) doTask_retriesDisabled_metricsDisabled_metricsContextDisable
 		}
 	}()
 	err := twm.doer.Do(ctx, workerID)
-	phase = doPhaseInvalid // done, no panic occurred
+	phase = taskPhaseInvalid // done, no panic occurred
 	if err == nil {
 
 		return

@@ -38,7 +38,7 @@ type loadtestConfig struct {
 	resultsChanSize        int
 	percentilesEnabled     bool
 	variancesEnabled       bool
-	metricsContextEnabled  bool
+	metaProviderEnabled    bool
 }
 
 func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
@@ -278,25 +278,15 @@ func (newOpts) Retry(b bool) LoadtestOption {
 	}
 }
 
-// MetricsContextEnabled sets wether the context provided to a task's Do, CanRetry, and Retry methods
-// implements:
+// MetadataProviderEnabled sets wether the context provided to a task's Do, CanRetry, and Retry methods
+// returns a non-nil value when passed to GetTaskMetadataProvider(...)
 //
-// - `IntervalID() time.Time`
-//
-// - `SampleSize() int`
-//
-// - `NumIntervalTasks() int`
-//
-// - `Lag() time.Duration`
-//
-// - `EnqueueTime() time.Time`
-//
-// Use these methods to instrument result reporting as you may see fit with far more granularity than the high level metrics.csv.
+// Use GetTaskMetadataProvider to instrument result reporting as you may see fit with far more granularity than the high level metrics.csv.
 //
 // off == false (default)
-func (newOpts) MetricsContextEnabled(b bool) LoadtestOption {
+func (newOpts) MetadataProviderEnabled(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
-		cfg.metricsContextEnabled = b
+		cfg.metaProviderEnabled = b
 	}
 }
 
