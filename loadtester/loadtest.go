@@ -110,6 +110,7 @@ type Loadtest struct {
 	metricsEnabled         bool
 	percentilesEnabled     bool
 	variancesEnabled       bool
+	metaProviderEnabled    bool
 }
 
 func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
@@ -186,6 +187,7 @@ func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 		percentilesEnabled:     cfg.percentilesEnabled,
 		latencies:              latencies,
 		variancesEnabled:       cfg.variancesEnabled,
+		metaProviderEnabled:    cfg.metaProviderEnabled,
 	}
 
 	if cfg.retry {
@@ -337,37 +339,39 @@ func (lt *Loadtest) addWorker(ctx context.Context, workerID int) {
 
 func (lt *Loadtest) loadtestConfigAsJson() any {
 	type Config struct {
-		StartTime              string `json:"start_time"`
-		Interval               string `json:"interval"`
-		MaxIntervalTasks       int    `json:"max_interval_tasks"`
-		MaxTasks               int    `json:"max_tasks"`
-		MaxWorkers             int    `json:"max_workers"`
-		NumIntervalTasks       int    `json:"num_interval_tasks"`
-		NumWorkers             int    `json:"num_workers"`
-		MetricsEnabled         bool   `json:"metrics_enabled"`
-		MetricsFlushInterval   string `json:"metrics_flush_interval"`
-		FlushRetriesOnShutdown bool   `json:"flush_retries_on_shutdown"`
-		FlushRetriesTimeout    string `json:"flush_retries_timeout"`
-		Retry                  bool   `json:"retry_enabled"`
-		PercentilesEnabled     bool   `json:"percentiles_enabled"`
-		VariancesEnabled       bool   `json:"variances_enabled"`
+		StartTime               string `json:"start_time"`
+		Interval                string `json:"interval"`
+		MaxIntervalTasks        int    `json:"max_interval_tasks"`
+		MaxTasks                int    `json:"max_tasks"`
+		MaxWorkers              int    `json:"max_workers"`
+		NumIntervalTasks        int    `json:"num_interval_tasks"`
+		NumWorkers              int    `json:"num_workers"`
+		MetricsEnabled          bool   `json:"metrics_enabled"`
+		MetricsFlushInterval    string `json:"metrics_flush_interval"`
+		FlushRetriesOnShutdown  bool   `json:"flush_retries_on_shutdown"`
+		FlushRetriesTimeout     string `json:"flush_retries_timeout"`
+		Retry                   bool   `json:"retry_enabled"`
+		PercentilesEnabled      bool   `json:"percentiles_enabled"`
+		VariancesEnabled        bool   `json:"variances_enabled"`
+		MetadataProviderEnabled bool   `json:"metadata_provider_enabled"`
 	}
 
 	return Config{
-		StartTime:              timeToString(lt.startTime),
-		Interval:               lt.interval.String(),
-		MaxIntervalTasks:       lt.maxIntervalTasks,
-		MaxTasks:               lt.maxTasks,
-		MaxWorkers:             lt.maxWorkers,
-		NumIntervalTasks:       lt.numIntervalTasks,
-		NumWorkers:             lt.numWorkers,
-		MetricsEnabled:         lt.metricsEnabled,
-		MetricsFlushInterval:   lt.csvData.flushInterval.String(),
-		FlushRetriesOnShutdown: lt.flushRetriesOnShutdown,
-		FlushRetriesTimeout:    lt.flushRetriesTimeout.String(),
-		Retry:                  lt.retry,
-		PercentilesEnabled:     lt.percentilesEnabled,
-		VariancesEnabled:       lt.variancesEnabled,
+		StartTime:               timeToString(lt.startTime),
+		Interval:                lt.interval.String(),
+		MaxIntervalTasks:        lt.maxIntervalTasks,
+		MaxTasks:                lt.maxTasks,
+		MaxWorkers:              lt.maxWorkers,
+		NumIntervalTasks:        lt.numIntervalTasks,
+		NumWorkers:              lt.numWorkers,
+		MetricsEnabled:          lt.metricsEnabled,
+		MetricsFlushInterval:    lt.csvData.flushInterval.String(),
+		FlushRetriesOnShutdown:  lt.flushRetriesOnShutdown,
+		FlushRetriesTimeout:     lt.flushRetriesTimeout.String(),
+		Retry:                   lt.retry,
+		PercentilesEnabled:      lt.percentilesEnabled,
+		VariancesEnabled:        lt.variancesEnabled,
+		MetadataProviderEnabled: lt.metaProviderEnabled,
 	}
 }
 
