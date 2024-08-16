@@ -1565,8 +1565,8 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < len(lt.workers); i++ {
-			close(lt.workers[i])
+		for i := 0; i < numWorkers; i++ {
+			close(lt.pauseChans[i])
 		}
 
 		// wait for result handler routines to stop
@@ -1640,19 +1640,19 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < len(lt.workers); i++ {
-						lt.workers[i] <- struct{}{}
+					for i := numWorkers; i < numWorkers; i++ {
+						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := len(lt.workers); i < n; i++ {
+					for i := numWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
 					}
 				} else if n < numWorkers {
 
 					// pause workers if needed
 					for i := numWorkers - 1; i >= n; i-- {
-						lt.workers[i] <- struct{}{}
+						lt.pauseChans[i] <- struct{}{}
 					}
 				}
 
@@ -2313,8 +2313,8 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < len(lt.workers); i++ {
-			close(lt.workers[i])
+		for i := 0; i < numWorkers; i++ {
+			close(lt.pauseChans[i])
 		}
 
 		// wait for workers to stop
@@ -2382,19 +2382,19 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < len(lt.workers); i++ {
-						lt.workers[i] <- struct{}{}
+					for i := numWorkers; i < numWorkers; i++ {
+						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := len(lt.workers); i < n; i++ {
+					for i := numWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
 					}
 				} else if n < numWorkers {
 
 					// pause workers if needed
 					for i := numWorkers - 1; i >= n; i-- {
-						lt.workers[i] <- struct{}{}
+						lt.pauseChans[i] <- struct{}{}
 					}
 				}
 
@@ -3055,8 +3055,8 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < len(lt.workers); i++ {
-			close(lt.workers[i])
+		for i := 0; i < numWorkers; i++ {
+			close(lt.pauseChans[i])
 		}
 
 		// wait for result handler routines to stop
@@ -3130,19 +3130,19 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < len(lt.workers); i++ {
-						lt.workers[i] <- struct{}{}
+					for i := numWorkers; i < numWorkers; i++ {
+						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := len(lt.workers); i < n; i++ {
+					for i := numWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
 					}
 				} else if n < numWorkers {
 
 					// pause workers if needed
 					for i := numWorkers - 1; i >= n; i-- {
-						lt.workers[i] <- struct{}{}
+						lt.pauseChans[i] <- struct{}{}
 					}
 				}
 
@@ -3756,8 +3756,8 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < len(lt.workers); i++ {
-			close(lt.workers[i])
+		for i := 0; i < numWorkers; i++ {
+			close(lt.pauseChans[i])
 		}
 
 		// wait for workers to stop
@@ -3825,19 +3825,19 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < len(lt.workers); i++ {
-						lt.workers[i] <- struct{}{}
+					for i := numWorkers; i < numWorkers; i++ {
+						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := len(lt.workers); i < n; i++ {
+					for i := numWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
 					}
 				} else if n < numWorkers {
 
 					// pause workers if needed
 					for i := numWorkers - 1; i >= n; i-- {
-						lt.workers[i] <- struct{}{}
+						lt.pauseChans[i] <- struct{}{}
 					}
 				}
 
@@ -4265,8 +4265,8 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < len(lt.workers); i++ {
-			close(lt.workers[i])
+		for i := 0; i < numWorkers; i++ {
+			close(lt.pauseChans[i])
 		}
 
 		// wait for result handler routines to stop
@@ -4340,19 +4340,19 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < len(lt.workers); i++ {
-						lt.workers[i] <- struct{}{}
+					for i := numWorkers; i < numWorkers; i++ {
+						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := len(lt.workers); i < n; i++ {
+					for i := numWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
 					}
 				} else if n < numWorkers {
 
 					// pause workers if needed
 					for i := numWorkers - 1; i >= n; i-- {
-						lt.workers[i] <- struct{}{}
+						lt.pauseChans[i] <- struct{}{}
 					}
 				}
 
@@ -4734,8 +4734,8 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < len(lt.workers); i++ {
-			close(lt.workers[i])
+		for i := 0; i < numWorkers; i++ {
+			close(lt.pauseChans[i])
 		}
 
 		// wait for workers to stop
@@ -4803,19 +4803,19 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < len(lt.workers); i++ {
-						lt.workers[i] <- struct{}{}
+					for i := numWorkers; i < numWorkers; i++ {
+						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := len(lt.workers); i < n; i++ {
+					for i := numWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
 					}
 				} else if n < numWorkers {
 
 					// pause workers if needed
 					for i := numWorkers - 1; i >= n; i-- {
-						lt.workers[i] <- struct{}{}
+						lt.pauseChans[i] <- struct{}{}
 					}
 				}
 
@@ -5216,8 +5216,8 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < len(lt.workers); i++ {
-			close(lt.workers[i])
+		for i := 0; i < numWorkers; i++ {
+			close(lt.pauseChans[i])
 		}
 
 		// wait for result handler routines to stop
@@ -5291,19 +5291,19 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < len(lt.workers); i++ {
-						lt.workers[i] <- struct{}{}
+					for i := numWorkers; i < numWorkers; i++ {
+						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := len(lt.workers); i < n; i++ {
+					for i := numWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
 					}
 				} else if n < numWorkers {
 
 					// pause workers if needed
 					for i := numWorkers - 1; i >= n; i-- {
-						lt.workers[i] <- struct{}{}
+						lt.pauseChans[i] <- struct{}{}
 					}
 				}
 
@@ -5671,8 +5671,8 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < len(lt.workers); i++ {
-			close(lt.workers[i])
+		for i := 0; i < numWorkers; i++ {
+			close(lt.pauseChans[i])
 		}
 
 		// wait for workers to stop
@@ -5740,19 +5740,19 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < len(lt.workers); i++ {
-						lt.workers[i] <- struct{}{}
+					for i := numWorkers; i < numWorkers; i++ {
+						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := len(lt.workers); i < n; i++ {
+					for i := numWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
 					}
 				} else if n < numWorkers {
 
 					// pause workers if needed
 					for i := numWorkers - 1; i >= n; i-- {
-						lt.workers[i] <- struct{}{}
+						lt.pauseChans[i] <- struct{}{}
 					}
 				}
 
