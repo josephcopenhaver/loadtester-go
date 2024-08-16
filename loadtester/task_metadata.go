@@ -61,18 +61,6 @@ func injectTaskMetadataProvider(ctx context.Context, tm *taskMetadata) context.C
 	return context.WithValue(ctx, taskMetadataCtxKey{}, tm)
 }
 
-type taskMetadataProvider interface {
-	IntervalID() time.Time
-	EnqueueTime() time.Time
-	DequeueTime() time.Time
-	SampleSize() int
-	NumIntervalTasks() int
-	Lag() time.Duration
-}
-
-// TODO: move to unit test
-var _ taskMetadataProvider = (*taskMetadata)(nil)
-
 // GetTaskMetadataProvider returns a possibly nil value that implements:
 //
 // - `IntervalID() time.Time`
