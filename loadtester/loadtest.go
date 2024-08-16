@@ -66,7 +66,7 @@ type Loadtest struct {
 	numWorkers int
 	// maxLiveSamples is the max buffer size of sample sizes that exist at any possible point in time
 	maxLiveSamples  int
-	workers         []chan struct{}
+	pauseChans      []chan struct{}
 	workerWaitGroup sync.WaitGroup
 	resultWaitGroup sync.WaitGroup
 	taskChan        chan taskWithMeta
@@ -110,6 +110,7 @@ type Loadtest struct {
 	metricsEnabled         bool
 	percentilesEnabled     bool
 	variancesEnabled       bool
+	metaProviderEnabled    bool
 }
 
 func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
@@ -153,13 +154,18 @@ func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 		latencies = newLatencyLists(cfg.maxIntervalTasks)
 	}
 
+	pauseChans := make([]chan struct{}, cfg.maxWorkers)
+	for i := 0; i < cfg.maxWorkers; i++ {
+		pauseChans[i] = make(chan struct{}, 2)
+	}
+
 	lt := &Loadtest{
 		taskReader:     cfg.taskReader,
 		maxTasks:       cfg.maxTasks,
 		maxWorkers:     cfg.maxWorkers,
 		numWorkers:     cfg.numWorkers,
 		maxLiveSamples: maxLiveSamples,
-		workers:        make([]chan struct{}, 0, cfg.maxWorkers),
+		pauseChans:     pauseChans,
 		taskChan:       make(chan taskWithMeta, cfg.maxIntervalTasks),
 		resultsChan:    resultsChan,
 		cfgUpdateChan:  make(chan ConfigUpdate),
@@ -186,13 +192,24 @@ func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 		percentilesEnabled:     cfg.percentilesEnabled,
 		latencies:              latencies,
 		variancesEnabled:       cfg.variancesEnabled,
+		metaProviderEnabled:    cfg.metaProviderEnabled,
 	}
 
 	if cfg.retry {
 		if cfg.csvOutputEnabled {
-			lt.doTask = lt.doTask_retriesEnabled_metricsEnabled
+			if cfg.metaProviderEnabled {
+				lt.doTask = lt.doTask_retriesEnabled_metricsEnabled_taskMetadataProviderEnabled
+			} else {
+
+				lt.doTask = lt.doTask_retriesEnabled_metricsEnabled_taskMetadataProviderDisabled
+			}
 		} else {
-			lt.doTask = lt.doTask_retriesEnabled_metricsDisabled
+			if cfg.metaProviderEnabled {
+				lt.doTask = lt.doTask_retriesEnabled_metricsDisabled_taskMetadataProviderEnabled
+			} else {
+
+				lt.doTask = lt.doTask_retriesEnabled_metricsDisabled_taskMetadataProviderDisabled
+			}
 		}
 		if cfg.maxTasks > 0 {
 			if cfg.csvOutputEnabled {
@@ -207,9 +224,19 @@ func NewLoadtest(options ...LoadtestOption) (*Loadtest, error) {
 		}
 	} else {
 		if cfg.csvOutputEnabled {
-			lt.doTask = lt.doTask_retriesDisabled_metricsEnabled
+			if cfg.metaProviderEnabled {
+				lt.doTask = lt.doTask_retriesDisabled_metricsEnabled_taskMetadataProviderEnabled
+			} else {
+
+				lt.doTask = lt.doTask_retriesDisabled_metricsEnabled_taskMetadataProviderDisabled
+			}
 		} else {
-			lt.doTask = lt.doTask_retriesDisabled_metricsDisabled
+			if cfg.metaProviderEnabled {
+				lt.doTask = lt.doTask_retriesDisabled_metricsDisabled_taskMetadataProviderEnabled
+			} else {
+
+				lt.doTask = lt.doTask_retriesDisabled_metricsDisabled_taskMetadataProviderDisabled
+			}
 		}
 		if cfg.maxTasks > 0 {
 			if cfg.csvOutputEnabled {
@@ -305,14 +332,12 @@ func (lt *Loadtest) UpdateConfig(cu ConfigUpdate) (handled bool) {
 }
 
 func (lt *Loadtest) addWorker(ctx context.Context, workerID int) {
-	pauseChan := make(chan struct{}, 2)
 	lt.workerWaitGroup.Add(1)
 	go func() {
 		defer lt.workerWaitGroup.Done()
 
-		lt.workerLoop(ctx, workerID, pauseChan)
+		lt.workerLoop(ctx, workerID)
 	}()
-	lt.workers = append(lt.workers, pauseChan)
 }
 
 func (lt *Loadtest) loadtestConfigAsJson() any {
@@ -331,6 +356,7 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		Retry                  bool   `json:"retry_enabled"`
 		PercentilesEnabled     bool   `json:"percentiles_enabled"`
 		VariancesEnabled       bool   `json:"variances_enabled"`
+		MetaProviderEnabled    bool   `json:"metadata_provider_enabled"`
 	}
 
 	return Config{
@@ -348,11 +374,13 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		Retry:                  lt.retry,
 		PercentilesEnabled:     lt.percentilesEnabled,
 		VariancesEnabled:       lt.variancesEnabled,
+		MetaProviderEnabled:    lt.metaProviderEnabled,
 	}
 }
 
-func (lt *Loadtest) workerLoop(ctx context.Context, workerID int, pauseChan <-chan struct{}) {
+func (lt *Loadtest) workerLoop(ctx context.Context, workerID int) {
 	var task taskWithMeta
+	pauseChan := (<-chan struct{})(lt.pauseChans[workerID])
 
 	for {
 		// duplicating short-circuit signal control processing to give it priority over the randomizing nature of the multi-select

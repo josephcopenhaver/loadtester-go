@@ -1,14 +1,15 @@
-func (lt *Loadtest) doTask_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_metrics{{if .MetricsEnabled}}Enabled{{else}}Disabled{{end}}(ctx context.Context, workerID int, twm taskWithMeta) {
+func (lt *Loadtest) doTask_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{end}}_metrics{{if .MetricsEnabled}}Enabled{{else}}Disabled{{end}}_taskMetadataProvider{{if .InjectTaskMetadataProvider}}Enabled{{else}}Disabled{{end}}(ctx context.Context, workerID int, twm taskWithMeta) {
+	{{if .InjectTaskMetadataProvider}}taskStart := time.Now(){{end}}
 	{{if .MetricsEnabled}}
 	var respFlags taskResultFlags
 	{
-		taskStart := time.Now()
-		defer func(){
+		{{if not .InjectTaskMetadataProvider}}taskStart := time.Now()
+		{{end}}defer func(){
 			taskEnd := time.Now()
 
 			lt.resultsChan <- taskResult{
 				taskResultFlags: respFlags,
-				QueueDuration:  taskStart.Sub(twm.enqueueTime),
+				QueueDuration:   taskStart.Sub(twm.enqueueTime),
 				TaskDuration:    taskEnd.Sub(taskStart),
 				Meta:            twm.meta,
 			}
@@ -16,15 +17,23 @@ func (lt *Loadtest) doTask_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{
 	}
 	{{else}}
 	defer lt.resultWaitGroup.Done()
+	{{end}}{{if .InjectTaskMetadataProvider}}
+	tm := newTaskMetadata()
+	defer releaseTaskMetadata(tm)
+
+	tm.enqueueTime = twm.enqueueTime
+	tm.dequeueTime = taskStart
+	tm.meta = twm.meta
+	ctx = injectTaskMetadataProvider(ctx, tm)
 	{{end}}
 
 	// phase is the name of the step which has possibly caused a panic
-	phase := "do"
+	phase := taskPhaseDo
 	{{if .RetriesEnabled}}
 	var rt *retryTask
 	if v, ok := twm.doer.(*retryTask); ok {
 		rt = v
-		phase = "retry"
+		phase = taskPhaseRetry
 		defer func() {
 			*rt = retryTask{}
 			lt.retryTaskPool.Put(v)
@@ -46,21 +55,21 @@ func (lt *Loadtest) doTask_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.Any("error", v),
 				)
 			case []byte:
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", string(v)),
 				)
 			case string:
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", v),
 				)
 			default:
@@ -69,14 +78,14 @@ func (lt *Loadtest) doTask_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{
 				lt.logger.LogAttrs(ctx, slog.LevelError,
 					evtName,
 					slog.Int("worker_id", workerID),
-					slog.String("phase", phase),
+					slog.String("phase", phase.String()),
 					slog.String("error", msg),
 				)
 			}
 		}
 	}()
 	err := twm.doer.Do(ctx, workerID)
-	phase = "" // done, no panic occurred
+	phase = taskPhaseInvalid // done, no panic occurred
 	if err == nil {
 		{{if .MetricsEnabled}}respFlags.Passed = 1{{end}}
 		return
@@ -100,12 +109,12 @@ func (lt *Loadtest) doTask_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{
 		return
 	}
 
-	phase = "can-retry"
+	phase = taskPhaseCanRetry
 	if v, ok := dr.(DoRetryChecker); ok && !v.CanRetry(ctx, workerID, err) {
-		phase = "" // done, no panic occurred
+		phase = taskPhaseInvalid // done, no panic occurred
 		return
 	}
-	phase = "" // done, no panic occurred
+	phase = taskPhaseInvalid // done, no panic occurred
 
 	// queue a new retry task
 	{

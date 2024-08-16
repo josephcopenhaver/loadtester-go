@@ -136,17 +136,22 @@ func main() {
 		t := parse(tsDoTask)
 
 		type cfg struct {
-			RetriesEnabled bool
-			MetricsEnabled bool
+			RetriesEnabled             bool
+			MetricsEnabled             bool
+			InjectTaskMetadataProvider bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{RetriesEnabled: true, MetricsEnabled: true},
-			{RetriesEnabled: true, MetricsEnabled: false},
-			{RetriesEnabled: false, MetricsEnabled: true},
-			{RetriesEnabled: false, MetricsEnabled: false},
+			{RetriesEnabled: true, MetricsEnabled: true, InjectTaskMetadataProvider: true},
+			{RetriesEnabled: true, MetricsEnabled: true, InjectTaskMetadataProvider: false},
+			{RetriesEnabled: true, MetricsEnabled: false, InjectTaskMetadataProvider: true},
+			{RetriesEnabled: true, MetricsEnabled: false, InjectTaskMetadataProvider: false},
+			{RetriesEnabled: false, MetricsEnabled: true, InjectTaskMetadataProvider: true},
+			{RetriesEnabled: false, MetricsEnabled: true, InjectTaskMetadataProvider: false},
+			{RetriesEnabled: false, MetricsEnabled: false, InjectTaskMetadataProvider: true},
+			{RetriesEnabled: false, MetricsEnabled: false, InjectTaskMetadataProvider: false},
 		})
 	}
 
