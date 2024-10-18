@@ -1235,6 +1235,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 	}()
 
 	numWorkers := lt.numWorkers
+	numSpawnedWorkers := 0
 
 	// numTasks is the total number of tasks
 	// scheduled to run ( including retries )
@@ -1565,7 +1566,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < numWorkers; i++ {
+		for i := 0; i < numSpawnedWorkers; i++ {
 			close(lt.pauseChans[i])
 		}
 
@@ -1640,13 +1641,14 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < numWorkers; i++ {
+					for i := numWorkers; i < numSpawnedWorkers; i++ {
 						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := numWorkers; i < n; i++ {
+					for i := numSpawnedWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
+						numSpawnedWorkers++
 					}
 				} else if n < numWorkers {
 
@@ -1823,6 +1825,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 	// start workers just before starting task scheduling
 	for i := 0; i < numWorkers; i++ {
 		lt.addWorker(ctx, i)
+		numSpawnedWorkers++
 	}
 
 	// main task scheduling loop
@@ -2004,6 +2007,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 	)
 
 	numWorkers := lt.numWorkers
+	numSpawnedWorkers := 0
 
 	// numTasks is the total number of tasks
 	// scheduled to run ( including retries )
@@ -2313,7 +2317,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < numWorkers; i++ {
+		for i := 0; i < numSpawnedWorkers; i++ {
 			close(lt.pauseChans[i])
 		}
 
@@ -2382,13 +2386,14 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < numWorkers; i++ {
+					for i := numWorkers; i < numSpawnedWorkers; i++ {
 						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := numWorkers; i < n; i++ {
+					for i := numSpawnedWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
+						numSpawnedWorkers++
 					}
 				} else if n < numWorkers {
 
@@ -2565,6 +2570,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 	// start workers just before starting task scheduling
 	for i := 0; i < numWorkers; i++ {
 		lt.addWorker(ctx, i)
+		numSpawnedWorkers++
 	}
 
 	// main task scheduling loop
@@ -2760,6 +2766,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 	}()
 
 	numWorkers := lt.numWorkers
+	numSpawnedWorkers := 0
 
 	// numTasks is the total number of tasks
 	// scheduled to run ( including retries )
@@ -3055,7 +3062,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < numWorkers; i++ {
+		for i := 0; i < numSpawnedWorkers; i++ {
 			close(lt.pauseChans[i])
 		}
 
@@ -3130,13 +3137,14 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < numWorkers; i++ {
+					for i := numWorkers; i < numSpawnedWorkers; i++ {
 						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := numWorkers; i < n; i++ {
+					for i := numSpawnedWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
+						numSpawnedWorkers++
 					}
 				} else if n < numWorkers {
 
@@ -3313,6 +3321,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 	// start workers just before starting task scheduling
 	for i := 0; i < numWorkers; i++ {
 		lt.addWorker(ctx, i)
+		numSpawnedWorkers++
 	}
 
 	// main task scheduling loop
@@ -3482,6 +3491,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 	)
 
 	numWorkers := lt.numWorkers
+	numSpawnedWorkers := 0
 
 	// numTasks is the total number of tasks
 	// scheduled to run ( including retries )
@@ -3756,7 +3766,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < numWorkers; i++ {
+		for i := 0; i < numSpawnedWorkers; i++ {
 			close(lt.pauseChans[i])
 		}
 
@@ -3825,13 +3835,14 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < numWorkers; i++ {
+					for i := numWorkers; i < numSpawnedWorkers; i++ {
 						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := numWorkers; i < n; i++ {
+					for i := numSpawnedWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
+						numSpawnedWorkers++
 					}
 				} else if n < numWorkers {
 
@@ -4008,6 +4019,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 	// start workers just before starting task scheduling
 	for i := 0; i < numWorkers; i++ {
 		lt.addWorker(ctx, i)
+		numSpawnedWorkers++
 	}
 
 	// main task scheduling loop
@@ -4191,6 +4203,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 	}()
 
 	numWorkers := lt.numWorkers
+	numSpawnedWorkers := 0
 
 	// numTasks is the total number of tasks
 	// scheduled to run ( including retries )
@@ -4265,7 +4278,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < numWorkers; i++ {
+		for i := 0; i < numSpawnedWorkers; i++ {
 			close(lt.pauseChans[i])
 		}
 
@@ -4340,13 +4353,14 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < numWorkers; i++ {
+					for i := numWorkers; i < numSpawnedWorkers; i++ {
 						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := numWorkers; i < n; i++ {
+					for i := numSpawnedWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
+						numSpawnedWorkers++
 					}
 				} else if n < numWorkers {
 
@@ -4523,6 +4537,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 	// start workers just before starting task scheduling
 	for i := 0; i < numWorkers; i++ {
 		lt.addWorker(ctx, i)
+		numSpawnedWorkers++
 	}
 
 	// main task scheduling loop
@@ -4667,6 +4682,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 	)
 
 	numWorkers := lt.numWorkers
+	numSpawnedWorkers := 0
 
 	// numTasks is the total number of tasks
 	// scheduled to run ( including retries )
@@ -4734,7 +4750,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < numWorkers; i++ {
+		for i := 0; i < numSpawnedWorkers; i++ {
 			close(lt.pauseChans[i])
 		}
 
@@ -4803,13 +4819,14 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < numWorkers; i++ {
+					for i := numWorkers; i < numSpawnedWorkers; i++ {
 						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := numWorkers; i < n; i++ {
+					for i := numSpawnedWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
+						numSpawnedWorkers++
 					}
 				} else if n < numWorkers {
 
@@ -4986,6 +5003,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 	// start workers just before starting task scheduling
 	for i := 0; i < numWorkers; i++ {
 		lt.addWorker(ctx, i)
+		numSpawnedWorkers++
 	}
 
 	// main task scheduling loop
@@ -5144,6 +5162,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 	}()
 
 	numWorkers := lt.numWorkers
+	numSpawnedWorkers := 0
 
 	// numTasks is the total number of tasks
 	// scheduled to run ( including retries )
@@ -5216,7 +5235,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < numWorkers; i++ {
+		for i := 0; i < numSpawnedWorkers; i++ {
 			close(lt.pauseChans[i])
 		}
 
@@ -5291,13 +5310,14 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < numWorkers; i++ {
+					for i := numWorkers; i < numSpawnedWorkers; i++ {
 						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := numWorkers; i < n; i++ {
+					for i := numSpawnedWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
+						numSpawnedWorkers++
 					}
 				} else if n < numWorkers {
 
@@ -5474,6 +5494,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 	// start workers just before starting task scheduling
 	for i := 0; i < numWorkers; i++ {
 		lt.addWorker(ctx, i)
+		numSpawnedWorkers++
 	}
 
 	// main task scheduling loop
@@ -5606,6 +5627,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 	)
 
 	numWorkers := lt.numWorkers
+	numSpawnedWorkers := 0
 
 	// numTasks is the total number of tasks
 	// scheduled to run ( including retries )
@@ -5671,7 +5693,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < numWorkers; i++ {
+		for i := 0; i < numSpawnedWorkers; i++ {
 			close(lt.pauseChans[i])
 		}
 
@@ -5740,13 +5762,14 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < numWorkers; i++ {
+					for i := numWorkers; i < numSpawnedWorkers; i++ {
 						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := numWorkers; i < n; i++ {
+					for i := numSpawnedWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
+						numSpawnedWorkers++
 					}
 				} else if n < numWorkers {
 
@@ -5923,6 +5946,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 	// start workers just before starting task scheduling
 	for i := 0; i < numWorkers; i++ {
 		lt.addWorker(ctx, i)
+		numSpawnedWorkers++
 	}
 
 	// main task scheduling loop
