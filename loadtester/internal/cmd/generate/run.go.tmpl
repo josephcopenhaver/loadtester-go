@@ -42,6 +42,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 	{{end}}
 
 	numWorkers := lt.numWorkers
+	numSpawnedWorkers := 0
 
 	// numTasks is the total number of tasks
 	// scheduled to run ( including retries )
@@ -382,7 +383,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 		lt.logger.LogAttrs(ctx, slog.LevelDebug,
 			"stopping workers",
 		)
-		for i := 0; i < numWorkers; i++ {
+		for i := 0; i < numSpawnedWorkers; i++ {
 			close(lt.pauseChans[i])
 		}
 
@@ -459,13 +460,14 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 				if n > numWorkers {
 
 					// unpause workers
-					for i := numWorkers; i < numWorkers; i++ {
+					for i := numWorkers; i < numSpawnedWorkers; i++ {
 						lt.pauseChans[i] <- struct{}{}
 					}
 
 					// spawn new workers if needed
-					for i := numWorkers; i < n; i++ {
+					for i := numSpawnedWorkers; i < n; i++ {
 						lt.addWorker(ctx, i)
+						numSpawnedWorkers++
 					}
 				} else if n < numWorkers {
 
@@ -642,6 +644,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 	// start workers just before starting task scheduling
 	for i := 0; i < numWorkers; i++ {
 		lt.addWorker(ctx, i)
+		numSpawnedWorkers++
 	}
 
 	// main task scheduling loop
