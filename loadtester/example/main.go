@@ -126,17 +126,14 @@ func main() {
 	//
 
 	// define input handling channel and closer
-	inputChan := make(chan string)
-	closeInputChan := func() func() {
-		var once sync.Once
+	inputChan, closeInputChan := func() (chan string, func()) {
+		c := make(chan string)
 
-		c := inputChan
+		closer := sync.OnceFunc(func() {
+			close(c)
+		})
 
-		return func() {
-			once.Do(func() {
-				close(c)
-			})
-		}
+		return c, closer
 	}()
 
 	//
@@ -169,7 +166,7 @@ func main() {
 
 			// note it's possible for this channel
 			// write to panic due to the user
-			// doing thing really fast and pressing control-c afterward
+			// doing things really fast and pressing control-c afterward
 			//
 			// but in that case we're still going through the stop procedure so meh
 
@@ -190,7 +187,7 @@ func main() {
 			// single outlier task affects the throughput of all the others in the same interval-segment of time.
 
 			switch s {
-			case "stop":
+			case "stop", "exit", "quit":
 				return
 			case "set workers":
 				cu.SetNumWorkers(numWorkers)
