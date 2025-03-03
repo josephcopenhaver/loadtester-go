@@ -159,78 +159,86 @@ func newLoadtestConfig(options ...LoadtestOption) (loadtestConfig, error) {
 
 type LoadtestOption func(*loadtestConfig)
 
-type newOpts struct{}
+// LoadtestOptions should never be instantiated manually
+//
+// Instead call NewOpts()
+//
+// This is only exported to allow godocs to discover the exported methods.
+//
+// LoadtestOptions will never have exported data members, just
+// stateless exported functions.
+type LoadtestOptions struct{}
 
-func NewOpts() newOpts {
-	return newOpts{}
+func NewOpts() LoadtestOptions {
+	return LoadtestOptions{}
 }
 
-func (newOpts) TaskReader(taskReader TaskReader) LoadtestOption {
+func (LoadtestOptions) TaskReader(taskReader TaskReader) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.taskReader = taskReader
 	}
 }
 
 // MaxTasks sets an upper bound on the number of tasks the loadtest could perform
-func (newOpts) MaxTasks(max int) LoadtestOption {
+func (LoadtestOptions) MaxTasks(max int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.maxTasks = max
 	}
 }
 
-func (newOpts) MaxWorkers(max int) LoadtestOption {
+func (LoadtestOptions) MaxWorkers(max int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.maxWorkers = max
 		cfg.maxWorkersSet = true
 	}
 }
 
-func (newOpts) NumWorkers(n int) LoadtestOption {
+func (LoadtestOptions) NumWorkers(n int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.numWorkers = n
 		cfg.numWorkersSet = true
 	}
 }
 
-func (newOpts) OutputBufferingFactor(factor int) LoadtestOption {
+func (LoadtestOptions) OutputBufferingFactor(factor int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.outputBufferingFactor = factor
 	}
 }
 
-func (newOpts) MaxIntervalTasks(n int) LoadtestOption {
+func (LoadtestOptions) MaxIntervalTasks(n int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.maxIntervalTasks = n
 		cfg.maxIntervalTasksSet = true
 	}
 }
 
-func (newOpts) NumIntervalTasks(n int) LoadtestOption {
+func (LoadtestOptions) NumIntervalTasks(n int) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.numIntervalTasks = n
 		cfg.numIntervalTasksSet = true
 	}
 }
 
-func (newOpts) Interval(d time.Duration) LoadtestOption {
+func (LoadtestOptions) Interval(d time.Duration) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.interval = d
 	}
 }
 
-func (newOpts) MetricsCsvFilename(s string) LoadtestOption {
+func (LoadtestOptions) MetricsCsvFilename(s string) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.csvOutputFilename = s
 	}
 }
 
-func (newOpts) MetricsCsvFlushInterval(d time.Duration) LoadtestOption {
+func (LoadtestOptions) MetricsCsvFlushInterval(d time.Duration) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.csvOutputFlushInterval = d
 	}
 }
 
-func (newOpts) MetricsCsv(b bool) LoadtestOption {
+func (LoadtestOptions) MetricsCsv(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.csvOutputEnabled = b
 	}
@@ -241,14 +249,14 @@ func (newOpts) MetricsCsv(b bool) LoadtestOption {
 //
 // Make sure MaxIntervalTasks is either not set or if it must be set make
 // sure it is not too large for the hosts's ram availability.
-func (newOpts) MetricsLatencyPercentile(b bool) LoadtestOption {
+func (LoadtestOptions) MetricsLatencyPercentile(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.percentilesEnabled = b
 	}
 }
 
 // MetricsLatencyVariance can create additional delay while processing results.
-func (newOpts) MetricsLatencyVariance(b bool) LoadtestOption {
+func (LoadtestOptions) MetricsLatencyVariance(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.variancesEnabled = b
 	}
@@ -256,14 +264,14 @@ func (newOpts) MetricsLatencyVariance(b bool) LoadtestOption {
 
 // FlushRetriesOnShutdown is useful when your loadtest is more like a smoke test
 // that must have all tasks flush and be successful
-func (newOpts) FlushRetriesOnShutdown(b bool) LoadtestOption {
+func (LoadtestOptions) FlushRetriesOnShutdown(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.flushRetriesOnShutdown = b
 	}
 }
 
 // FlushRetriesTimeout is only relevant when FlushRetriesOnShutdown(true) is used
-func (newOpts) FlushRetriesTimeout(d time.Duration) LoadtestOption {
+func (LoadtestOptions) FlushRetriesTimeout(d time.Duration) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.flushRetriesTimeout = d
 	}
@@ -272,7 +280,7 @@ func (newOpts) FlushRetriesTimeout(d time.Duration) LoadtestOption {
 // Retry sets wether the loadtester has retry support on or off.
 //
 // on == true (default)
-func (newOpts) Retry(b bool) LoadtestOption {
+func (LoadtestOptions) Retry(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.retry = b
 	}
@@ -284,13 +292,13 @@ func (newOpts) Retry(b bool) LoadtestOption {
 // Use GetTaskMetadataProvider to instrument result reporting as you may see fit with far more granularity than the high level metrics.csv.
 //
 // off == false (default)
-func (newOpts) MetadataProviderEnabled(b bool) LoadtestOption {
+func (LoadtestOptions) MetadataProviderEnabled(b bool) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.metaProviderEnabled = b
 	}
 }
 
-func (newOpts) Logger(logger StructuredLogger) LoadtestOption {
+func (LoadtestOptions) Logger(logger StructuredLogger) LoadtestOption {
 	return func(cfg *loadtestConfig) {
 		cfg.logger = logger
 	}
