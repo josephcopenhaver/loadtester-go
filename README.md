@@ -1,5 +1,7 @@
 # loadtester-go
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/josephcopenhaver/loadtester-go)](https://goreportcard.com/report/github.com/josephcopenhaver/loadtester-go)
+
 ---
 
 If you want to send http requests with a specific HTTP Method and not validate anything as well as you don't care about connection reuse, then use [ab](https://httpd.apache.org/docs/2.4/programs/ab.html) instead.
