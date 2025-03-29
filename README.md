@@ -1,6 +1,6 @@
 # loadtester-go
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/josephcopenhaver/loadtester-go)](https://goreportcard.com/report/github.com/josephcopenhaver/loadtester-go)
+[![Go Report Card](https://goreportcard.com/badge/github.com/josephcopenhaver/loadtester-go/v5)](https://goreportcard.com/report/github.com/josephcopenhaver/loadtester-go/v5)
 
 ---
 
