@@ -27,3 +27,7 @@ Features:
 1. All load spaced greater than 20 milliseconds apart is evenly created. ( 20ms was chosen due to that being the average time for GC to interrupt processes ) All load that would be spaced less than 20 milliseconds apart is created as quickly as possible but each interval is still spaced before the next batch of load is created.
 
 For information on what metrics are included by this "framework" without bringing your own in the task implementations please see [METRICS](./docs/metrics.md)
+
+---
+
+[![Go Documentation](https://godocs.io/github.com/josephcopenhaver/loadtester-go/v5?status.svg)](https://godocs.io/github.com/josephcopenhaver/loadtester-go/v5/loadtester)
