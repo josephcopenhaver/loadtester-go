@@ -30,4 +30,4 @@ For information on what metrics are included by this "framework" without bringin
 
 ---
 
-[![Go Documentation](https://godocs.io/github.com/josephcopenhaver/loadtester-go/v5?status.svg)](https://godocs.io/github.com/josephcopenhaver/loadtester-go/v5/loadtester)
+[![Go Reference](https://pkg.go.dev/badge/github.com/josephcopenhaver/loadtester-go/v5/loadtester)](https://pkg.go.dev/github.com/josephcopenhaver/loadtester-go/v5/loadtester)
