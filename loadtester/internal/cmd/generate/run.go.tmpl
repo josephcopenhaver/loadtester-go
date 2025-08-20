@@ -33,12 +33,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 	{{if .MetricsEnabled}}
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		lt.resultsHandler()
-	}()
+	wg.Go(lt.resultsHandler)
 	{{end}}
 
 	numWorkers := lt.numWorkers

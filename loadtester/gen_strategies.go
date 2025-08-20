@@ -1227,12 +1227,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		lt.resultsHandler()
-	}()
+	wg.Go(lt.resultsHandler)
 
 	numWorkers := lt.numWorkers
 	numSpawnedWorkers := 0
@@ -2758,12 +2753,7 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		lt.resultsHandler()
-	}()
+	wg.Go(lt.resultsHandler)
 
 	numWorkers := lt.numWorkers
 	numSpawnedWorkers := 0
@@ -4195,12 +4185,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		lt.resultsHandler()
-	}()
+	wg.Go(lt.resultsHandler)
 
 	numWorkers := lt.numWorkers
 	numSpawnedWorkers := 0
@@ -5154,12 +5139,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		lt.resultsHandler()
-	}()
+	wg.Go(lt.resultsHandler)
 
 	numWorkers := lt.numWorkers
 	numSpawnedWorkers := 0

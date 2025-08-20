@@ -101,10 +101,7 @@ func main() {
 	//
 	// start loadtest routine
 	//
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		// ensure the parent context is canceled when this critical goroutine ends
 		defer cancel()
 
@@ -119,7 +116,7 @@ func main() {
 			)
 			panic(err)
 		}
-	}()
+	})
 
 	//
 	// support user input to adjust the loadtest config
@@ -141,13 +138,10 @@ func main() {
 	//
 
 	// routine that listens for context done and closes input channel
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		<-ctx.Done()
 		closeInputChan()
-	}()
+	})
 
 	// routine that offers user strings to input channel
 	go func() {
