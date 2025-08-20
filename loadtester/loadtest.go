@@ -332,12 +332,9 @@ func (lt *Loadtest) UpdateConfig(cu ConfigUpdate) (handled bool) {
 }
 
 func (lt *Loadtest) addWorker(ctx context.Context, workerID int) {
-	lt.workerWaitGroup.Add(1)
-	go func() {
-		defer lt.workerWaitGroup.Done()
-
+	lt.workerWaitGroup.Go(func() {
 		lt.workerLoop(ctx, workerID)
-	}()
+	})
 }
 
 func (lt *Loadtest) loadtestConfigAsJson() any {
