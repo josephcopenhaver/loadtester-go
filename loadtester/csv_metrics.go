@@ -2,7 +2,7 @@ package loadtester
 
 import (
 	"encoding/csv"
-	"encoding/json"
+	"encoding/json/v2"
 	"io"
 	"os"
 	"strconv"
@@ -48,13 +48,18 @@ func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
 		return err
 	}
 
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
+	{
+		err := json.MarshalWrite(w,
+			struct {
+				C any `json:"config"`
+			}{lt.loadtestConfigAsJson()},
+		)
+		if err != nil {
+			return err
+		}
+	}
 
-	err := enc.Encode(struct {
-		C any `json:"config"`
-	}{lt.loadtestConfigAsJson()})
-	if err != nil {
+	if _, err := w.Write([]byte("\n")); err != nil {
 		return err
 	}
 
