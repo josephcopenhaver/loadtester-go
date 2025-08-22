@@ -48,11 +48,13 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 	maxTasks := lt.maxTasks
 	{{end}}
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}

@@ -18,7 +18,7 @@ func (lt *Loadtest) writeOutputCsvRow_retry{{if .RetriesEnabled}}Enabled{{else}}
 
 		var percent csv.Field
 		{
-			const percentColMaxBytes = 5
+			const percentColMaxBytes = 6 // "100.00"
 			buf := make([]byte, 0, percentColMaxBytes)
 
 			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
@@ -45,7 +45,7 @@ func (lt *Loadtest) writeOutputCsvRow_retry{{if .RetriesEnabled}}Enabled{{else}}
 		mr.latencies.task.readPercentiles(&taskPercentiles)
 		{{end}}
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -85,9 +85,8 @@ func (lt *Loadtest) writeOutputCsvRow_retry{{if .RetriesEnabled}}Enabled{{else}}
 			csv.Float64(mr.welfords.queue.Variance(mr.numTasks)),
 			csv.Float64(mr.welfords.task.Variance(mr.numTasks)),{{end}}{{if .MaxTasksGTZero}}
 			percent,{{end}}
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}

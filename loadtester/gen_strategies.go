@@ -1242,11 +1242,13 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 
 	maxTasks := lt.maxTasks
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -2014,11 +2016,13 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 
 	maxTasks := lt.maxTasks
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -2766,11 +2770,13 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 
 	intervalID := time.Now()
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -3491,11 +3497,13 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 
 	intervalID := time.Now()
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -4200,11 +4208,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 
 	maxTasks := lt.maxTasks
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -4679,11 +4689,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 
 	maxTasks := lt.maxTasks
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -5152,11 +5164,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 
 	intervalID := time.Now()
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -5617,11 +5631,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 
 	intervalID := time.Now()
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -6052,7 +6068,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 
 		var percent csv.Field
 		{
-			const percentColMaxBytes = 5
+			const percentColMaxBytes = 6 // "100.00"
 			buf := make([]byte, 0, percentColMaxBytes)
 
 			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
@@ -6076,7 +6092,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 		mr.latencies.queue.readPercentiles(&queuePercentiles)
 		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -6116,9 +6132,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 			csv.Float64(mr.welfords.queue.Variance(mr.numTasks)),
 			csv.Float64(mr.welfords.task.Variance(mr.numTasks)),
 			percent,
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6141,7 +6156,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 
 		var percent csv.Field
 		{
-			const percentColMaxBytes = 5
+			const percentColMaxBytes = 6 // "100.00"
 			buf := make([]byte, 0, percentColMaxBytes)
 
 			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
@@ -6165,7 +6180,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 		mr.latencies.queue.readPercentiles(&queuePercentiles)
 		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -6203,9 +6218,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 			NullableDurationToCSVField(taskPercentiles[8]),
 			NullableDurationToCSVField(taskPercentiles[9]),
 			percent,
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6226,7 +6240,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 
 		var percent csv.Field
 		{
-			const percentColMaxBytes = 5
+			const percentColMaxBytes = 6 // "100.00"
 			buf := make([]byte, 0, percentColMaxBytes)
 
 			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
@@ -6247,7 +6261,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -6267,9 +6281,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 			csv.Float64(mr.welfords.queue.Variance(mr.numTasks)),
 			csv.Float64(mr.welfords.task.Variance(mr.numTasks)),
 			percent,
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6290,7 +6303,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 
 		var percent csv.Field
 		{
-			const percentColMaxBytes = 5
+			const percentColMaxBytes = 6 // "100.00"
 			buf := make([]byte, 0, percentColMaxBytes)
 
 			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
@@ -6311,7 +6324,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -6329,9 +6342,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 			csv.Uint(uint64(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()))),
 			csv.Uint(uint64(mr.maxTaskDuration)),
 			percent,
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6357,7 +6369,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileE
 		mr.latencies.queue.readPercentiles(&queuePercentiles)
 		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -6396,9 +6408,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileE
 			NullableDurationToCSVField(taskPercentiles[9]),
 			csv.Float64(mr.welfords.queue.Variance(mr.numTasks)),
 			csv.Float64(mr.welfords.task.Variance(mr.numTasks)),
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6424,7 +6435,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileE
 		mr.latencies.queue.readPercentiles(&queuePercentiles)
 		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -6461,9 +6472,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileE
 			NullableDurationToCSVField(taskPercentiles[7]),
 			NullableDurationToCSVField(taskPercentiles[8]),
 			NullableDurationToCSVField(taskPercentiles[9]),
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6484,7 +6494,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileD
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -6503,9 +6513,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileD
 			csv.Uint(uint64(mr.maxTaskDuration)),
 			csv.Float64(mr.welfords.queue.Variance(mr.numTasks)),
 			csv.Float64(mr.welfords.task.Variance(mr.numTasks)),
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6526,7 +6535,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileD
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -6543,9 +6552,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileD
 			csv.Uint(uint64(mr.minTaskDuration)),
 			csv.Uint(uint64(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()))),
 			csv.Uint(uint64(mr.maxTaskDuration)),
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6568,7 +6576,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 
 		var percent csv.Field
 		{
-			const percentColMaxBytes = 5
+			const percentColMaxBytes = 6 // "100.00"
 			buf := make([]byte, 0, percentColMaxBytes)
 
 			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
@@ -6592,7 +6600,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 		mr.latencies.queue.readPercentiles(&queuePercentiles)
 		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -6631,9 +6639,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 			csv.Float64(mr.welfords.queue.Variance(mr.numTasks)),
 			csv.Float64(mr.welfords.task.Variance(mr.numTasks)),
 			percent,
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6656,7 +6663,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 
 		var percent csv.Field
 		{
-			const percentColMaxBytes = 5
+			const percentColMaxBytes = 6 // "100.00"
 			buf := make([]byte, 0, percentColMaxBytes)
 
 			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
@@ -6680,7 +6687,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 		mr.latencies.queue.readPercentiles(&queuePercentiles)
 		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -6717,9 +6724,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 			NullableDurationToCSVField(taskPercentiles[8]),
 			NullableDurationToCSVField(taskPercentiles[9]),
 			percent,
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6740,7 +6746,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 
 		var percent csv.Field
 		{
-			const percentColMaxBytes = 5
+			const percentColMaxBytes = 6 // "100.00"
 			buf := make([]byte, 0, percentColMaxBytes)
 
 			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
@@ -6761,7 +6767,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -6780,9 +6786,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 			csv.Float64(mr.welfords.queue.Variance(mr.numTasks)),
 			csv.Float64(mr.welfords.task.Variance(mr.numTasks)),
 			percent,
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6803,7 +6808,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 
 		var percent csv.Field
 		{
-			const percentColMaxBytes = 5
+			const percentColMaxBytes = 6 // "100.00"
 			buf := make([]byte, 0, percentColMaxBytes)
 
 			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
@@ -6824,7 +6829,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -6841,9 +6846,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 			csv.Uint(uint64(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()))),
 			csv.Uint(uint64(mr.maxTaskDuration)),
 			percent,
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6869,7 +6873,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 		mr.latencies.queue.readPercentiles(&queuePercentiles)
 		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -6907,9 +6911,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 			NullableDurationToCSVField(taskPercentiles[9]),
 			csv.Float64(mr.welfords.queue.Variance(mr.numTasks)),
 			csv.Float64(mr.welfords.task.Variance(mr.numTasks)),
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6935,7 +6938,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 		mr.latencies.queue.readPercentiles(&queuePercentiles)
 		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -6971,9 +6974,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 			NullableDurationToCSVField(taskPercentiles[7]),
 			NullableDurationToCSVField(taskPercentiles[8]),
 			NullableDurationToCSVField(taskPercentiles[9]),
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6994,7 +6996,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -7012,9 +7014,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 			csv.Uint(uint64(mr.maxTaskDuration)),
 			csv.Float64(mr.welfords.queue.Variance(mr.numTasks)),
 			csv.Float64(mr.welfords.task.Variance(mr.numTasks)),
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -7035,7 +7036,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []csv.Field{
+		err := csv.WriteRow(cd.writer,
 			csv.Time(now),
 			csv.Time(mr.intervalID),
 			csv.Uint(uint(mr.numIntervalTasks)),
@@ -7051,9 +7052,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 			csv.Uint(uint64(mr.minTaskDuration)),
 			csv.Uint(uint64(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64()))),
 			csv.Uint(uint64(mr.maxTaskDuration)),
-		}
-
-		if err := csv.WriteRow(cd.writer, fields...); err != nil {
+		)
+		if err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}

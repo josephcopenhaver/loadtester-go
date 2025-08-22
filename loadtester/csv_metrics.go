@@ -169,6 +169,8 @@ func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
 		return
 	}
 
+	now := time.Now().UTC()
+
 	const (
 		prefix = `# {"done":{"end_time":"`
 		suffix = `"}}`
@@ -179,7 +181,7 @@ func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
 	buf := make([]byte, 0, len(prefix)+maxRFC3339NanoSerializedBytes+len(suffix))
 
 	buf = append(buf, prefix...)
-	buf = time.Now().UTC().AppendFormat(buf, time.RFC3339Nano)
+	buf = now.AppendFormat(buf, time.RFC3339Nano)
 	buf = append(buf, suffix...)
 
 	_, cd.writeErr = csvFile.Write(buf)
