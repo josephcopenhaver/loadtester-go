@@ -18,7 +18,7 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 		if lt.csvData.writeErr == nil {
 
-			lt.csvData.writer = csv.NewWriter(csvFile)
+			lt.csvData.writer = bufio.NewWriter(csvFile)
 
 			lt.csvData.writeErr = lt.writeOutputCsvHeaders()
 		}

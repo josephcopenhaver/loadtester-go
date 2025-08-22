@@ -4,6 +4,8 @@ import (
 	"math"
 	"slices"
 	"time"
+
+	"github.com/josephcopenhaver/loadtester-go/v5/loadtester/internal/csv"
 )
 
 type latencyList struct {
@@ -61,20 +63,33 @@ var percentileComputeOrder = [numPercentiles]uint8{
 	9, // 9999
 }
 
-func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
+type NullableDuration struct {
+	time.Duration
+	Valid bool
+}
+
+func NullableDurationToCSVField(v NullableDuration) csv.Field {
+	if !v.Valid {
+		return csv.Field{}
+	}
+
+	return csv.Uint(uint64(v.Duration))
+}
+
+func (ll *latencyList) readPercentiles(out *[numPercentiles]NullableDuration) {
 
 	maxIdx := len(ll.data) - 1
 	if maxIdx < 0 {
 		for i := range out {
-			out[i] = ""
+			out[i] = NullableDuration{}
 		}
 		return
 	}
 
 	if maxIdx == 0 {
-		s := durationToNanoString(ll.data[0])
+		v := NullableDuration{ll.data[0], true}
 		for i := range out {
-			out[i] = s
+			out[i] = v
 		}
 		return
 	}
@@ -90,7 +105,7 @@ func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
 
 			v := ll.data[((maxIdx*pt.n)+pt.rt)/pt.d]
 
-			out[pcv] = durationToNanoString(v)
+			out[pcv] = NullableDuration{v, true}
 			continue
 		}
 
@@ -106,7 +121,7 @@ func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
 
 			idx := int(fidx)
 			v := ll.data[idx]
-			out[pcv] = durationToNanoString(v)
+			out[pcv] = NullableDuration{v, true}
 
 			pci++
 			if pci >= numPercentiles {

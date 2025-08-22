@@ -470,6 +470,10 @@ func newLatencyLists(size int) latencyLists {
 // helpers
 //
 
+func timeToString(t time.Time) string {
+	return t.UTC().Format(time.RFC3339Nano)
+}
+
 func maxPendingTasks(numWorkers, numIntervalTasks int) int {
 	// if the number of workers exceeds the number
 	// of tasks then ideally we'll always have a
