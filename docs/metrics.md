@@ -55,6 +55,8 @@ In version 2.x of this "library" sums of queued and execution durations for all 
 
 | version | metric                 | change             |
 | ------- | ---------------------- | ------------------ |
+| 5.0.5   | p*_queue_latency       | :wavy_dash: BUGFIX: very high throughput configurations could lead to duplicate incorrect values being reported |
+| 5.0.5   | p*_task_latency        | :wavy_dash: BUGFIX: very high throughput configurations could lead to duplicate incorrect values being reported |
 | 5.x     | sample_time            | :wavy_dash: format |
 | 5.x     | interval_id            | :wavy_dash: format |
 | 5.x     | sum_lag                | :wavy_dash: format |

@@ -35,7 +35,7 @@ func newPTarget(percentileTimes100, n, d int) percentileTarget {
 const numPercentiles = 10
 
 var percentileTargets = [numPercentiles]percentileTarget{
-	newPTarget(2500, 1, 4), // 0
+	newPTarget(2500, 1, 4), // 0 (percentile target index)
 	newPTarget(5000, 1, 2), // 1
 	newPTarget(7500, 3, 4), // 2
 	// next val's n & d are intentionally doubled so last argument (d) can be even for integer rounding term ( d/2 )
@@ -49,7 +49,7 @@ var percentileTargets = [numPercentiles]percentileTarget{
 }
 
 var percentileComputeOrder = [numPercentiles]uint8{
-	0, // 1
+	0, // 1 (numerator value: which should never decrease)
 	1, // 1
 	2, // 3
 	3, // 8
@@ -95,6 +95,12 @@ func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
 		}
 
 		// would overflow, time to use expensive floats
+		//
+		// this inner loop will finish populating the remaining cells
+		// and the parent loop will never be entered into again
+		//
+		// consider this a terminal return block that happens to be a loop
+		// as well
 		for {
 			fidx := math.Round(float64(pt.n) / float64(pt.d) * float64(maxIdx))
 
@@ -108,6 +114,7 @@ func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
 			}
 
 			pcv = percentileComputeOrder[pci]
+			pt = percentileTargets[pcv]
 		}
 	}
 }
