@@ -68,6 +68,8 @@ type NullableDuration struct {
 	Valid bool
 }
 
+// NullableDurationToCSVField will return an empty Field value
+// (which renders as an empty string) when the duration is invalid/null
 func NullableDurationToCSVField(v NullableDuration) csv.Field {
 	if !v.Valid {
 		return csv.Field{}
