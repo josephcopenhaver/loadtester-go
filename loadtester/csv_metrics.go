@@ -1,13 +1,14 @@
 package loadtester
 
 import (
-	"encoding/csv"
-	"encoding/json"
+	"bufio"
+	"encoding/json/v2"
 	"io"
 	"os"
-	"strconv"
 	"sync"
 	"time"
+
+	"github.com/josephcopenhaver/loadtester-go/v5/loadtester/internal/csv"
 )
 
 const (
@@ -16,7 +17,7 @@ const (
 
 type csvData struct {
 	outputFilename string
-	writer         *csv.Writer
+	writer         *bufio.Writer
 	flushInterval  time.Duration
 	flushDeadline  time.Time
 
@@ -48,13 +49,18 @@ func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
 		return err
 	}
 
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
+	{
+		err := json.MarshalWrite(w,
+			struct {
+				C any `json:"config"`
+			}{lt.loadtestConfigAsJson()},
+		)
+		if err != nil {
+			return err
+		}
+	}
 
-	err := enc.Encode(struct {
-		C any `json:"config"`
-	}{lt.loadtestConfigAsJson()})
-	if err != nil {
+	if _, err := w.Write([]byte("\n")); err != nil {
 		return err
 	}
 
@@ -65,80 +71,78 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 
 	cd := &lt.csvData
 
-	fields := append(make([]string, 0, maxCsvNumColumns),
-		"sample_time",
-		"interval_id",        // gauge
-		"num_interval_tasks", // gauge
-		"lag",                // gauge
-		"sum_lag",
-		"num_tasks",
-		"num_pass",
-		"num_fail",
+	fields := append(make([]csv.Field, 0, maxCsvNumColumns),
+		csv.Str("sample_time"),
+		csv.Str("interval_id"),        // gauge
+		csv.Str("num_interval_tasks"), // gauge
+		csv.Str("lag"),                // gauge
+		csv.Str("sum_lag"),
+		csv.Str("num_tasks"),
+		csv.Str("num_pass"),
+		csv.Str("num_fail"),
 	)
 
 	if lt.retry {
 		fields = append(fields,
-			"num_retry",
+			csv.Str("num_retry"),
 		)
 	}
 
 	fields = append(fields,
-		"num_panic",
-		"min_queue_latency",
-		"avg_queue_latency",
-		"max_queue_latency",
-		"min_task_latency",
-		"avg_task_latency",
-		"max_task_latency",
+		csv.Str("num_panic"),
+		csv.Str("min_queue_latency"),
+		csv.Str("avg_queue_latency"),
+		csv.Str("max_queue_latency"),
+		csv.Str("min_task_latency"),
+		csv.Str("avg_task_latency"),
+		csv.Str("max_task_latency"),
 	)
 
 	if lt.percentilesEnabled {
 		fields = append(fields,
-			"p25_queue_latency",
-			"p50_queue_latency",
-			"p75_queue_latency",
-			"p80_queue_latency",
-			"p85_queue_latency",
-			"p90_queue_latency",
-			"p95_queue_latency",
-			"p99_queue_latency",
-			"p99p9_queue_latency",
-			"p99p99_queue_latency",
-			"p25_task_latency",
-			"p50_task_latency",
-			"p75_task_latency",
-			"p80_task_latency",
-			"p85_task_latency",
-			"p90_task_latency",
-			"p95_task_latency",
-			"p99_task_latency",
-			"p99p9_task_latency",
-			"p99p99_task_latency",
+			csv.Str("p25_queue_latency"),
+			csv.Str("p50_queue_latency"),
+			csv.Str("p75_queue_latency"),
+			csv.Str("p80_queue_latency"),
+			csv.Str("p85_queue_latency"),
+			csv.Str("p90_queue_latency"),
+			csv.Str("p95_queue_latency"),
+			csv.Str("p99_queue_latency"),
+			csv.Str("p99p9_queue_latency"),
+			csv.Str("p99p99_queue_latency"),
+			csv.Str("p25_task_latency"),
+			csv.Str("p50_task_latency"),
+			csv.Str("p75_task_latency"),
+			csv.Str("p80_task_latency"),
+			csv.Str("p85_task_latency"),
+			csv.Str("p90_task_latency"),
+			csv.Str("p95_task_latency"),
+			csv.Str("p99_task_latency"),
+			csv.Str("p99p9_task_latency"),
+			csv.Str("p99p99_task_latency"),
 		)
 	}
 
 	if lt.variancesEnabled {
 		fields = append(fields,
-			"queue_latency_variance",
-			"task_latency_variance",
+			csv.Str("queue_latency_variance"),
+			csv.Str("task_latency_variance"),
 		)
 	}
 
 	if lt.maxTasks > 0 {
 		fields = append(fields,
-			"percent_done",
+			csv.Str("percent_done"),
 		)
 	}
 
-	err := cd.writer.Write(fields)
+	err := csv.WriteRow(cd.writer, fields...)
 	if err != nil {
 		return err
 	}
 
 	// ensure headers flush asap
-	cd.writer.Flush()
-
-	return cd.writer.Error()
+	return cd.writer.Flush()
 }
 
 func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
@@ -160,28 +164,25 @@ func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
 		return
 	}
 
-	cd.writer.Flush()
-
-	cd.writeErr = cd.writer.Error()
+	cd.writeErr = cd.writer.Flush()
 	if cd.writeErr != nil {
 		return
 	}
 
-	_, cd.writeErr = csvFile.Write([]byte("# {\"done\":{\"end_time\":\"" + timeToString(time.Now()) + "\"}}"))
-}
+	now := time.Now().UTC()
 
-//
-// helpers
-//
+	const (
+		prefix = `# {"done":{"end_time":"`
+		suffix = `"}}`
 
-func timeToString(t time.Time) string {
-	return t.UTC().Format(time.RFC3339Nano)
-}
+		maxRFC3339NanoSerializedBytes = 30
+	)
 
-func timeToUnixNanoString(t time.Time) string {
-	return strconv.FormatInt(t.UnixNano(), 10)
-}
+	buf := make([]byte, 0, len(prefix)+maxRFC3339NanoSerializedBytes+len(suffix))
 
-func durationToNanoString(d time.Duration) string {
-	return strconv.FormatInt(d.Nanoseconds(), 10)
+	buf = append(buf, prefix...)
+	buf = now.AppendFormat(buf, time.RFC3339Nano)
+	buf = append(buf, suffix...)
+
+	_, cd.writeErr = csvFile.Write(buf)
 }

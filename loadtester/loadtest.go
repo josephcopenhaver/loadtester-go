@@ -337,26 +337,28 @@ func (lt *Loadtest) addWorker(ctx context.Context, workerID int) {
 	})
 }
 
-func (lt *Loadtest) loadtestConfigAsJson() any {
-	type Config struct {
-		StartTime              string `json:"start_time"`
-		Interval               string `json:"interval"`
-		MaxIntervalTasks       int    `json:"max_interval_tasks"`
-		MaxTasks               int    `json:"max_tasks"`
-		MaxWorkers             int    `json:"max_workers"`
-		NumIntervalTasks       int    `json:"num_interval_tasks"`
-		NumWorkers             int    `json:"num_workers"`
-		MetricsEnabled         bool   `json:"metrics_enabled"`
-		MetricsFlushInterval   string `json:"metrics_flush_interval"`
-		FlushRetriesOnShutdown bool   `json:"flush_retries_on_shutdown"`
-		FlushRetriesTimeout    string `json:"flush_retries_timeout"`
-		Retry                  bool   `json:"retry_enabled"`
-		PercentilesEnabled     bool   `json:"percentiles_enabled"`
-		VariancesEnabled       bool   `json:"variances_enabled"`
-		MetaProviderEnabled    bool   `json:"metadata_provider_enabled"`
-	}
+type printableConfig struct {
+	StartTime              string `json:"start_time"`
+	Interval               string `json:"interval"`
+	MaxIntervalTasks       int    `json:"max_interval_tasks"`
+	MaxTasks               int    `json:"max_tasks"`
+	MaxWorkers             int    `json:"max_workers"`
+	NumIntervalTasks       int    `json:"num_interval_tasks"`
+	NumWorkers             int    `json:"num_workers"`
+	MetricsEnabled         bool   `json:"metrics_enabled"`
+	MetricsFlushInterval   string `json:"metrics_flush_interval"`
+	FlushRetriesOnShutdown bool   `json:"flush_retries_on_shutdown"`
+	FlushRetriesTimeout    string `json:"flush_retries_timeout"`
+	Retry                  bool   `json:"retry_enabled"`
+	PercentilesEnabled     bool   `json:"percentiles_enabled"`
+	VariancesEnabled       bool   `json:"variances_enabled"`
+	MetaProviderEnabled    bool   `json:"metadata_provider_enabled"`
+}
 
-	return Config{
+func (lt *Loadtest) loadtestConfigAsJson() (v struct {
+	Cfg printableConfig `json:"config"`
+}) {
+	v.Cfg = printableConfig{
 		StartTime:              timeToString(lt.startTime),
 		Interval:               lt.interval.String(),
 		MaxIntervalTasks:       lt.maxIntervalTasks,
@@ -373,6 +375,7 @@ func (lt *Loadtest) loadtestConfigAsJson() any {
 		VariancesEnabled:       lt.variancesEnabled,
 		MetaProviderEnabled:    lt.metaProviderEnabled,
 	}
+	return
 }
 
 func (lt *Loadtest) workerLoop(ctx context.Context, workerID int) {
@@ -469,6 +472,10 @@ func newLatencyLists(size int) latencyLists {
 //
 // helpers
 //
+
+func timeToString(t time.Time) string {
+	return t.UTC().Format(time.RFC3339Nano)
+}
 
 func maxPendingTasks(numWorkers, numIntervalTasks int) int {
 	// if the number of workers exceeds the number

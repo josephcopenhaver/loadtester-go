@@ -4,6 +4,8 @@ import (
 	"math"
 	"slices"
 	"time"
+
+	"github.com/josephcopenhaver/loadtester-go/v5/loadtester/internal/csv"
 )
 
 type latencyList struct {
@@ -19,17 +21,17 @@ func (ll *latencyList) reset() {
 }
 
 type percentileTarget struct {
-	n  int // numerator
-	d  int // denominator
-	rt int // integerRoundingTerm
+	n  uint // numerator
+	d  uint // denominator
+	rt uint // integerRoundingTerm
 }
 
 // newPTarget constructs a new integer rational multiplication lookup table record and validates the input elements
-func newPTarget(percentileTimes100, n, d int) percentileTarget {
-	if percentileTimes100 <= 0 || n <= 0 || d <= 0 || n >= d || d%2 != 0 || (10000%d != 0) || ((10000/d)*n != percentileTimes100) {
+func newPTarget(percentileTimes100, n, d uint) percentileTarget {
+	if percentileTimes100 == 0 || n == 0 || d == 0 || n >= d || d%2 != 0 || (10000%d != 0) || ((10000/d)*n != percentileTimes100) {
 		panic("should never happen")
 	}
-	return percentileTarget{n, d, d >> 1}
+	return percentileTarget{n, d, d / 2}
 }
 
 const numPercentiles = 10
@@ -61,20 +63,35 @@ var percentileComputeOrder = [numPercentiles]uint8{
 	9, // 9999
 }
 
-func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
+type NullableDuration struct {
+	time.Duration
+	Valid bool
+}
+
+// NullableDurationToCSVField will return an empty Field value
+// (which renders as an empty string) when the duration is invalid/null
+func NullableDurationToCSVField(v NullableDuration) csv.Field {
+	if !v.Valid {
+		return csv.Field{}
+	}
+
+	return csv.Uint(uint64(v.Duration))
+}
+
+func (ll *latencyList) readPercentiles(out *[numPercentiles]NullableDuration) {
 
 	maxIdx := len(ll.data) - 1
 	if maxIdx < 0 {
 		for i := range out {
-			out[i] = ""
+			out[i] = NullableDuration{}
 		}
 		return
 	}
 
 	if maxIdx == 0 {
-		s := durationToNanoString(ll.data[0])
+		v := NullableDuration{ll.data[0], true}
 		for i := range out {
-			out[i] = s
+			out[i] = v
 		}
 		return
 	}
@@ -85,12 +102,12 @@ func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
 		pt := percentileTargets[pcv]
 
 		// check for integer overflow
-		if pt.n <= ((math.MaxInt - pt.rt) / maxIdx) {
+		if pt.n <= ((math.MaxUint - pt.rt) / uint(maxIdx)) {
 			// integer math multiplication operation will not overflow
 
-			v := ll.data[((maxIdx*pt.n)+pt.rt)/pt.d]
+			v := ll.data[((uint(maxIdx)*pt.n)+pt.rt)/pt.d]
 
-			out[pcv] = durationToNanoString(v)
+			out[pcv] = NullableDuration{v, true}
 			continue
 		}
 
@@ -106,7 +123,7 @@ func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
 
 			idx := int(fidx)
 			v := ll.data[idx]
-			out[pcv] = durationToNanoString(v)
+			out[pcv] = NullableDuration{v, true}
 
 			pci++
 			if pci >= numPercentiles {

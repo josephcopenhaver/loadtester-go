@@ -104,8 +104,7 @@ func (lt *Loadtest) resultsHandler_retry{{if .RetriesEnabled}}Enabled{{else}}Dis
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.writer.Flush(); err != nil && cd.err() == nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
