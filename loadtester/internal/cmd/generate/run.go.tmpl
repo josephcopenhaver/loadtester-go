@@ -18,7 +18,17 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 		if lt.csvData.writeErr == nil {
 
-			lt.csvData.writer = csv.NewWriter(csvFile)
+			bw := bufio.NewWriter(csvFile)
+			lt.csvData.bufWriter = bw
+
+			cw, err := csv.NewWriter(
+				csv.WriterOpts().Writer(bw),
+				csv.WriterOpts().InitialRecordBufferSize(16384),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to create CSV writer: %w", err)
+			}
+			lt.csvData.writer = cw
 
 			lt.csvData.writeErr = lt.writeOutputCsvHeaders()
 		}

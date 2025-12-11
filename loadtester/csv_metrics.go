@@ -1,13 +1,15 @@
 package loadtester
 
 import (
-	"encoding/csv"
+	"bufio"
 	"encoding/json"
 	"io"
+	"math"
 	"os"
-	"strconv"
 	"sync"
 	"time"
+
+	"github.com/josephcopenhaver/csv-go/v3"
 )
 
 const (
@@ -16,6 +18,7 @@ const (
 
 type csvData struct {
 	outputFilename string
+	bufWriter      *bufio.Writer
 	writer         *csv.Writer
 	flushInterval  time.Duration
 	flushDeadline  time.Time
@@ -130,15 +133,15 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 		)
 	}
 
-	err := cd.writer.Write(fields)
+	_, err := cd.writer.WriteHeader(
+		csv.WriteHeaderOpts().Headers(fields...),
+	)
 	if err != nil {
 		return err
 	}
 
 	// ensure headers flush asap
-	cd.writer.Flush()
-
-	return cd.writer.Error()
+	return cd.bufWriter.Flush()
 }
 
 func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
@@ -160,9 +163,7 @@ func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
 		return
 	}
 
-	cd.writer.Flush()
-
-	cd.writeErr = cd.writer.Error()
+	cd.writeErr = cd.bufWriter.Flush()
 	if cd.writeErr != nil {
 		return
 	}
@@ -178,10 +179,29 @@ func timeToString(t time.Time) string {
 	return t.UTC().Format(time.RFC3339Nano)
 }
 
-func timeToUnixNanoString(t time.Time) string {
-	return strconv.FormatInt(t.UnixNano(), 10)
+func csvFmtVariance(rw *csv.RecordWriter, f float64) {
+	f = math.Round(f)
+
+	if math.IsNaN(f) {
+		rw.String("")
+		return
+	}
+
+	v := int64(math.MaxInt64)
+	if !math.IsInf(f, 1) {
+		if n := int64(f); n >= 0 {
+			v = n
+		}
+	}
+
+	rw.Int64(v)
 }
 
-func durationToNanoString(d time.Duration) string {
-	return strconv.FormatInt(d.Nanoseconds(), 10)
+func csvFmtLatency(rw *csv.RecordWriter, n latency) {
+	if n < 0 {
+		rw.String("")
+		return
+	}
+
+	rw.Int64(int64(n))
 }
