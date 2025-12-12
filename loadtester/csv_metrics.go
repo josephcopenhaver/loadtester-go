@@ -179,22 +179,27 @@ func timeToString(t time.Time) string {
 	return t.UTC().Format(time.RFC3339Nano)
 }
 
-func csvFmtVariance(rw *csv.RecordWriter, f float64) {
+func csvFmtLatencyVarianceAsInt64(rw *csv.RecordWriter, f float64) {
+	const int64OverflowCutoff = float64(uint64(1) << 63)
+
 	f = math.Round(f)
 
 	if math.IsNaN(f) {
-		rw.String("")
+		rw.UncheckedUTF8String("")
 		return
 	}
 
-	v := int64(math.MaxInt64)
-	if !math.IsInf(f, 1) {
-		if n := int64(f); n >= 0 {
-			v = n
-		}
+	if f < 0 {
+		rw.UncheckedUTF8String("0")
+		return
 	}
 
-	rw.Int64(v)
+	if f >= int64OverflowCutoff {
+		rw.Int64(math.MaxInt64)
+		return
+	}
+
+	rw.Int64(int64(f))
 }
 
 func csvFmtLatency(rw *csv.RecordWriter, n latency) {

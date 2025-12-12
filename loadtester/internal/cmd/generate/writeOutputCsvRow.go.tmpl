@@ -81,8 +81,8 @@ func (lt *Loadtest) writeOutputCsvRow_retry{{if .RetriesEnabled}}Enabled{{else}}
 		csvFmtLatency(rw, taskPercentiles[7])
 		csvFmtLatency(rw, taskPercentiles[8])
 		csvFmtLatency(rw, taskPercentiles[9]){{end}}{{if .VarianceEnabled}}
-		csvFmtVariance(rw, mr.welfords.queue.Variance(mr.numTasks))
-		csvFmtVariance(rw, mr.welfords.task.Variance(mr.numTasks)){{end}}{{if .MaxTasksGTZero}}
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks)){{end}}{{if .MaxTasksGTZero}}
 		rw.UncheckedUTF8Bytes(percent){{end}}
 
 		if _, err := rw.Write(); err != nil {

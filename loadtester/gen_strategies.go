@@ -6153,8 +6153,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 		csvFmtLatency(rw, taskPercentiles[7])
 		csvFmtLatency(rw, taskPercentiles[8])
 		csvFmtLatency(rw, taskPercentiles[9])
-		csvFmtVariance(rw, mr.welfords.queue.Variance(mr.numTasks))
-		csvFmtVariance(rw, mr.welfords.task.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
 		rw.UncheckedUTF8Bytes(percent)
 
 		if _, err := rw.Write(); err != nil {
@@ -6302,8 +6302,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 		rw.Duration(mr.minTaskDuration)
 		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
 		rw.Duration(mr.maxTaskDuration)
-		csvFmtVariance(rw, mr.welfords.queue.Variance(mr.numTasks))
-		csvFmtVariance(rw, mr.welfords.task.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
 		rw.UncheckedUTF8Bytes(percent)
 
 		if _, err := rw.Write(); err != nil {
@@ -6432,8 +6432,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileE
 		csvFmtLatency(rw, taskPercentiles[7])
 		csvFmtLatency(rw, taskPercentiles[8])
 		csvFmtLatency(rw, taskPercentiles[9])
-		csvFmtVariance(rw, mr.welfords.queue.Variance(mr.numTasks))
-		csvFmtVariance(rw, mr.welfords.task.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
 
 		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
@@ -6541,8 +6541,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileD
 		rw.Duration(mr.minTaskDuration)
 		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
 		rw.Duration(mr.maxTaskDuration)
-		csvFmtVariance(rw, mr.welfords.queue.Variance(mr.numTasks))
-		csvFmtVariance(rw, mr.welfords.task.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
 
 		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
@@ -6668,8 +6668,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 		csvFmtLatency(rw, taskPercentiles[7])
 		csvFmtLatency(rw, taskPercentiles[8])
 		csvFmtLatency(rw, taskPercentiles[9])
-		csvFmtVariance(rw, mr.welfords.queue.Variance(mr.numTasks))
-		csvFmtVariance(rw, mr.welfords.task.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
 		rw.UncheckedUTF8Bytes(percent)
 
 		if _, err := rw.Write(); err != nil {
@@ -6815,8 +6815,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 		rw.Duration(mr.minTaskDuration)
 		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
 		rw.Duration(mr.maxTaskDuration)
-		csvFmtVariance(rw, mr.welfords.queue.Variance(mr.numTasks))
-		csvFmtVariance(rw, mr.welfords.task.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
 		rw.UncheckedUTF8Bytes(percent)
 
 		if _, err := rw.Write(); err != nil {
@@ -6943,8 +6943,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 		csvFmtLatency(rw, taskPercentiles[7])
 		csvFmtLatency(rw, taskPercentiles[8])
 		csvFmtLatency(rw, taskPercentiles[9])
-		csvFmtVariance(rw, mr.welfords.queue.Variance(mr.numTasks))
-		csvFmtVariance(rw, mr.welfords.task.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
 
 		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
@@ -7050,8 +7050,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 		rw.Duration(mr.minTaskDuration)
 		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
 		rw.Duration(mr.maxTaskDuration)
-		csvFmtVariance(rw, mr.welfords.queue.Variance(mr.numTasks))
-		csvFmtVariance(rw, mr.welfords.task.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
 
 		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
