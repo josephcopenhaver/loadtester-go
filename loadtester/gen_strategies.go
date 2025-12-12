@@ -6090,6 +6090,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 
 		now := time.Now()
 
+		// Calculate percentage with two decimal places at most using fixed-point arithmetic
+		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
 			var buf [5]byte
@@ -6178,6 +6180,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 
 		now := time.Now()
 
+		// Calculate percentage with two decimal places at most using fixed-point arithmetic
+		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
 			var buf [5]byte
@@ -6262,6 +6266,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 
 		now := time.Now()
 
+		// Calculate percentage with two decimal places at most using fixed-point arithmetic
+		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
 			var buf [5]byte
@@ -6325,6 +6331,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 
 		now := time.Now()
 
+		// Calculate percentage with two decimal places at most using fixed-point arithmetic
+		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
 			var buf [5]byte
@@ -6606,6 +6614,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 
 		now := time.Now()
 
+		// Calculate percentage with two decimal places at most using fixed-point arithmetic
+		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
 			var buf [5]byte
@@ -6693,6 +6703,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 
 		now := time.Now()
 
+		// Calculate percentage with two decimal places at most using fixed-point arithmetic
+		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
 			var buf [5]byte
@@ -6776,6 +6788,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 
 		now := time.Now()
 
+		// Calculate percentage with two decimal places at most using fixed-point arithmetic
+		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
 			var buf [5]byte
@@ -6838,6 +6852,8 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 
 		now := time.Now()
 
+		// Calculate percentage with two decimal places at most using fixed-point arithmetic
+		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
 			var buf [5]byte

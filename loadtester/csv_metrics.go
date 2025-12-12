@@ -155,20 +155,45 @@ func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
 		}
 	}()
 
-	if cd.writeErr != nil {
+	defer func() {
+		if cd.writeErr != nil {
+			return
+		}
+
+		const prefix = `# {"done":{"end_time":"`
+		const maxLenSerializedTime = 35
+		const suffix = `"}}`
+
+		var buf [len(prefix) + maxLenSerializedTime + len(suffix)]byte
+
+		footer := append(buf[:0], prefix...)
+		fw := csv.FieldWriters().Time(time.Now().UTC())
+		footer, _ = fw.AppendText(footer)
+		footer = append(footer, suffix...)
+
+		_, cd.writeErr = csvFile.Write(footer)
+		if cd.writeErr != nil {
+			return
+		}
+	}()
+
+	if cd.bufWriter == nil {
 		return
 	}
+
+	defer func() {
+		if err := cd.bufWriter.Flush(); err != nil && cd.writeErr == nil {
+			cd.writeErr = err
+		}
+	}()
 
 	if cd.writer == nil {
 		return
 	}
 
-	cd.writeErr = cd.bufWriter.Flush()
-	if cd.writeErr != nil {
-		return
+	if err := cd.writer.Close(); err != nil && cd.writeErr == nil {
+		cd.writeErr = err
 	}
-
-	_, cd.writeErr = csvFile.Write([]byte("# {\"done\":{\"end_time\":\"" + timeToString(time.Now()) + "\"}}"))
 }
 
 //
@@ -190,7 +215,7 @@ func csvFmtLatencyVarianceAsInt64(rw *csv.RecordWriter, f float64) {
 	}
 
 	if f < 0 {
-		rw.UncheckedUTF8String("0")
+		rw.UncheckedUTF8Rune('0')
 		return
 	}
 

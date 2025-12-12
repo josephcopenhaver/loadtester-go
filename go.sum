@@ -1,7 +1,7 @@
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/josephcopenhaver/csv-go/v3 v3.4.0 h1:FvU/26uyIzN46JH+qruQJ4pyIMtzM+6iy3ATBkFCnds=
-github.com/josephcopenhaver/csv-go/v3 v3.4.0/go.mod h1:QkpJ8VOqv2VuniYZnz/myjG08S1Ii0kqUq9doY5aInU=
+github.com/josephcopenhaver/csv-go/v3 v3.5.0 h1:GEAgY2N1LH3qezWQoSZvPg5AGqtbJQqRcssBEpi+55o=
+github.com/josephcopenhaver/csv-go/v3 v3.5.0/go.mod h1:QkpJ8VOqv2VuniYZnz/myjG08S1Ii0kqUq9doY5aInU=
 github.com/josephcopenhaver/tbdd-go v1.2.0 h1:fAR/T7y/W7PGNFXlfYO7k7I8WhhEqRq9+Cxmzxm77ws=
 github.com/josephcopenhaver/tbdd-go v1.2.0/go.mod h1:/TdWC7pmYqB4SuQ/8BkGXzfelRDgPtDyjOUnsY8eM+Y=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
