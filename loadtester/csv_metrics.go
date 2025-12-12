@@ -185,7 +185,7 @@ func csvFmtLatencyVarianceAsInt64(rw *csv.RecordWriter, f float64) {
 	f = math.Round(f)
 
 	if math.IsNaN(f) {
-		rw.UncheckedUTF8String("")
+		rw.Empty()
 		return
 	}
 
@@ -204,7 +204,7 @@ func csvFmtLatencyVarianceAsInt64(rw *csv.RecordWriter, f float64) {
 
 func csvFmtLatency(rw *csv.RecordWriter, n latency) {
 	if n < 0 {
-		rw.String("")
+		rw.Empty()
 		return
 	}
 

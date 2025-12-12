@@ -30,13 +30,20 @@ func (wv *welfordVariance) Variance(count int) float64 {
 	}
 
 	result := wv.m2 / float64(count)
-	// if statement defends against returning a negative value
+
+	// if statement would defends against returning a negative value
 	// given all update float values are non-negative and
 	// multiplication / division operations using extremely small
 	// non-negative values can introduce negative epsilons
-	if result < 0 {
-		result = 0
-	}
+	//
+	// however in higher presentation layers we round and check for
+	// negative values before displaying them so skipping it but
+	// leaving it here for posterity.
+	//
+	// if result < 0 {
+	// 	result = 0
+	// }
+
 	return result
 }
 

@@ -10,7 +10,7 @@ import (
 	"github.com/josephcopenhaver/csv-go/v3"
 )
 
-func Test_varianceFloatString(t *testing.T) {
+func Test_csvFmtLatencyVarianceAsInt64(t *testing.T) {
 	toStr := func(f float64) string {
 
 		var buf bytes.Buffer

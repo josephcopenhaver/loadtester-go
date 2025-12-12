@@ -74,9 +74,9 @@ func (ll *latencyList) readPercentiles(out *[numPercentiles]latency) {
 	}
 
 	if maxIdx == 0 {
-		v := ll.data[0]
+		v := latency(ll.data[0])
 		for i := range out {
-			out[i] = latency(v)
+			out[i] = v
 		}
 		return
 	}
@@ -90,9 +90,7 @@ func (ll *latencyList) readPercentiles(out *[numPercentiles]latency) {
 		if pt.n <= ((math.MaxInt - pt.rt) / maxIdx) {
 			// integer math multiplication operation will not overflow
 
-			v := ll.data[((maxIdx*pt.n)+pt.rt)/pt.d]
-
-			out[pcv] = latency(v)
+			out[pcv] = latency(ll.data[((maxIdx*pt.n)+pt.rt)/pt.d])
 			continue
 		}
 
@@ -107,8 +105,7 @@ func (ll *latencyList) readPercentiles(out *[numPercentiles]latency) {
 			fidx := math.Round(float64(pt.n) / float64(pt.d) * float64(maxIdx))
 
 			idx := int(fidx)
-			v := ll.data[idx]
-			out[pcv] = latency(v)
+			out[pcv] = latency(ll.data[idx])
 
 			pci++
 			if pci >= numPercentiles {
