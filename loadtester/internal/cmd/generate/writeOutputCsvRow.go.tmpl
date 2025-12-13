@@ -19,7 +19,7 @@ func (lt *Loadtest) writeOutputCsvRow_retry{{if .RetriesEnabled}}Enabled{{else}}
 		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
-			var buf [5]byte
+			var buf [6]byte
 
 			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
 			low := high % (percentDonePrecisionFactor / 100)

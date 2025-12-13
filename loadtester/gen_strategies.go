@@ -1216,12 +1216,15 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 
 		if lt.csvData.writeErr == nil {
 
-			bw := bufio.NewWriter(csvFile)
+			bw := bufio.NewWriterSize(csvFile, 16384 /* 16 KB buffer allows for at least 3x of the default interval record size total space possibly utilized */)
 			lt.csvData.bufWriter = bw
 
 			cw, err := csv.NewWriter(
 				csv.WriterOpts().Writer(bw),
-				csv.WriterOpts().InitialRecordBufferSize(16384),
+				// 805 = 39 columns with 38 being base10 ints, and 6 for a percent indicator
+				//
+				// base-2 rounding up to 896 for memory alignment
+				csv.WriterOpts().InitialRecordBufferSize(896),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to create CSV writer: %w", err)
@@ -2752,12 +2755,15 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 
 		if lt.csvData.writeErr == nil {
 
-			bw := bufio.NewWriter(csvFile)
+			bw := bufio.NewWriterSize(csvFile, 16384 /* 16 KB buffer allows for at least 3x of the default interval record size total space possibly utilized */)
 			lt.csvData.bufWriter = bw
 
 			cw, err := csv.NewWriter(
 				csv.WriterOpts().Writer(bw),
-				csv.WriterOpts().InitialRecordBufferSize(16384),
+				// 805 = 39 columns with 38 being base10 ints, and 6 for a percent indicator
+				//
+				// base-2 rounding up to 896 for memory alignment
+				csv.WriterOpts().InitialRecordBufferSize(896),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to create CSV writer: %w", err)
@@ -4194,12 +4200,15 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 
 		if lt.csvData.writeErr == nil {
 
-			bw := bufio.NewWriter(csvFile)
+			bw := bufio.NewWriterSize(csvFile, 16384 /* 16 KB buffer allows for at least 3x of the default interval record size total space possibly utilized */)
 			lt.csvData.bufWriter = bw
 
 			cw, err := csv.NewWriter(
 				csv.WriterOpts().Writer(bw),
-				csv.WriterOpts().InitialRecordBufferSize(16384),
+				// 805 = 39 columns with 38 being base10 ints, and 6 for a percent indicator
+				//
+				// base-2 rounding up to 896 for memory alignment
+				csv.WriterOpts().InitialRecordBufferSize(896),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to create CSV writer: %w", err)
@@ -5158,12 +5167,15 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 
 		if lt.csvData.writeErr == nil {
 
-			bw := bufio.NewWriter(csvFile)
+			bw := bufio.NewWriterSize(csvFile, 16384 /* 16 KB buffer allows for at least 3x of the default interval record size total space possibly utilized */)
 			lt.csvData.bufWriter = bw
 
 			cw, err := csv.NewWriter(
 				csv.WriterOpts().Writer(bw),
-				csv.WriterOpts().InitialRecordBufferSize(16384),
+				// 805 = 39 columns with 38 being base10 ints, and 6 for a percent indicator
+				//
+				// base-2 rounding up to 896 for memory alignment
+				csv.WriterOpts().InitialRecordBufferSize(896),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to create CSV writer: %w", err)
@@ -6094,7 +6106,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
-			var buf [5]byte
+			var buf [6]byte
 
 			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
 			low := high % (percentDonePrecisionFactor / 100)
@@ -6184,7 +6196,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
-			var buf [5]byte
+			var buf [6]byte
 
 			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
 			low := high % (percentDonePrecisionFactor / 100)
@@ -6270,7 +6282,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
-			var buf [5]byte
+			var buf [6]byte
 
 			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
 			low := high % (percentDonePrecisionFactor / 100)
@@ -6335,7 +6347,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
-			var buf [5]byte
+			var buf [6]byte
 
 			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
 			low := high % (percentDonePrecisionFactor / 100)
@@ -6618,7 +6630,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
-			var buf [5]byte
+			var buf [6]byte
 
 			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
 			low := high % (percentDonePrecisionFactor / 100)
@@ -6707,7 +6719,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
-			var buf [5]byte
+			var buf [6]byte
 
 			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
 			low := high % (percentDonePrecisionFactor / 100)
@@ -6792,7 +6804,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
-			var buf [5]byte
+			var buf [6]byte
 
 			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
 			low := high % (percentDonePrecisionFactor / 100)
@@ -6856,7 +6868,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 		// to avoid floating-point operations in hot path.
 		var percent []byte
 		{
-			var buf [5]byte
+			var buf [6]byte
 
 			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
 			low := high % (percentDonePrecisionFactor / 100)
