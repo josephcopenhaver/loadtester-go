@@ -6102,25 +6102,40 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 
 		now := time.Now()
 
-		// Calculate percentage with two decimal places at most using fixed-point arithmetic
-		// to avoid floating-point operations in hot path.
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
 		var percent []byte
 		{
-			var buf [6]byte
+			const bufSize = 6
 
-			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
-
-			percent = strconv.AppendInt(buf[:0], int64(high), 10)
-
-			if low < 10 {
-				percent = append(percent, ".0"...)
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				percent = append(percent, '.')
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.AppendInt(percent, int64(low), 10)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
@@ -6192,25 +6207,40 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 
 		now := time.Now()
 
-		// Calculate percentage with two decimal places at most using fixed-point arithmetic
-		// to avoid floating-point operations in hot path.
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
 		var percent []byte
 		{
-			var buf [6]byte
+			const bufSize = 6
 
-			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
-
-			percent = strconv.AppendInt(buf[:0], int64(high), 10)
-
-			if low < 10 {
-				percent = append(percent, ".0"...)
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				percent = append(percent, '.')
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.AppendInt(percent, int64(low), 10)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
@@ -6278,25 +6308,40 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 
 		now := time.Now()
 
-		// Calculate percentage with two decimal places at most using fixed-point arithmetic
-		// to avoid floating-point operations in hot path.
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
 		var percent []byte
 		{
-			var buf [6]byte
+			const bufSize = 6
 
-			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
-
-			percent = strconv.AppendInt(buf[:0], int64(high), 10)
-
-			if low < 10 {
-				percent = append(percent, ".0"...)
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				percent = append(percent, '.')
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.AppendInt(percent, int64(low), 10)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
@@ -6343,25 +6388,40 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 
 		now := time.Now()
 
-		// Calculate percentage with two decimal places at most using fixed-point arithmetic
-		// to avoid floating-point operations in hot path.
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
 		var percent []byte
 		{
-			var buf [6]byte
+			const bufSize = 6
 
-			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
-
-			percent = strconv.AppendInt(buf[:0], int64(high), 10)
-
-			if low < 10 {
-				percent = append(percent, ".0"...)
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				percent = append(percent, '.')
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.AppendInt(percent, int64(low), 10)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
@@ -6626,25 +6686,40 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 
 		now := time.Now()
 
-		// Calculate percentage with two decimal places at most using fixed-point arithmetic
-		// to avoid floating-point operations in hot path.
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
 		var percent []byte
 		{
-			var buf [6]byte
+			const bufSize = 6
 
-			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
-
-			percent = strconv.AppendInt(buf[:0], int64(high), 10)
-
-			if low < 10 {
-				percent = append(percent, ".0"...)
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				percent = append(percent, '.')
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.AppendInt(percent, int64(low), 10)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
@@ -6715,25 +6790,40 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 
 		now := time.Now()
 
-		// Calculate percentage with two decimal places at most using fixed-point arithmetic
-		// to avoid floating-point operations in hot path.
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
 		var percent []byte
 		{
-			var buf [6]byte
+			const bufSize = 6
 
-			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
-
-			percent = strconv.AppendInt(buf[:0], int64(high), 10)
-
-			if low < 10 {
-				percent = append(percent, ".0"...)
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				percent = append(percent, '.')
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.AppendInt(percent, int64(low), 10)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
@@ -6800,25 +6890,40 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 
 		now := time.Now()
 
-		// Calculate percentage with two decimal places at most using fixed-point arithmetic
-		// to avoid floating-point operations in hot path.
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
 		var percent []byte
 		{
-			var buf [6]byte
+			const bufSize = 6
 
-			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
-
-			percent = strconv.AppendInt(buf[:0], int64(high), 10)
-
-			if low < 10 {
-				percent = append(percent, ".0"...)
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				percent = append(percent, '.')
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.AppendInt(percent, int64(low), 10)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
@@ -6864,25 +6969,40 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 
 		now := time.Now()
 
-		// Calculate percentage with two decimal places at most using fixed-point arithmetic
-		// to avoid floating-point operations in hot path.
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
 		var percent []byte
 		{
-			var buf [6]byte
+			const bufSize = 6
 
-			high := (mr.totalNumTasks / lt.maxTasks * percentDonePrecisionFactor) + ((mr.totalNumTasks % lt.maxTasks) * percentDonePrecisionFactor / lt.maxTasks)
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
-
-			percent = strconv.AppendInt(buf[:0], int64(high), 10)
-
-			if low < 10 {
-				percent = append(percent, ".0"...)
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				percent = append(percent, '.')
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.AppendInt(percent, int64(low), 10)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))

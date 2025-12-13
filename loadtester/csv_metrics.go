@@ -214,7 +214,7 @@ func csvFmtLatencyVarianceAsInt64(rw *csv.RecordWriter, f float64) {
 		return
 	}
 
-	if f < 0 {
+	if f <= 0 {
 		rw.UncheckedUTF8Rune('0')
 		return
 	}
