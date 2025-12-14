@@ -245,15 +245,13 @@ func main() {
 		})
 	}
 
-	// // for debugging
-	// _, err = f.Write(buf.Bytes())
-	// if err != nil {
-	// 	panic(err)
-	// } else {
-	// 	return
-	// }
+	b := buf.Bytes()
 
-	b, err := format.Source(buf.Bytes())
+	//
+	// comment out the next block if you are trying to debug
+	//
+
+	b, err = format.Source(b) // uses standard SDK "go/format" lib
 	if err != nil {
 		panic(err)
 	}

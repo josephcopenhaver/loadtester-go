@@ -1,13 +1,15 @@
 package loadtester
 
 import (
-	"encoding/csv"
+	"bufio"
 	"encoding/json"
 	"io"
+	"math"
 	"os"
-	"strconv"
 	"sync"
 	"time"
+
+	"github.com/josephcopenhaver/csv-go/v3"
 )
 
 const (
@@ -16,6 +18,7 @@ const (
 
 type csvData struct {
 	outputFilename string
+	bufWriter      *bufio.Writer
 	writer         *csv.Writer
 	flushInterval  time.Duration
 	flushDeadline  time.Time
@@ -130,15 +133,15 @@ func (lt *Loadtest) writeOutputCsvHeaders() error {
 		)
 	}
 
-	err := cd.writer.Write(fields)
+	_, err := cd.writer.WriteHeader(
+		csv.WriteHeaderOpts().Headers(fields...),
+	)
 	if err != nil {
 		return err
 	}
 
 	// ensure headers flush asap
-	cd.writer.Flush()
-
-	return cd.writer.Error()
+	return cd.bufWriter.Flush()
 }
 
 func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
@@ -152,22 +155,45 @@ func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
 		}
 	}()
 
-	if cd.writeErr != nil {
+	defer func() {
+		if cd.writeErr != nil {
+			return
+		}
+
+		const prefix = `# {"done":{"end_time":"`
+		const maxLenSerializedTime = 35
+		const suffix = `"}}`
+
+		var buf [len(prefix) + maxLenSerializedTime + len(suffix)]byte
+
+		footer := append(buf[:0], prefix...)
+		fw := csv.FieldWriters().Time(time.Now().UTC())
+		footer, _ = fw.AppendText(footer)
+		footer = append(footer, suffix...)
+
+		_, cd.writeErr = csvFile.Write(footer)
+		if cd.writeErr != nil {
+			return
+		}
+	}()
+
+	if cd.bufWriter == nil {
 		return
 	}
+
+	defer func() {
+		if err := cd.bufWriter.Flush(); err != nil && cd.writeErr == nil {
+			cd.writeErr = err
+		}
+	}()
 
 	if cd.writer == nil {
 		return
 	}
 
-	cd.writer.Flush()
-
-	cd.writeErr = cd.writer.Error()
-	if cd.writeErr != nil {
-		return
+	if err := cd.writer.Close(); err != nil && cd.writeErr == nil {
+		cd.writeErr = err
 	}
-
-	_, cd.writeErr = csvFile.Write([]byte("# {\"done\":{\"end_time\":\"" + timeToString(time.Now()) + "\"}}"))
 }
 
 //
@@ -178,10 +204,34 @@ func timeToString(t time.Time) string {
 	return t.UTC().Format(time.RFC3339Nano)
 }
 
-func timeToUnixNanoString(t time.Time) string {
-	return strconv.FormatInt(t.UnixNano(), 10)
+func csvFmtLatencyVarianceAsInt64(rw *csv.RecordWriter, f float64) {
+	const int64OverflowCutoff = float64(uint64(1) << 63)
+
+	f = math.Round(f)
+
+	if math.IsNaN(f) {
+		rw.Empty()
+		return
+	}
+
+	if f <= 0 {
+		rw.UncheckedUTF8Rune('0')
+		return
+	}
+
+	if f >= int64OverflowCutoff {
+		rw.Int64(math.MaxInt64)
+		return
+	}
+
+	rw.Int64(int64(f))
 }
 
-func durationToNanoString(d time.Duration) string {
-	return strconv.FormatInt(d.Nanoseconds(), 10)
+func csvFmtLatency(rw *csv.RecordWriter, n latency) {
+	if n < 0 {
+		rw.Empty()
+		return
+	}
+
+	rw.Int64(int64(n))
 }

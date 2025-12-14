@@ -18,7 +18,20 @@ func (lt *Loadtest) run_retries{{if .RetriesEnabled}}Enabled{{else}}Disabled{{en
 
 		if lt.csvData.writeErr == nil {
 
-			lt.csvData.writer = csv.NewWriter(csvFile)
+			bw := bufio.NewWriterSize(csvFile, 16384 /* 16 KB buffer allows for at least 3x of the default interval record size total space possibly utilized */)
+			lt.csvData.bufWriter = bw
+
+			cw, err := csv.NewWriter(
+				csv.WriterOpts().Writer(bw),
+				// 805 = 39 columns with 38 being base10 ints, and 6 for a percent indicator
+				//
+				// base-2 rounding up to 896 for memory alignment
+				csv.WriterOpts().InitialRecordBufferSize(896),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to create CSV writer: %w", err)
+			}
+			lt.csvData.writer = cw
 
 			lt.csvData.writeErr = lt.writeOutputCsvHeaders()
 		}

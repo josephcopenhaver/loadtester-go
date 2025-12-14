@@ -3,8 +3,8 @@
 package loadtester
 
 import (
+	"bufio"
 	"context"
-	"encoding/csv"
 	"fmt"
 	"log/slog"
 	"math"
@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/josephcopenhaver/csv-go/v3"
 )
 
 type metricRecordResetables_retryEnabled_varianceEnabled struct {
@@ -1214,7 +1216,20 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 
 		if lt.csvData.writeErr == nil {
 
-			lt.csvData.writer = csv.NewWriter(csvFile)
+			bw := bufio.NewWriterSize(csvFile, 16384 /* 16 KB buffer allows for at least 3x of the default interval record size total space possibly utilized */)
+			lt.csvData.bufWriter = bw
+
+			cw, err := csv.NewWriter(
+				csv.WriterOpts().Writer(bw),
+				// 805 = 39 columns with 38 being base10 ints, and 6 for a percent indicator
+				//
+				// base-2 rounding up to 896 for memory alignment
+				csv.WriterOpts().InitialRecordBufferSize(896),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to create CSV writer: %w", err)
+			}
+			lt.csvData.writer = cw
 
 			lt.csvData.writeErr = lt.writeOutputCsvHeaders()
 		}
@@ -2740,7 +2755,20 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 
 		if lt.csvData.writeErr == nil {
 
-			lt.csvData.writer = csv.NewWriter(csvFile)
+			bw := bufio.NewWriterSize(csvFile, 16384 /* 16 KB buffer allows for at least 3x of the default interval record size total space possibly utilized */)
+			lt.csvData.bufWriter = bw
+
+			cw, err := csv.NewWriter(
+				csv.WriterOpts().Writer(bw),
+				// 805 = 39 columns with 38 being base10 ints, and 6 for a percent indicator
+				//
+				// base-2 rounding up to 896 for memory alignment
+				csv.WriterOpts().InitialRecordBufferSize(896),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to create CSV writer: %w", err)
+			}
+			lt.csvData.writer = cw
 
 			lt.csvData.writeErr = lt.writeOutputCsvHeaders()
 		}
@@ -4172,7 +4200,20 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 
 		if lt.csvData.writeErr == nil {
 
-			lt.csvData.writer = csv.NewWriter(csvFile)
+			bw := bufio.NewWriterSize(csvFile, 16384 /* 16 KB buffer allows for at least 3x of the default interval record size total space possibly utilized */)
+			lt.csvData.bufWriter = bw
+
+			cw, err := csv.NewWriter(
+				csv.WriterOpts().Writer(bw),
+				// 805 = 39 columns with 38 being base10 ints, and 6 for a percent indicator
+				//
+				// base-2 rounding up to 896 for memory alignment
+				csv.WriterOpts().InitialRecordBufferSize(896),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to create CSV writer: %w", err)
+			}
+			lt.csvData.writer = cw
 
 			lt.csvData.writeErr = lt.writeOutputCsvHeaders()
 		}
@@ -5126,7 +5167,20 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 
 		if lt.csvData.writeErr == nil {
 
-			lt.csvData.writer = csv.NewWriter(csvFile)
+			bw := bufio.NewWriterSize(csvFile, 16384 /* 16 KB buffer allows for at least 3x of the default interval record size total space possibly utilized */)
+			lt.csvData.bufWriter = bw
+
+			cw, err := csv.NewWriter(
+				csv.WriterOpts().Writer(bw),
+				// 805 = 39 columns with 38 being base10 ints, and 6 for a percent indicator
+				//
+				// base-2 rounding up to 896 for memory alignment
+				csv.WriterOpts().InitialRecordBufferSize(896),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to create CSV writer: %w", err)
+			}
+			lt.csvData.writer = cw
 
 			lt.csvData.writeErr = lt.writeOutputCsvHeaders()
 		}
@@ -6035,7 +6089,7 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 
 func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnabled_varianceEnabled() func(metricRecord_retryEnabled_maxTasksGTZero_percentileEnabled_varianceEnabled) {
 
-	var queuePercentiles, taskPercentiles [numPercentiles]string
+	var queuePercentiles, taskPercentiles [numPercentiles]latency
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
@@ -6048,70 +6102,91 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 
 		now := time.Now()
 
-		var percent string
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
+		var percent []byte
 		{
-			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
+			const bufSize = 6
 
-			var sep string
-			if low < 10 {
-				sep = ".0"
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				sep = "."
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.Itoa(high) + sep + strconv.Itoa(low)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		mr.latencies.queue.readPercentileStrings(&queuePercentiles)
-		mr.latencies.task.readPercentileStrings(&taskPercentiles)
+		mr.latencies.queue.readPercentiles(&queuePercentiles)
+		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numRetry),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-			queuePercentiles[0],
-			queuePercentiles[1],
-			queuePercentiles[2],
-			queuePercentiles[3],
-			queuePercentiles[4],
-			queuePercentiles[5],
-			queuePercentiles[6],
-			queuePercentiles[7],
-			queuePercentiles[8],
-			queuePercentiles[9],
-			taskPercentiles[0],
-			taskPercentiles[1],
-			taskPercentiles[2],
-			taskPercentiles[3],
-			taskPercentiles[4],
-			taskPercentiles[5],
-			taskPercentiles[6],
-			taskPercentiles[7],
-			taskPercentiles[8],
-			taskPercentiles[9],
-			varianceFloatString(mr.welfords.queue.Variance(mr.numTasks)),
-			varianceFloatString(mr.welfords.task.Variance(mr.numTasks)),
-			percent,
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numRetry)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+		csvFmtLatency(rw, queuePercentiles[0])
+		csvFmtLatency(rw, queuePercentiles[1])
+		csvFmtLatency(rw, queuePercentiles[2])
+		csvFmtLatency(rw, queuePercentiles[3])
+		csvFmtLatency(rw, queuePercentiles[4])
+		csvFmtLatency(rw, queuePercentiles[5])
+		csvFmtLatency(rw, queuePercentiles[6])
+		csvFmtLatency(rw, queuePercentiles[7])
+		csvFmtLatency(rw, queuePercentiles[8])
+		csvFmtLatency(rw, queuePercentiles[9])
+		csvFmtLatency(rw, taskPercentiles[0])
+		csvFmtLatency(rw, taskPercentiles[1])
+		csvFmtLatency(rw, taskPercentiles[2])
+		csvFmtLatency(rw, taskPercentiles[3])
+		csvFmtLatency(rw, taskPercentiles[4])
+		csvFmtLatency(rw, taskPercentiles[5])
+		csvFmtLatency(rw, taskPercentiles[6])
+		csvFmtLatency(rw, taskPercentiles[7])
+		csvFmtLatency(rw, taskPercentiles[8])
+		csvFmtLatency(rw, taskPercentiles[9])
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
+		rw.UncheckedUTF8Bytes(percent)
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6119,7 +6194,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 
 func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnabled_varianceDisabled() func(metricRecord_retryEnabled_maxTasksGTZero_percentileEnabled_varianceDisabled) {
 
-	var queuePercentiles, taskPercentiles [numPercentiles]string
+	var queuePercentiles, taskPercentiles [numPercentiles]latency
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
@@ -6132,68 +6207,89 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileEnab
 
 		now := time.Now()
 
-		var percent string
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
+		var percent []byte
 		{
-			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
+			const bufSize = 6
 
-			var sep string
-			if low < 10 {
-				sep = ".0"
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				sep = "."
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.Itoa(high) + sep + strconv.Itoa(low)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		mr.latencies.queue.readPercentileStrings(&queuePercentiles)
-		mr.latencies.task.readPercentileStrings(&taskPercentiles)
+		mr.latencies.queue.readPercentiles(&queuePercentiles)
+		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numRetry),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-			queuePercentiles[0],
-			queuePercentiles[1],
-			queuePercentiles[2],
-			queuePercentiles[3],
-			queuePercentiles[4],
-			queuePercentiles[5],
-			queuePercentiles[6],
-			queuePercentiles[7],
-			queuePercentiles[8],
-			queuePercentiles[9],
-			taskPercentiles[0],
-			taskPercentiles[1],
-			taskPercentiles[2],
-			taskPercentiles[3],
-			taskPercentiles[4],
-			taskPercentiles[5],
-			taskPercentiles[6],
-			taskPercentiles[7],
-			taskPercentiles[8],
-			taskPercentiles[9],
-			percent,
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numRetry)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+		csvFmtLatency(rw, queuePercentiles[0])
+		csvFmtLatency(rw, queuePercentiles[1])
+		csvFmtLatency(rw, queuePercentiles[2])
+		csvFmtLatency(rw, queuePercentiles[3])
+		csvFmtLatency(rw, queuePercentiles[4])
+		csvFmtLatency(rw, queuePercentiles[5])
+		csvFmtLatency(rw, queuePercentiles[6])
+		csvFmtLatency(rw, queuePercentiles[7])
+		csvFmtLatency(rw, queuePercentiles[8])
+		csvFmtLatency(rw, queuePercentiles[9])
+		csvFmtLatency(rw, taskPercentiles[0])
+		csvFmtLatency(rw, taskPercentiles[1])
+		csvFmtLatency(rw, taskPercentiles[2])
+		csvFmtLatency(rw, taskPercentiles[3])
+		csvFmtLatency(rw, taskPercentiles[4])
+		csvFmtLatency(rw, taskPercentiles[5])
+		csvFmtLatency(rw, taskPercentiles[6])
+		csvFmtLatency(rw, taskPercentiles[7])
+		csvFmtLatency(rw, taskPercentiles[8])
+		csvFmtLatency(rw, taskPercentiles[9])
+		rw.UncheckedUTF8Bytes(percent)
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6212,47 +6308,68 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 
 		now := time.Now()
 
-		var percent string
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
+		var percent []byte
 		{
-			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
+			const bufSize = 6
 
-			var sep string
-			if low < 10 {
-				sep = ".0"
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				sep = "."
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.Itoa(high) + sep + strconv.Itoa(low)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numRetry),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-			varianceFloatString(mr.welfords.queue.Variance(mr.numTasks)),
-			varianceFloatString(mr.welfords.task.Variance(mr.numTasks)),
-			percent,
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numRetry)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
+		rw.UncheckedUTF8Bytes(percent)
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6271,45 +6388,66 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 
 		now := time.Now()
 
-		var percent string
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
+		var percent []byte
 		{
-			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
+			const bufSize = 6
 
-			var sep string
-			if low < 10 {
-				sep = ".0"
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				sep = "."
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.Itoa(high) + sep + strconv.Itoa(low)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numRetry),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-			percent,
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numRetry)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+		rw.UncheckedUTF8Bytes(percent)
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6317,7 +6455,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksGTZero_percentileDisa
 
 func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileEnabled_varianceEnabled() func(metricRecord_retryEnabled_maxTasksNotGTZero_percentileEnabled_varianceEnabled) {
 
-	var queuePercentiles, taskPercentiles [numPercentiles]string
+	var queuePercentiles, taskPercentiles [numPercentiles]latency
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
@@ -6332,51 +6470,52 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileE
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		mr.latencies.queue.readPercentileStrings(&queuePercentiles)
-		mr.latencies.task.readPercentileStrings(&taskPercentiles)
+		mr.latencies.queue.readPercentiles(&queuePercentiles)
+		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numRetry),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-			queuePercentiles[0],
-			queuePercentiles[1],
-			queuePercentiles[2],
-			queuePercentiles[3],
-			queuePercentiles[4],
-			queuePercentiles[5],
-			queuePercentiles[6],
-			queuePercentiles[7],
-			queuePercentiles[8],
-			queuePercentiles[9],
-			taskPercentiles[0],
-			taskPercentiles[1],
-			taskPercentiles[2],
-			taskPercentiles[3],
-			taskPercentiles[4],
-			taskPercentiles[5],
-			taskPercentiles[6],
-			taskPercentiles[7],
-			taskPercentiles[8],
-			taskPercentiles[9],
-			varianceFloatString(mr.welfords.queue.Variance(mr.numTasks)),
-			varianceFloatString(mr.welfords.task.Variance(mr.numTasks)),
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numRetry)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+		csvFmtLatency(rw, queuePercentiles[0])
+		csvFmtLatency(rw, queuePercentiles[1])
+		csvFmtLatency(rw, queuePercentiles[2])
+		csvFmtLatency(rw, queuePercentiles[3])
+		csvFmtLatency(rw, queuePercentiles[4])
+		csvFmtLatency(rw, queuePercentiles[5])
+		csvFmtLatency(rw, queuePercentiles[6])
+		csvFmtLatency(rw, queuePercentiles[7])
+		csvFmtLatency(rw, queuePercentiles[8])
+		csvFmtLatency(rw, queuePercentiles[9])
+		csvFmtLatency(rw, taskPercentiles[0])
+		csvFmtLatency(rw, taskPercentiles[1])
+		csvFmtLatency(rw, taskPercentiles[2])
+		csvFmtLatency(rw, taskPercentiles[3])
+		csvFmtLatency(rw, taskPercentiles[4])
+		csvFmtLatency(rw, taskPercentiles[5])
+		csvFmtLatency(rw, taskPercentiles[6])
+		csvFmtLatency(rw, taskPercentiles[7])
+		csvFmtLatency(rw, taskPercentiles[8])
+		csvFmtLatency(rw, taskPercentiles[9])
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6384,7 +6523,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileE
 
 func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileEnabled_varianceDisabled() func(metricRecord_retryEnabled_maxTasksNotGTZero_percentileEnabled_varianceDisabled) {
 
-	var queuePercentiles, taskPercentiles [numPercentiles]string
+	var queuePercentiles, taskPercentiles [numPercentiles]latency
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
@@ -6399,49 +6538,50 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileE
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		mr.latencies.queue.readPercentileStrings(&queuePercentiles)
-		mr.latencies.task.readPercentileStrings(&taskPercentiles)
+		mr.latencies.queue.readPercentiles(&queuePercentiles)
+		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numRetry),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-			queuePercentiles[0],
-			queuePercentiles[1],
-			queuePercentiles[2],
-			queuePercentiles[3],
-			queuePercentiles[4],
-			queuePercentiles[5],
-			queuePercentiles[6],
-			queuePercentiles[7],
-			queuePercentiles[8],
-			queuePercentiles[9],
-			taskPercentiles[0],
-			taskPercentiles[1],
-			taskPercentiles[2],
-			taskPercentiles[3],
-			taskPercentiles[4],
-			taskPercentiles[5],
-			taskPercentiles[6],
-			taskPercentiles[7],
-			taskPercentiles[8],
-			taskPercentiles[9],
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numRetry)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+		csvFmtLatency(rw, queuePercentiles[0])
+		csvFmtLatency(rw, queuePercentiles[1])
+		csvFmtLatency(rw, queuePercentiles[2])
+		csvFmtLatency(rw, queuePercentiles[3])
+		csvFmtLatency(rw, queuePercentiles[4])
+		csvFmtLatency(rw, queuePercentiles[5])
+		csvFmtLatency(rw, queuePercentiles[6])
+		csvFmtLatency(rw, queuePercentiles[7])
+		csvFmtLatency(rw, queuePercentiles[8])
+		csvFmtLatency(rw, queuePercentiles[9])
+		csvFmtLatency(rw, taskPercentiles[0])
+		csvFmtLatency(rw, taskPercentiles[1])
+		csvFmtLatency(rw, taskPercentiles[2])
+		csvFmtLatency(rw, taskPercentiles[3])
+		csvFmtLatency(rw, taskPercentiles[4])
+		csvFmtLatency(rw, taskPercentiles[5])
+		csvFmtLatency(rw, taskPercentiles[6])
+		csvFmtLatency(rw, taskPercentiles[7])
+		csvFmtLatency(rw, taskPercentiles[8])
+		csvFmtLatency(rw, taskPercentiles[9])
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6462,28 +6602,29 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileD
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numRetry),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-			varianceFloatString(mr.welfords.queue.Variance(mr.numTasks)),
-			varianceFloatString(mr.welfords.task.Variance(mr.numTasks)),
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numRetry)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6504,26 +6645,27 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileD
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numRetry),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numRetry)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6531,7 +6673,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryEnabled_maxTasksNotGTZero_percentileD
 
 func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEnabled_varianceEnabled() func(metricRecord_retryDisabled_maxTasksGTZero_percentileEnabled_varianceEnabled) {
 
-	var queuePercentiles, taskPercentiles [numPercentiles]string
+	var queuePercentiles, taskPercentiles [numPercentiles]latency
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
@@ -6544,69 +6686,90 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 
 		now := time.Now()
 
-		var percent string
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
+		var percent []byte
 		{
-			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
+			const bufSize = 6
 
-			var sep string
-			if low < 10 {
-				sep = ".0"
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				sep = "."
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.Itoa(high) + sep + strconv.Itoa(low)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		mr.latencies.queue.readPercentileStrings(&queuePercentiles)
-		mr.latencies.task.readPercentileStrings(&taskPercentiles)
+		mr.latencies.queue.readPercentiles(&queuePercentiles)
+		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-			queuePercentiles[0],
-			queuePercentiles[1],
-			queuePercentiles[2],
-			queuePercentiles[3],
-			queuePercentiles[4],
-			queuePercentiles[5],
-			queuePercentiles[6],
-			queuePercentiles[7],
-			queuePercentiles[8],
-			queuePercentiles[9],
-			taskPercentiles[0],
-			taskPercentiles[1],
-			taskPercentiles[2],
-			taskPercentiles[3],
-			taskPercentiles[4],
-			taskPercentiles[5],
-			taskPercentiles[6],
-			taskPercentiles[7],
-			taskPercentiles[8],
-			taskPercentiles[9],
-			varianceFloatString(mr.welfords.queue.Variance(mr.numTasks)),
-			varianceFloatString(mr.welfords.task.Variance(mr.numTasks)),
-			percent,
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+		csvFmtLatency(rw, queuePercentiles[0])
+		csvFmtLatency(rw, queuePercentiles[1])
+		csvFmtLatency(rw, queuePercentiles[2])
+		csvFmtLatency(rw, queuePercentiles[3])
+		csvFmtLatency(rw, queuePercentiles[4])
+		csvFmtLatency(rw, queuePercentiles[5])
+		csvFmtLatency(rw, queuePercentiles[6])
+		csvFmtLatency(rw, queuePercentiles[7])
+		csvFmtLatency(rw, queuePercentiles[8])
+		csvFmtLatency(rw, queuePercentiles[9])
+		csvFmtLatency(rw, taskPercentiles[0])
+		csvFmtLatency(rw, taskPercentiles[1])
+		csvFmtLatency(rw, taskPercentiles[2])
+		csvFmtLatency(rw, taskPercentiles[3])
+		csvFmtLatency(rw, taskPercentiles[4])
+		csvFmtLatency(rw, taskPercentiles[5])
+		csvFmtLatency(rw, taskPercentiles[6])
+		csvFmtLatency(rw, taskPercentiles[7])
+		csvFmtLatency(rw, taskPercentiles[8])
+		csvFmtLatency(rw, taskPercentiles[9])
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
+		rw.UncheckedUTF8Bytes(percent)
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6614,7 +6777,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 
 func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEnabled_varianceDisabled() func(metricRecord_retryDisabled_maxTasksGTZero_percentileEnabled_varianceDisabled) {
 
-	var queuePercentiles, taskPercentiles [numPercentiles]string
+	var queuePercentiles, taskPercentiles [numPercentiles]latency
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
@@ -6627,67 +6790,88 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileEna
 
 		now := time.Now()
 
-		var percent string
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
+		var percent []byte
 		{
-			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
+			const bufSize = 6
 
-			var sep string
-			if low < 10 {
-				sep = ".0"
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				sep = "."
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.Itoa(high) + sep + strconv.Itoa(low)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		mr.latencies.queue.readPercentileStrings(&queuePercentiles)
-		mr.latencies.task.readPercentileStrings(&taskPercentiles)
+		mr.latencies.queue.readPercentiles(&queuePercentiles)
+		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-			queuePercentiles[0],
-			queuePercentiles[1],
-			queuePercentiles[2],
-			queuePercentiles[3],
-			queuePercentiles[4],
-			queuePercentiles[5],
-			queuePercentiles[6],
-			queuePercentiles[7],
-			queuePercentiles[8],
-			queuePercentiles[9],
-			taskPercentiles[0],
-			taskPercentiles[1],
-			taskPercentiles[2],
-			taskPercentiles[3],
-			taskPercentiles[4],
-			taskPercentiles[5],
-			taskPercentiles[6],
-			taskPercentiles[7],
-			taskPercentiles[8],
-			taskPercentiles[9],
-			percent,
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+		csvFmtLatency(rw, queuePercentiles[0])
+		csvFmtLatency(rw, queuePercentiles[1])
+		csvFmtLatency(rw, queuePercentiles[2])
+		csvFmtLatency(rw, queuePercentiles[3])
+		csvFmtLatency(rw, queuePercentiles[4])
+		csvFmtLatency(rw, queuePercentiles[5])
+		csvFmtLatency(rw, queuePercentiles[6])
+		csvFmtLatency(rw, queuePercentiles[7])
+		csvFmtLatency(rw, queuePercentiles[8])
+		csvFmtLatency(rw, queuePercentiles[9])
+		csvFmtLatency(rw, taskPercentiles[0])
+		csvFmtLatency(rw, taskPercentiles[1])
+		csvFmtLatency(rw, taskPercentiles[2])
+		csvFmtLatency(rw, taskPercentiles[3])
+		csvFmtLatency(rw, taskPercentiles[4])
+		csvFmtLatency(rw, taskPercentiles[5])
+		csvFmtLatency(rw, taskPercentiles[6])
+		csvFmtLatency(rw, taskPercentiles[7])
+		csvFmtLatency(rw, taskPercentiles[8])
+		csvFmtLatency(rw, taskPercentiles[9])
+		rw.UncheckedUTF8Bytes(percent)
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6706,46 +6890,67 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 
 		now := time.Now()
 
-		var percent string
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
+		var percent []byte
 		{
-			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
+			const bufSize = 6
 
-			var sep string
-			if low < 10 {
-				sep = ".0"
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				sep = "."
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.Itoa(high) + sep + strconv.Itoa(low)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-			varianceFloatString(mr.welfords.queue.Variance(mr.numTasks)),
-			varianceFloatString(mr.welfords.task.Variance(mr.numTasks)),
-			percent,
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
+		rw.UncheckedUTF8Bytes(percent)
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6764,44 +6969,65 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 
 		now := time.Now()
 
-		var percent string
+		// Calculate percentage with two decimal places using fixed-point arithmetic
+		// avoiding floating-point operations in hot path as much as possible.
+		var percent []byte
 		{
-			high := mr.totalNumTasks * percentDonePrecisionFactor / lt.maxTasks
-			low := high % (percentDonePrecisionFactor / 100)
-			high /= (percentDonePrecisionFactor / 100)
+			const bufSize = 6
 
-			var sep string
-			if low < 10 {
-				sep = ".0"
+			var buf [bufSize]byte
+			if mr.totalNumTasks >= lt.maxTasks {
+				percent = append(buf[:0], "100.00"...)
+			} else if highNumerator := mr.totalNumTasks * percentDonePrecisionFactor; highNumerator < percentDonePrecisionFactor {
+				// handle the very unlikely int overflow case using an expensive but valid float strategy
+				if f := float64(mr.totalNumTasks) / float64(lt.maxTasks) * 100.0; f <= 0 {
+					percent = append(buf[:0], "0.00"...)
+				} else {
+					percent = strconv.AppendFloat(buf[:0], f, 'f', 2, 64)
+					if len(percent) >= bufSize {
+						percent = append(buf[:0], "99.99"...)
+					}
+				}
 			} else {
-				sep = "."
-			}
+				high := highNumerator / lt.maxTasks
+				low := high % (percentDonePrecisionFactor / 100)
+				high /= (percentDonePrecisionFactor / 100)
 
-			percent = strconv.Itoa(high) + sep + strconv.Itoa(low)
+				percent = strconv.AppendInt(buf[:0], int64(high), 10)
+
+				if low < 10 {
+					percent = append(percent, ".0"...)
+				} else {
+					percent = append(percent, '.')
+				}
+
+				percent = strconv.AppendInt(percent, int64(low), 10)
+			}
 		}
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-			percent,
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+		rw.UncheckedUTF8Bytes(percent)
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6809,7 +7035,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksGTZero_percentileDis
 
 func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentileEnabled_varianceEnabled() func(metricRecord_retryDisabled_maxTasksNotGTZero_percentileEnabled_varianceEnabled) {
 
-	var queuePercentiles, taskPercentiles [numPercentiles]string
+	var queuePercentiles, taskPercentiles [numPercentiles]latency
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
@@ -6824,50 +7050,51 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		mr.latencies.queue.readPercentileStrings(&queuePercentiles)
-		mr.latencies.task.readPercentileStrings(&taskPercentiles)
+		mr.latencies.queue.readPercentiles(&queuePercentiles)
+		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-			queuePercentiles[0],
-			queuePercentiles[1],
-			queuePercentiles[2],
-			queuePercentiles[3],
-			queuePercentiles[4],
-			queuePercentiles[5],
-			queuePercentiles[6],
-			queuePercentiles[7],
-			queuePercentiles[8],
-			queuePercentiles[9],
-			taskPercentiles[0],
-			taskPercentiles[1],
-			taskPercentiles[2],
-			taskPercentiles[3],
-			taskPercentiles[4],
-			taskPercentiles[5],
-			taskPercentiles[6],
-			taskPercentiles[7],
-			taskPercentiles[8],
-			taskPercentiles[9],
-			varianceFloatString(mr.welfords.queue.Variance(mr.numTasks)),
-			varianceFloatString(mr.welfords.task.Variance(mr.numTasks)),
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+		csvFmtLatency(rw, queuePercentiles[0])
+		csvFmtLatency(rw, queuePercentiles[1])
+		csvFmtLatency(rw, queuePercentiles[2])
+		csvFmtLatency(rw, queuePercentiles[3])
+		csvFmtLatency(rw, queuePercentiles[4])
+		csvFmtLatency(rw, queuePercentiles[5])
+		csvFmtLatency(rw, queuePercentiles[6])
+		csvFmtLatency(rw, queuePercentiles[7])
+		csvFmtLatency(rw, queuePercentiles[8])
+		csvFmtLatency(rw, queuePercentiles[9])
+		csvFmtLatency(rw, taskPercentiles[0])
+		csvFmtLatency(rw, taskPercentiles[1])
+		csvFmtLatency(rw, taskPercentiles[2])
+		csvFmtLatency(rw, taskPercentiles[3])
+		csvFmtLatency(rw, taskPercentiles[4])
+		csvFmtLatency(rw, taskPercentiles[5])
+		csvFmtLatency(rw, taskPercentiles[6])
+		csvFmtLatency(rw, taskPercentiles[7])
+		csvFmtLatency(rw, taskPercentiles[8])
+		csvFmtLatency(rw, taskPercentiles[9])
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6875,7 +7102,7 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 
 func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentileEnabled_varianceDisabled() func(metricRecord_retryDisabled_maxTasksNotGTZero_percentileEnabled_varianceDisabled) {
 
-	var queuePercentiles, taskPercentiles [numPercentiles]string
+	var queuePercentiles, taskPercentiles [numPercentiles]latency
 
 	var bigAvgQueueLatency, bigAvgTaskLatency big.Int
 
@@ -6890,48 +7117,49 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		mr.latencies.queue.readPercentileStrings(&queuePercentiles)
-		mr.latencies.task.readPercentileStrings(&taskPercentiles)
+		mr.latencies.queue.readPercentiles(&queuePercentiles)
+		mr.latencies.task.readPercentiles(&taskPercentiles)
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-			queuePercentiles[0],
-			queuePercentiles[1],
-			queuePercentiles[2],
-			queuePercentiles[3],
-			queuePercentiles[4],
-			queuePercentiles[5],
-			queuePercentiles[6],
-			queuePercentiles[7],
-			queuePercentiles[8],
-			queuePercentiles[9],
-			taskPercentiles[0],
-			taskPercentiles[1],
-			taskPercentiles[2],
-			taskPercentiles[3],
-			taskPercentiles[4],
-			taskPercentiles[5],
-			taskPercentiles[6],
-			taskPercentiles[7],
-			taskPercentiles[8],
-			taskPercentiles[9],
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+		csvFmtLatency(rw, queuePercentiles[0])
+		csvFmtLatency(rw, queuePercentiles[1])
+		csvFmtLatency(rw, queuePercentiles[2])
+		csvFmtLatency(rw, queuePercentiles[3])
+		csvFmtLatency(rw, queuePercentiles[4])
+		csvFmtLatency(rw, queuePercentiles[5])
+		csvFmtLatency(rw, queuePercentiles[6])
+		csvFmtLatency(rw, queuePercentiles[7])
+		csvFmtLatency(rw, queuePercentiles[8])
+		csvFmtLatency(rw, queuePercentiles[9])
+		csvFmtLatency(rw, taskPercentiles[0])
+		csvFmtLatency(rw, taskPercentiles[1])
+		csvFmtLatency(rw, taskPercentiles[2])
+		csvFmtLatency(rw, taskPercentiles[3])
+		csvFmtLatency(rw, taskPercentiles[4])
+		csvFmtLatency(rw, taskPercentiles[5])
+		csvFmtLatency(rw, taskPercentiles[6])
+		csvFmtLatency(rw, taskPercentiles[7])
+		csvFmtLatency(rw, taskPercentiles[8])
+		csvFmtLatency(rw, taskPercentiles[9])
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6952,27 +7180,28 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-			varianceFloatString(mr.welfords.queue.Variance(mr.numTasks)),
-			varianceFloatString(mr.welfords.task.Variance(mr.numTasks)),
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.queue.Variance(mr.numTasks))
+		csvFmtLatencyVarianceAsInt64(rw, mr.welfords.task.Variance(mr.numTasks))
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -6993,25 +7222,26 @@ func (lt *Loadtest) writeOutputCsvRow_retryDisabled_maxTasksNotGTZero_percentile
 
 		bigNumTasks := big.NewInt(int64(mr.numTasks))
 
-		fields := []string{
-			timeToUnixNanoString(now),
-			timeToUnixNanoString(mr.intervalID),
-			strconv.Itoa(mr.numIntervalTasks),
-			durationToNanoString(mr.lag),
-			durationToNanoString(mr.sumLag),
-			strconv.Itoa(mr.numTasks),
-			strconv.Itoa(mr.numPass),
-			strconv.Itoa(mr.numFail),
-			strconv.Itoa(mr.numPanic),
-			durationToNanoString(mr.minQueueDuration),
-			durationToNanoString(time.Duration(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxQueueDuration),
-			durationToNanoString(mr.minTaskDuration),
-			durationToNanoString(time.Duration(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())),
-			durationToNanoString(mr.maxTaskDuration),
-		}
+		rw := cd.writer.MustNewRecord()
+		defer rw.Rollback()
 
-		if err := cd.writer.Write(fields); err != nil {
+		rw.Int64(now.UnixNano())
+		rw.Int64(mr.intervalID.UnixNano())
+		rw.Int(mr.numIntervalTasks)
+		rw.Duration(mr.lag)
+		rw.Duration(mr.sumLag)
+		rw.Int(mr.numTasks)
+		rw.Int(mr.numPass)
+		rw.Int(mr.numFail)
+		rw.Int(mr.numPanic)
+		rw.Duration(mr.minQueueDuration)
+		rw.Int64(bigAvgQueueLatency.Div(&mr.sumQueueDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxQueueDuration)
+		rw.Duration(mr.minTaskDuration)
+		rw.Int64(bigAvgTaskLatency.Div(&mr.sumTaskDuration, bigNumTasks).Int64())
+		rw.Duration(mr.maxTaskDuration)
+
+		if _, err := rw.Write(); err != nil {
 			cd.setErr(err) // sets error state in multiple goroutine safe way
 		}
 	}
@@ -7119,8 +7349,7 @@ func (lt *Loadtest) resultsHandler_retryEnabled_maxTasksGTZero_percentileEnabled
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -7229,8 +7458,7 @@ func (lt *Loadtest) resultsHandler_retryEnabled_maxTasksGTZero_percentileEnabled
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -7338,8 +7566,7 @@ func (lt *Loadtest) resultsHandler_retryEnabled_maxTasksGTZero_percentileDisable
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -7444,8 +7671,7 @@ func (lt *Loadtest) resultsHandler_retryEnabled_maxTasksGTZero_percentileDisable
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -7555,8 +7781,7 @@ func (lt *Loadtest) resultsHandler_retryEnabled_maxTasksNotGTZero_percentileEnab
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -7663,8 +7888,7 @@ func (lt *Loadtest) resultsHandler_retryEnabled_maxTasksNotGTZero_percentileEnab
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -7770,8 +7994,7 @@ func (lt *Loadtest) resultsHandler_retryEnabled_maxTasksNotGTZero_percentileDisa
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -7874,8 +8097,7 @@ func (lt *Loadtest) resultsHandler_retryEnabled_maxTasksNotGTZero_percentileDisa
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -7986,8 +8208,7 @@ func (lt *Loadtest) resultsHandler_retryDisabled_maxTasksGTZero_percentileEnable
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -8095,8 +8316,7 @@ func (lt *Loadtest) resultsHandler_retryDisabled_maxTasksGTZero_percentileEnable
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -8203,8 +8423,7 @@ func (lt *Loadtest) resultsHandler_retryDisabled_maxTasksGTZero_percentileDisabl
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -8308,8 +8527,7 @@ func (lt *Loadtest) resultsHandler_retryDisabled_maxTasksGTZero_percentileDisabl
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -8418,8 +8636,7 @@ func (lt *Loadtest) resultsHandler_retryDisabled_maxTasksNotGTZero_percentileEna
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -8525,8 +8742,7 @@ func (lt *Loadtest) resultsHandler_retryDisabled_maxTasksNotGTZero_percentileEna
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -8631,8 +8847,7 @@ func (lt *Loadtest) resultsHandler_retryDisabled_maxTasksNotGTZero_percentileDis
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)
@@ -8734,8 +8949,7 @@ func (lt *Loadtest) resultsHandler_retryDisabled_maxTasksNotGTZero_percentileDis
 				ssReadIdx = (ssReadIdx + 1) % ssSize
 
 				if cd.writeErr == nil && !cd.flushDeadline.After(time.Now()) {
-					cd.writer.Flush()
-					if err := cd.writer.Error(); err != nil {
+					if err := cd.bufWriter.Flush(); err != nil {
 						cd.setErr(err) // sets error state in multiple goroutine safe way
 					}
 					cd.flushDeadline = time.Now().Add(cd.flushInterval)

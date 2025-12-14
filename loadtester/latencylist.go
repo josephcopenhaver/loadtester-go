@@ -61,20 +61,22 @@ var percentileComputeOrder = [numPercentiles]uint8{
 	9, // 9999
 }
 
-func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
+type latency int64
+
+func (ll *latencyList) readPercentiles(out *[numPercentiles]latency) {
 
 	maxIdx := len(ll.data) - 1
 	if maxIdx < 0 {
 		for i := range out {
-			out[i] = ""
+			out[i] = -1
 		}
 		return
 	}
 
 	if maxIdx == 0 {
-		s := durationToNanoString(ll.data[0])
+		v := latency(ll.data[0])
 		for i := range out {
-			out[i] = s
+			out[i] = v
 		}
 		return
 	}
@@ -88,9 +90,7 @@ func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
 		if pt.n <= ((math.MaxInt - pt.rt) / maxIdx) {
 			// integer math multiplication operation will not overflow
 
-			v := ll.data[((maxIdx*pt.n)+pt.rt)/pt.d]
-
-			out[pcv] = durationToNanoString(v)
+			out[pcv] = latency(ll.data[((maxIdx*pt.n)+pt.rt)/pt.d])
 			continue
 		}
 
@@ -105,8 +105,7 @@ func (ll *latencyList) readPercentileStrings(out *[numPercentiles]string) {
 			fidx := math.Round(float64(pt.n) / float64(pt.d) * float64(maxIdx))
 
 			idx := int(fidx)
-			v := ll.data[idx]
-			out[pcv] = durationToNanoString(v)
+			out[pcv] = latency(ll.data[idx])
 
 			pci++
 			if pci >= numPercentiles {
