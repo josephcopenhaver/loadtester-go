@@ -1,6 +1,7 @@
 package loadtester
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -48,6 +49,12 @@ func TestMetadataProviderInterfaceStability(t *testing.T) {
 	}
 
 	if v.Lag() != 2*time.Second {
+		t.Fatal()
+	}
+}
+
+func TestMetadataProviderNilable(t *testing.T) {
+	if v := GetTaskMetadataProvider(context.Background()); v != nil {
 		t.Fatal()
 	}
 }
