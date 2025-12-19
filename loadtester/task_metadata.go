@@ -75,5 +75,9 @@ func injectTaskMetadataProvider(ctx context.Context, tm *taskMetadata) context.C
 //
 // - `Lag() time.Duration`
 func GetTaskMetadataProvider(ctx context.Context) *taskMetadata {
-	return ctx.Value(taskMetadataCtxKey{}).(*taskMetadata)
+	if v, ok := ctx.Value(taskMetadataCtxKey{}).(*taskMetadata); ok {
+		return v
+	}
+
+	return nil
 }
