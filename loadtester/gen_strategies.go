@@ -1255,11 +1255,13 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsEnabled(ctx context
 
 	maxTasks := lt.maxTasks
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -2027,11 +2029,13 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksGTZero_metricsDisabled(ctx contex
 
 	maxTasks := lt.maxTasks
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -2780,11 +2784,13 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsEnabled(ctx cont
 
 	intervalID := time.Now()
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -3505,11 +3511,13 @@ func (lt *Loadtest) run_retriesEnabled_maxTasksNotGTZero_metricsDisabled(ctx con
 
 	intervalID := time.Now()
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -4215,11 +4223,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsEnabled(ctx contex
 
 	maxTasks := lt.maxTasks
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -4694,11 +4704,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksGTZero_metricsDisabled(ctx conte
 
 	maxTasks := lt.maxTasks
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -5174,11 +5186,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsEnabled(ctx con
 
 	intervalID := time.Now()
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}
@@ -5639,11 +5653,13 @@ func (lt *Loadtest) run_retriesDisabled_maxTasksNotGTZero_metricsDisabled(ctx co
 
 	intervalID := time.Now()
 
+	const maxConfigChanges = 6
+
 	interval := lt.interval
 	numNewTasks := lt.numIntervalTasks
 	ctxDone := ctx.Done()
 	taskReader := lt.taskReader
-	configChanges := make([]slog.Attr, 0, 6)
+	configChanges := make([]slog.Attr, 0, maxConfigChanges)
 	meta := taskMeta{
 		NumIntervalTasks: lt.numIntervalTasks,
 	}

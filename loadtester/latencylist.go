@@ -19,17 +19,17 @@ func (ll *latencyList) reset() {
 }
 
 type percentileTarget struct {
-	n  int // numerator
-	d  int // denominator
-	rt int // integerRoundingTerm
+	n  uint // numerator
+	d  uint // denominator
+	rt uint // integerRoundingTerm
 }
 
 // newPTarget constructs a new integer rational multiplication lookup table record and validates the input elements
-func newPTarget(percentileTimes100, n, d int) percentileTarget {
-	if percentileTimes100 <= 0 || n <= 0 || d <= 0 || n >= d || d%2 != 0 || (10000%d != 0) || ((10000/d)*n != percentileTimes100) {
+func newPTarget(percentileTimes100, n, d uint) percentileTarget {
+	if percentileTimes100 == 0 || n == 0 || d == 0 || n >= d || d%2 != 0 || (10000%d != 0) || ((10000/d)*n != percentileTimes100) {
 		panic("should never happen")
 	}
-	return percentileTarget{n, d, d >> 1}
+	return percentileTarget{n, d, d / 2}
 }
 
 const numPercentiles = 10
@@ -87,10 +87,10 @@ func (ll *latencyList) readPercentiles(out *[numPercentiles]latency) {
 		pt := percentileTargets[pcv]
 
 		// check for integer overflow
-		if pt.n <= ((math.MaxInt - pt.rt) / maxIdx) {
+		if pt.n <= ((math.MaxUint - pt.rt) / uint(maxIdx)) {
 			// integer math multiplication operation will not overflow
 
-			out[pcv] = latency(ll.data[((maxIdx*pt.n)+pt.rt)/pt.d])
+			out[pcv] = latency(ll.data[((uint(maxIdx)*pt.n)+pt.rt)/pt.d])
 			continue
 		}
 

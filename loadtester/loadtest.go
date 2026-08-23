@@ -2,6 +2,8 @@ package loadtester
 
 import (
 	"context"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"sync"
 	"time"
@@ -337,37 +339,49 @@ func (lt *Loadtest) addWorker(ctx context.Context, workerID int) {
 	})
 }
 
-func (lt *Loadtest) loadtestConfigAsJson() any {
-	type Config struct {
-		StartTime              string `json:"start_time"`
-		Interval               string `json:"interval"`
-		MaxIntervalTasks       int    `json:"max_interval_tasks"`
-		MaxTasks               int    `json:"max_tasks"`
-		MaxWorkers             int    `json:"max_workers"`
-		NumIntervalTasks       int    `json:"num_interval_tasks"`
-		NumWorkers             int    `json:"num_workers"`
-		MetricsEnabled         bool   `json:"metrics_enabled"`
-		MetricsFlushInterval   string `json:"metrics_flush_interval"`
-		FlushRetriesOnShutdown bool   `json:"flush_retries_on_shutdown"`
-		FlushRetriesTimeout    string `json:"flush_retries_timeout"`
-		Retry                  bool   `json:"retry_enabled"`
-		PercentilesEnabled     bool   `json:"percentiles_enabled"`
-		VariancesEnabled       bool   `json:"variances_enabled"`
-		MetaProviderEnabled    bool   `json:"metadata_provider_enabled"`
-	}
+type printableConfig struct {
+	StartTime              time.Time     `json:"start_time"`
+	Interval               time.Duration `json:"interval"`
+	MaxIntervalTasks       int           `json:"max_interval_tasks"`
+	MaxTasks               int           `json:"max_tasks"`
+	MaxWorkers             int           `json:"max_workers"`
+	NumIntervalTasks       int           `json:"num_interval_tasks"`
+	NumWorkers             int           `json:"num_workers"`
+	MetricsEnabled         bool          `json:"metrics_enabled"`
+	MetricsFlushInterval   time.Duration `json:"metrics_flush_interval"`
+	FlushRetriesOnShutdown bool          `json:"flush_retries_on_shutdown"`
+	FlushRetriesTimeout    time.Duration `json:"flush_retries_timeout"`
+	Retry                  bool          `json:"retry_enabled"`
+	PercentilesEnabled     bool          `json:"percentiles_enabled"`
+	VariancesEnabled       bool          `json:"variances_enabled"`
+	MetaProviderEnabled    bool          `json:"metadata_provider_enabled"`
+}
 
-	return Config{
-		StartTime:              timeToString(lt.startTime),
-		Interval:               lt.interval.String(),
+func (cfg *printableConfig) MarshalJSONTo(enc *jsontext.Encoder) error {
+	type shadow printableConfig
+	return json.MarshalEncode(enc, ((*shadow)(cfg)), json.WithMarshalers(json.JoinMarshalers(
+		json.MarshalToFunc(func(enc *jsontext.Encoder, t time.Time) error {
+			return enc.WriteToken(jsontext.String(t.UTC().Format(time.RFC3339Nano)))
+		}),
+		json.MarshalToFunc(func(enc *jsontext.Encoder, d time.Duration) error {
+			return enc.WriteToken(jsontext.String(d.String()))
+		}),
+	)))
+}
+
+func (lt *Loadtest) loadtestConfigAsJson() *printableConfig {
+	return &printableConfig{
+		StartTime:              lt.startTime,
+		Interval:               lt.interval,
 		MaxIntervalTasks:       lt.maxIntervalTasks,
 		MaxTasks:               lt.maxTasks,
 		MaxWorkers:             lt.maxWorkers,
 		NumIntervalTasks:       lt.numIntervalTasks,
 		NumWorkers:             lt.numWorkers,
 		MetricsEnabled:         lt.metricsEnabled,
-		MetricsFlushInterval:   lt.csvData.flushInterval.String(),
+		MetricsFlushInterval:   lt.csvData.flushInterval,
 		FlushRetriesOnShutdown: lt.flushRetriesOnShutdown,
-		FlushRetriesTimeout:    lt.flushRetriesTimeout.String(),
+		FlushRetriesTimeout:    lt.flushRetriesTimeout,
 		Retry:                  lt.retry,
 		PercentilesEnabled:     lt.percentilesEnabled,
 		VariancesEnabled:       lt.variancesEnabled,
