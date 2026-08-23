@@ -2,7 +2,7 @@ package loadtester
 
 import (
 	"bufio"
-	"encoding/json"
+	"encoding/json/v2"
 	"io"
 	"math"
 	"os"
@@ -47,17 +47,16 @@ func (cd *csvData) setErr(err error) {
 
 func (lt *Loadtest) writeOutputCsvConfigComment(w io.Writer) error {
 
-	if _, err := w.Write([]byte(`# `)); err != nil {
+	if _, err := w.Write([]byte(`# {"config":`)); err != nil {
 		return err
 	}
 
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-
-	err := enc.Encode(struct {
-		C any `json:"config"`
-	}{lt.loadtestConfigAsJson()})
+	err := json.MarshalWrite(w, lt.loadtestConfigAsJson())
 	if err != nil {
+		return err
+	}
+
+	if _, err := w.Write([]byte("}\n")); err != nil {
 		return err
 	}
 
@@ -199,10 +198,6 @@ func (lt *Loadtest) writeOutputCsvFooterAndClose(csvFile *os.File) {
 //
 // helpers
 //
-
-func timeToString(t time.Time) string {
-	return t.UTC().Format(time.RFC3339Nano)
-}
 
 func csvFmtLatencyVarianceAsInt64(rw *csv.RecordWriter, f float64) {
 	const int64OverflowCutoff = float64(uint64(1) << 63)
